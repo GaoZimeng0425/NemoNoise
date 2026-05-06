@@ -74,7 +74,9 @@ struct SettingsView: View {
         Form {
             engineSection
             if engineType == "sensevoice" {
-                modelSection
+                modelSection(for: .senseVoice)
+            } else if engineType == "paraformer" {
+                modelSection(for: .paraformer)
             }
             aboutSection
         }
@@ -88,79 +90,68 @@ struct SettingsView: View {
     private var engineSection: some View {
         Section("Speech Engine") {
             Picker("Engine", selection: $engineType) {
-                Label("Apple Speech (online)", systemImage: "apple.logo").tag("apple")
-                Label("SenseVoice (local, offline)", systemImage: "cpu").tag("sensevoice")
+                Label("Apple Speech", systemImage: "apple.logo").tag("apple")
+                Label("SenseVoice (offline)", systemImage: "cpu").tag("sensevoice")
+                Label("Paraformer (streaming)", systemImage: "waveform").tag("paraformer")
             }
             .pickerStyle(.radioGroup)
 
-            if engineType == "apple" {
+            switch engineType {
+            case "apple":
                 Text("Uses Apple's on-device/cloud recognition. No download required.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Uses SenseVoice via sherpa-onnx. Runs fully offline. Requires model download (~60 MB).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(.secondary)
+            case "sensevoice":
+                Text("SenseVoice — fully offline. Chinese + 5 languages. Emotion detection. Requires ~60 MB download.")
+                    .font(.caption).foregroundStyle(.secondary)
+            case "paraformer":
+                Text("Paraformer — streaming Chinese ASR with real-time partial results. Requires ~50 MB download.")
+                    .font(.caption).foregroundStyle(.secondary)
+            default: EmptyView()
             }
         }
     }
 
     // MARK: Model download
 
-    private var modelSection: some View {
-        Section("SenseVoice Model") {
+    private func modelSection(for descriptor: ModelDescriptor) -> some View {
+        Section("\(descriptor.displayName) Model") {
             let mm = controller.modelManager
 
-            switch mm.downloadState {
+            switch mm.state(for: descriptor) {
             case .notDownloaded:
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("SenseVoiceSmall (int8)")
-                            .font(.subheadline)
-                        Text("~60 MB · Chinese, English, Japanese, Korean")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Text(descriptor.displayName).font(.subheadline)
+                        Text("\(descriptor.downloadSize) · \(descriptor.detail)")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Download") { mm.startDownload() }
+                    Button("Download") { mm.startDownload(descriptor) }
                         .buttonStyle(.borderedProminent)
                 }
-
             case .downloading(let progress):
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("Downloading…")
-                            .font(.subheadline)
+                        Text("Downloading…").font(.subheadline)
                         Spacer()
-                        Text("\(Int(progress * 100))%")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button("Cancel") { mm.cancelDownload() }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                        Text("\(Int(progress * 100))%").font(.caption).foregroundStyle(.secondary)
+                        Button("Cancel") { mm.cancelDownload(descriptor) }
+                            .buttonStyle(.bordered).controlSize(.small)
                     }
                     ProgressView(value: progress)
                 }
-
             case .downloaded:
                 HStack {
-                    Label("Model ready", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                    Label("Model ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     Spacer()
-                    Button("Delete", role: .destructive) { mm.deleteModel() }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                    Button("Delete", role: .destructive) { mm.deleteModel(descriptor) }
+                        .buttonStyle(.bordered).controlSize(.small)
                 }
-
             case .error(let message):
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("Download failed", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Retry") { mm.startDownload() }
-                        .buttonStyle(.bordered)
+                    Label("Download failed", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                    Text(message).font(.caption).foregroundStyle(.secondary)
+                    Button("Retry") { mm.startDownload(descriptor) }.buttonStyle(.bordered)
                 }
             }
         }
@@ -179,11 +170,15 @@ struct SettingsView: View {
     }
 
     private var activeEngineLabel: String {
-        if engineType == "sensevoice" {
-            return controller.modelManager.downloadState == .downloaded
-                ? "SenseVoice (local)"
-                : "Apple Speech (model not downloaded)"
+        switch engineType {
+        case "sensevoice":
+            return controller.modelManager.state(for: .senseVoice) == .downloaded
+                ? "SenseVoice (local)" : "Apple Speech (model not downloaded)"
+        case "paraformer":
+            return controller.modelManager.state(for: .paraformer) == .downloaded
+                ? "Paraformer (streaming)" : "Apple Speech (model not downloaded)"
+        default:
+            return "Apple Speech"
         }
-        return "Apple Speech"
     }
 }

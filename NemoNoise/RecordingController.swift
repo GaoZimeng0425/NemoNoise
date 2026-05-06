@@ -43,8 +43,17 @@ final class RecordingController {
 
     private func makeEngine() -> any ASRService {
         let choice = UserDefaults.standard.string(forKey: "engineType") ?? "apple"
-        if choice == "sensevoice", let modelPath = modelManager.modelPath {
-            return SherpaASREngine(modelDir: modelPath)
+        switch choice {
+        case "sensevoice":
+            if let dir = modelManager.modelPath(for: .senseVoice) {
+                return SherpaASREngine(modelDir: dir)
+            }
+        case "paraformer":
+            if let dir = modelManager.modelPath(for: .paraformer) {
+                return ParaformerStreamingEngine(modelDir: dir)
+            }
+        default:
+            break
         }
         return AppleSpeechASREngine()
     }
