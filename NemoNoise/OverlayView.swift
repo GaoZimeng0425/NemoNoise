@@ -158,7 +158,27 @@ struct MenuBarLabel: View {
     @Environment(RecordingController.self) private var controller
 
     var body: some View {
-        Image(systemName: controller.recordingState == .recording ? "mic.fill" : "mic")
-            .symbolEffect(.pulse, isActive: controller.recordingState == .recording)
+        if controller.recordingState == .recording {
+            HStack(spacing: 1.5) {
+                ForEach(0..<3, id: \.self) { i in
+                    Capsule()
+                        .fill(.primary)
+                        .frame(width: 2.5, height: menuBarHeight(index: i))
+                }
+            }
+            .frame(height: 16)
+            .animation(.easeOut(duration: 0.1), value: controller.micLevel)
+        } else {
+            Image(systemName: "waveform")
+        }
+    }
+
+    private func menuBarHeight(index: Int) -> CGFloat {
+        let level = CGFloat(controller.micLevel)
+        let base: CGFloat = 4
+        let maxExtra: CGFloat = 12
+        let threshold = CGFloat(index) * 0.3
+        let active = max(0, level - threshold) / 0.3
+        return base + active * maxExtra
     }
 }
