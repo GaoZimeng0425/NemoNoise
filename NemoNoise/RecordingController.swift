@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import ApplicationServices
 
 @Observable
 final class RecordingController {
@@ -9,6 +10,13 @@ final class RecordingController {
     var micLevel: Float = 0
     var lastError: String?
     var showCopyButton: Bool = false
+    var showErrorAlert: Bool = false
+    var errorMessage: String = ""
+    var showAccessibilityGuide: Bool = false
+    var isListeningSilence: Bool = false
+    private var silenceTimer: Timer?
+    private let maxRecordingDuration: TimeInterval = 120
+    private var recordingStartTime: Date?
 
     let modelManager = ModelManager()
 
@@ -59,12 +67,17 @@ final class RecordingController {
     }
 
     private func startRecording() {
+        guard recordingState == .idle else {
+            print("[RecordingController] Ignoring startRecording — state is \(recordingState)")
+            return
+        }
         recordingState = .recording
         confirmedSegments = []
         partialText = ""
         accumulatedSamples = []
         showCopyButton = false
         showOverlay()
+        recordingStartTime = Date()
 
         engine = makeEngine()
         engine?.reset()
@@ -72,17 +85,39 @@ final class RecordingController {
         recordingTask = Task {
             do {
                 let stream = try await audioCapture.start()
+                resetSilenceTimer()
 
                 for await chunk in stream {
                     guard recordingState == .recording else { break }
                     accumulatedSamples.append(contentsOf: chunk.samples)
                     micLevel = chunk.rmsLevel
 
-                    if let result = try? await engine?.feedChunk(
-                        chunk.samples,
-                        sampleRate: 16000
-                    ), !result.text.isEmpty {
-                        partialText = result.text
+                    do {
+                        let result = try await engine?.feedChunk(chunk.samples, sampleRate: 16000)
+                        if let result, !result.text.isEmpty {
+                            partialText = result.text
+                            isListeningSilence = false
+                            resetSilenceTimer()
+                        }
+                    } catch {
+                        await MainActor.run {
+                            errorMessage = "ASR engine error: \(error.localizedDescription)"
+                            showErrorAlert = true
+                            recordingState = .idle
+                        }
+                        hideOverlay()
+                        break
+                    }
+
+                    // Auto-checkpoint for long recordings (>120s)
+                    if let startTime = recordingStartTime, Date().timeIntervalSince(startTime) > maxRecordingDuration {
+                        if let result = try? await engine?.finish(), !result.text.isEmpty {
+                            let segment = TranscriptionSegment(text: result.text, emotion: result.emotion)
+                            await MainActor.run { confirmedSegments.append(segment) }
+                        }
+                        engine = makeEngine()
+                        engine?.reset()
+                        recordingStartTime = Date()
                     }
                 }
             } catch {
@@ -97,6 +132,7 @@ final class RecordingController {
     private func stopRecording() {
         recordingState = .processing
         audioCapture.stop()
+        invalidateSilenceTimer()
 
         Task {
             defer {
@@ -121,7 +157,12 @@ final class RecordingController {
 
     private func injectText(_ text: String) async {
         let success = await textInjector.inject(text)
-        if !success { showCopyButton = true }
+        if !success {
+            showCopyButton = true
+            if !AXIsProcessTrusted() {
+                showAccessibilityGuide = true
+            }
+        }
     }
 
     private func showOverlay() {
@@ -133,6 +174,22 @@ final class RecordingController {
 
     private func hideOverlay() {
         overlayController?.hide()
+    }
+
+    private func resetSilenceTimer() {
+        silenceTimer?.invalidate()
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, recordingState == .recording else { return }
+                isListeningSilence = true
+            }
+        }
+    }
+
+    private func invalidateSilenceTimer() {
+        silenceTimer?.invalidate()
+        silenceTimer = nil
+        isListeningSilence = false
     }
 
     func copyToClipboard() {
