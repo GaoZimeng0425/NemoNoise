@@ -9,6 +9,11 @@ final class HotkeyMonitor: @unchecked Sendable {
     private var runLoopSource: CFRunLoopSource?
     private var optionWasDown = false
 
+    var hotkeyOption: HotkeyOption {
+        let raw = UserDefaults.standard.string(forKey: "hotkeyOption") ?? "option"
+        return HotkeyOption(rawValue: raw) ?? .option
+    }
+
     func start() {
         requestAccessibilityIfNeeded()
 
@@ -63,11 +68,12 @@ final class HotkeyMonitor: @unchecked Sendable {
     // nonisolated: called from CGEventTap callback off the main thread
     nonisolated private func handleFlagsChangedSync(event: CGEvent) {
         let flags = event.flags
-        let optionNowDown = flags.contains(.maskAlternate)
-        let onlyOption = flags.intersection([.maskCommand, .maskControl, .maskShift, .maskAlternate]) == .maskAlternate
+        let selectedFlag = hotkeyOption.cgFlags
+        let allFlags: CGEventFlags = [.maskCommand, .maskControl, .maskShift, .maskAlternate]
+        let optionNowDown = flags.contains(selectedFlag)
+        let onlyOption = flags.intersection(allFlags) == selectedFlag
 
-        var wasDown: Bool
-        wasDown = optionWasDown  // read (safe: only toggled here, single CGEventTap queue)
+        var wasDown = optionWasDown
 
         if optionNowDown && !wasDown && onlyOption {
             optionWasDown = true

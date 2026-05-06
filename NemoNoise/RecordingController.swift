@@ -34,7 +34,7 @@ final class RecordingController {
 
     private let audioCapture = AudioCapture()
     private let textInjector = TextInjector()
-    private let hotkeyMonitor = HotkeyMonitor()
+    let hotkeyMonitor = HotkeyMonitor()
     private var overlayController: OverlayWindowController?
     private var recordingTask: Task<Void, Never>?
     private var accumulatedSamples: [Float] = []

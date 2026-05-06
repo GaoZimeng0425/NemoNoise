@@ -27,6 +27,20 @@ enum RecordingMode: String, CaseIterable, Codable {
     case toggle = "Toggle"
 }
 
+import ApplicationServices
+
+enum HotkeyOption: String, CaseIterable, Codable {
+    case option = "⌥ Option"
+    case rightCommand = "⌘ Right Command"
+
+    var cgFlags: CGEventFlags {
+        switch self {
+        case .option: return .maskAlternate
+        case .rightCommand: return .maskCommand
+        }
+    }
+}
+
 // MARK: - Errors
 
 enum ASRError: Error {

@@ -92,6 +92,7 @@ struct SettingsView: View {
         Form {
             engineSection
             recordingModeSection
+            shortcutsSection
             if engineType == "sensevoice" {
                 modelSection(for: .senseVoice)
             } else if engineType == "paraformer" {
@@ -147,6 +148,31 @@ struct SettingsView: View {
                  ? "Hold Option key to record. Release to stop."
                  : "Press Option key to start recording. Press again to stop.")
                 .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Shortcuts
+
+    private var shortcutsSection: some View {
+        Section("Shortcuts") {
+            Picker("Activation Key", selection: Binding(
+                get: { controller.hotkeyMonitor.hotkeyOption },
+                set: { UserDefaults.standard.set($0.rawValue, forKey: "hotkeyOption") }
+            )) {
+                ForEach(HotkeyOption.allCases, id: \.self) { option in
+                    Text(option.rawValue).tag(option)
+                }
+            }
+
+            if !AXIsProcessTrusted() {
+                Label("Accessibility permission required for global hotkey", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.caption)
+                Button("Open System Settings") {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                }
+                .font(.caption)
+            }
         }
     }
 
