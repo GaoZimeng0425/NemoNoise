@@ -8,7 +8,7 @@ final class RecordingController {
     var confirmedSegments: [TranscriptionSegment] = []
     var partialText: String = ""
     var micLevel: Float = 0
-    var lastError: String?
+    let recordingError = RecordingError()
     var showCopyButton: Bool = false
     var showErrorAlert: Bool = false
     var errorMessage: String = ""
@@ -17,6 +17,8 @@ final class RecordingController {
     private var silenceTimer: Timer?
     private let maxRecordingDuration: TimeInterval = 120
     private var recordingStartTime: Date?
+    var recordingDuration: TimeInterval = 0
+    private var timerTask: Task<Void, Never>?
 
     let modelManager = ModelManager()
 
@@ -122,7 +124,7 @@ final class RecordingController {
                 }
             } catch {
                 print("[RecordingController] Audio error: \(error)")
-                lastError = error.localizedDescription
+                recordingError.error = error.localizedDescription
                 recordingState = .idle
                 hideOverlay()
             }
@@ -150,7 +152,7 @@ final class RecordingController {
                     await injectText(result.text)
                 }
             } catch {
-                lastError = error.localizedDescription
+                recordingError.error = error.localizedDescription
             }
         }
     }

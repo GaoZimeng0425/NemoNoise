@@ -14,6 +14,7 @@ struct OverlayView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.separator, lineWidth: 0.5))
         .shadow(radius: 8, y: 4)
         .padding(12)
+        .recordingErrorAlert()
     }
 
     private var headerBar: some View {
