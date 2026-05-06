@@ -1,18 +1,32 @@
-//
-//  Item.swift
-//  NemoNoise
-//
-//  Created by GaoZimeng on 2026/5/5.
-//
-
 import Foundation
-import SwiftData
 
-@Model
-final class Item {
-    var timestamp: Date
-    
-    init(timestamp: Date) {
-        self.timestamp = timestamp
-    }
+// MARK: - ASR Models
+
+struct TranscriptionSegment: Identifiable, Sendable {
+    let id = UUID()
+    let text: String
+    let emotion: String?
+}
+
+struct TranscriptionResult: Sendable {
+    let text: String
+    let isFinal: Bool
+    let emotion: String?
+}
+
+// MARK: - State
+
+enum RecordingState: Equatable {
+    case idle
+    case recording
+    case processing
+}
+
+// MARK: - Errors
+
+enum ASRError: Error {
+    case modelNotFound
+    case audioCaptureFailed(String)
+    case invalidPythonPath
+    case socketDisconnected
 }

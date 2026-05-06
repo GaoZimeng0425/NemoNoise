@@ -1,32 +1,23 @@
-//
-//  NemoNoiseApp.swift
-//  NemoNoise
-//
-//  Created by GaoZimeng on 2026/5/5.
-//
-
 import SwiftUI
-import SwiftData
 
 @main
 struct NemoNoiseApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @State private var controller = RecordingController()
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        MenuBarExtra {
+            MenuBarPopoverView()
+                .environment(controller)
+        } label: {
+            MenuBarLabel()
+                .environment(controller)
         }
-        .modelContainer(sharedModelContainer)
+        .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView()
+                .environment(controller)
+                .environment(controller.modelManager)
+        }
     }
 }
