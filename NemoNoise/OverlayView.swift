@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OverlayView: View {
     @Environment(RecordingController.self) private var controller
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -75,15 +76,21 @@ struct OverlayView: View {
     }
 
     private var micLevelView: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<5, id: \.self) { i in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(barColor(index: i))
-                    .frame(width: 3, height: barHeight(index: i))
+        if reduceMotion {
+            Text("● REC")
+                .font(.caption.monospaced())
+                .foregroundStyle(.red)
+        } else {
+            HStack(spacing: 2) {
+                ForEach(0..<5, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(barColor(index: i))
+                        .frame(width: 3, height: barHeight(index: i))
+                }
             }
+            .frame(height: 16)
+            .animation(.easeOut(duration: 0.05), value: controller.micLevel)
         }
-        .frame(height: 16)
-        .animation(.easeOut(duration: 0.05), value: controller.micLevel)
     }
 
     private var closeButton: some View {
@@ -156,18 +163,24 @@ struct OverlayView: View {
 
 struct MenuBarLabel: View {
     @Environment(RecordingController.self) private var controller
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if controller.recordingState == .recording {
-            HStack(spacing: 1.5) {
-                ForEach(0..<3, id: \.self) { i in
-                    Capsule()
-                        .fill(.primary)
-                        .frame(width: 2.5, height: menuBarHeight(index: i))
+            if reduceMotion {
+                Image(systemName: "mic.fill")
+                    .foregroundStyle(.red)
+            } else {
+                HStack(spacing: 1.5) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Capsule()
+                            .fill(.primary)
+                            .frame(width: 2.5, height: menuBarHeight(index: i))
+                    }
                 }
+                .frame(height: 16)
+                .animation(.easeOut(duration: 0.1), value: controller.micLevel)
             }
-            .frame(height: 16)
-            .animation(.easeOut(duration: 0.1), value: controller.micLevel)
         } else {
             Image(systemName: "waveform")
         }

@@ -15,11 +15,20 @@ final class OverlayWindowController: NSObject {
             panel = makePanel()
         }
         positionOnActiveScreen()
-        panel?.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.2
+            panel?.animator().alphaValue = 1.0
+            panel?.orderFrontRegardless()
+        })
     }
 
     func hide() {
-        panel?.orderOut(nil)
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.15
+            panel?.animator().alphaValue = 0.0
+        }, completionHandler: { [weak self] in
+            self?.panel?.orderOut(nil)
+        })
     }
 
     private func makePanel() -> NSPanel {
@@ -42,6 +51,7 @@ final class OverlayWindowController: NSObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
         panel.contentView = hostingView
+        panel.alphaValue = 0.0
         return panel
     }
 
