@@ -14,6 +14,25 @@ struct OverlayView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.separator, lineWidth: 0.5))
         .shadow(radius: 8, y: 4)
         .padding(12)
+        .alert("Accessibility Permission Required", isPresented: Binding(
+            get: { controller.showAccessibilityGuide },
+            set: { controller.showAccessibilityGuide = $0 }
+        )) {
+            Button("Open System Settings") {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("NemoNoise needs Accessibility permission to inject text into other apps.\n\nGo to System Settings → Privacy & Security → Accessibility, then enable NemoNoise.")
+        }
+        .alert("Error", isPresented: Binding(
+            get: { controller.showErrorAlert },
+            set: { controller.showErrorAlert = $0 }
+        )) {
+            Button("OK") { controller.showErrorAlert = false }
+        } message: {
+            Text(controller.errorMessage)
+        }
     }
 
     private var headerBar: some View {
@@ -36,9 +55,23 @@ struct OverlayView: View {
     }
 
     private var timerLabel: some View {
-        Text(controller.recordingState == .processing ? "Processing…" : "Listening…")
+        Text(timerText)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .monospacedDigit()
+    }
+
+    private var timerText: String {
+        switch controller.recordingState {
+        case .recording:
+            let minutes = Int(controller.recordingDuration) / 60
+            let seconds = Int(controller.recordingDuration) % 60
+            return String(format: "%d:%02d", minutes, seconds)
+        case .processing:
+            return "Processing…"
+        case .idle:
+            return "Ready"
+        }
     }
 
     private var micLevelView: some View {
@@ -83,6 +116,17 @@ struct OverlayView: View {
                     .font(.system(size: 18))
                     .italic()
                     .foregroundStyle(.secondary)
+            }
+
+            if controller.isListeningSilence && controller.confirmedSegments.isEmpty && controller.partialText.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "ear")
+                        .foregroundStyle(.secondary)
+                    Text("Listening… speak now")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 4)
             }
 
             if controller.showCopyButton {

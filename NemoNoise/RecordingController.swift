@@ -17,6 +17,8 @@ final class RecordingController {
     private var silenceTimer: Timer?
     private let maxRecordingDuration: TimeInterval = 120
     private var recordingStartTime: Date?
+    var recordingDuration: TimeInterval = 0
+    private var timerTask: Task<Void, Never>?
 
     let modelManager = ModelManager()
 
@@ -77,6 +79,7 @@ final class RecordingController {
         accumulatedSamples = []
         showCopyButton = false
         showOverlay()
+        startTimer()
         recordingStartTime = Date()
 
         engine = makeEngine()
@@ -132,6 +135,7 @@ final class RecordingController {
     private func stopRecording() {
         recordingState = .processing
         audioCapture.stop()
+        stopTimer()
         invalidateSilenceTimer()
 
         Task {
@@ -190,6 +194,24 @@ final class RecordingController {
         silenceTimer?.invalidate()
         silenceTimer = nil
         isListeningSilence = false
+    }
+
+    private func startTimer() {
+        recordingDuration = 0
+        let startTime = Date()
+        timerTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                await MainActor.run {
+                    self.recordingDuration = Date().timeIntervalSince(startTime)
+                }
+            }
+        }
+    }
+
+    private func stopTimer() {
+        timerTask?.cancel()
+        timerTask = nil
     }
 
     func copyToClipboard() {
