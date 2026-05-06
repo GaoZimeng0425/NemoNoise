@@ -20,6 +20,16 @@ final class RecordingController {
     var recordingDuration: TimeInterval = 0
     private var timerTask: Task<Void, Never>?
 
+    var recordingMode: RecordingMode {
+        get {
+            let raw = UserDefaults.standard.string(forKey: "recordingMode") ?? "pushToTalk"
+            return RecordingMode(rawValue: raw) ?? .pushToTalk
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "recordingMode")
+        }
+    }
+
     let modelManager = ModelManager()
 
     private let audioCapture = AudioCapture()
@@ -41,14 +51,32 @@ final class RecordingController {
     }
 
     func handleHotkeyDown() {
-        guard recordingState == .idle else { return }
-        textInjector.captureTarget()
-        startRecording()
+        switch recordingMode {
+        case .pushToTalk:
+            guard recordingState == .idle else { return }
+            textInjector.captureTarget()
+            startRecording()
+        case .toggle:
+            switch recordingState {
+            case .idle:
+                textInjector.captureTarget()
+                startRecording()
+            case .recording:
+                stopRecording()
+            case .processing:
+                break
+            }
+        }
     }
 
     func handleHotkeyUp() {
-        guard recordingState == .recording else { return }
-        stopRecording()
+        switch recordingMode {
+        case .pushToTalk:
+            guard recordingState == .recording else { return }
+            stopRecording()
+        case .toggle:
+            break
+        }
     }
 
     private func makeEngine() -> any ASRService {

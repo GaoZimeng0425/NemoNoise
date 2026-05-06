@@ -91,6 +91,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             engineSection
+            recordingModeSection
             if engineType == "sensevoice" {
                 modelSection(for: .senseVoice)
             } else if engineType == "paraformer" {
@@ -126,6 +127,26 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             default: EmptyView()
             }
+        }
+    }
+
+    // MARK: Recording mode
+
+    private var recordingModeSection: some View {
+        Section("Recording Mode") {
+            Picker("Mode", selection: Binding(
+                get: { controller.recordingMode },
+                set: { controller.recordingMode = $0 }
+            )) {
+                Text("Push to Talk (hold ⌥)").tag(RecordingMode.pushToTalk)
+                Text("Toggle (press ⌥ to start/stop)").tag(RecordingMode.toggle)
+            }
+            .pickerStyle(.radioGroup)
+
+            Text(controller.recordingMode == .pushToTalk
+                 ? "Hold Option key to record. Release to stop."
+                 : "Press Option key to start recording. Press again to stop.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

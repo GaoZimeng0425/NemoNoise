@@ -22,6 +22,11 @@ enum RecordingState: Equatable {
     case processing
 }
 
+enum RecordingMode: String, CaseIterable, Codable {
+    case pushToTalk = "Push to Talk"
+    case toggle = "Toggle"
+}
+
 // MARK: - Errors
 
 enum ASRError: Error {
