@@ -3,6 +3,7 @@ import SwiftUI
 struct OverlayView: View {
     @Environment(RecordingController.self) private var controller
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("showEmotionTags") private var showEmotionTags = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -111,7 +112,7 @@ struct OverlayView: View {
                     Text(segment.text)
                         .font(.system(size: 20))
                         .foregroundStyle(.primary)
-                    if let emotion = segment.emotion {
+                    if showEmotionTags, let emotion = segment.emotion {
                         Text(emotion)
                             .font(.system(size: 18))
                     }

@@ -88,22 +88,67 @@ struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
     @AppStorage("engineType") private var engineType = "apple"
 
+    @AppStorage("showEmotionTags") private var showEmotionTags = true
+
     var body: some View {
+        TabView {
+            generalTab
+                .tabItem { Label("General", systemImage: "gear") }
+
+            engineTab
+                .tabItem { Label("Engine", systemImage: "cpu") }
+
+            shortcutsTab
+                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+
+            displayTab
+                .tabItem { Label("Display", systemImage: "paintbrush") }
+        }
+        .formStyle(.grouped)
+        .frame(width: 460, height: 380)
+    }
+
+    // MARK: - General tab
+
+    private var generalTab: some View {
+        Form {
+            recordingModeSection
+            languageSection
+            aboutSection
+        }
+    }
+
+    // MARK: - Engine tab
+
+    private var engineTab: some View {
         Form {
             engineSection
-            recordingModeSection
-            shortcutsSection
-            languageSection
             if engineType == "sensevoice" {
                 modelSection(for: .senseVoice)
             } else if engineType == "paraformer" {
                 modelSection(for: .paraformer)
             }
-            aboutSection
         }
-        .formStyle(.grouped)
-        .frame(width: 420)
-        .navigationTitle("NemoNoise")
+    }
+
+    // MARK: - Shortcuts tab
+
+    private var shortcutsTab: some View {
+        Form {
+            shortcutsSection
+        }
+    }
+
+    // MARK: - Display tab
+
+    private var displayTab: some View {
+        Form {
+            Section("Overlay") {
+                Toggle("Show emotion tags", isOn: $showEmotionTags)
+                Text("Display emotion indicators from SenseVoice after each sentence.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 
     // MARK: Engine picker
