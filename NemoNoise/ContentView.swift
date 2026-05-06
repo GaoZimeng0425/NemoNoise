@@ -26,6 +26,12 @@ struct MenuBarPopoverView: View {
                     .foregroundStyle(.secondary)
             }
 
+            if let warning = engineFallbackWarning {
+                Text(warning)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+
             Text("Hold **⌥ Option** to record")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
@@ -60,6 +66,18 @@ struct MenuBarPopoverView: View {
         case .idle: "Ready"
         case .recording: "Recording…"
         case .processing: "Processing…"
+        }
+    }
+
+    private var engineFallbackWarning: String? {
+        let choice = UserDefaults.standard.string(forKey: "engineType") ?? "apple"
+        switch choice {
+        case "sensevoice" where controller.modelManager.state(for: .senseVoice) != .downloaded:
+            return "SenseVoice model not downloaded — using Apple Speech"
+        case "paraformer" where controller.modelManager.state(for: .paraformer) != .downloaded:
+            return "Paraformer model not downloaded — using Apple Speech"
+        default:
+            return nil
         }
     }
 }
