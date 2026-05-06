@@ -26,7 +26,6 @@ final class OverlayWindowController: NSObject {
         let hostingView = NSHostingView(rootView:
             OverlayView()
                 .environment(controller)
-                .environment(controller.recordingError)
         )
         hostingView.sizingOptions = .preferredContentSize
 
