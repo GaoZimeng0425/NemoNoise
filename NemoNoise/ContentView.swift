@@ -93,6 +93,7 @@ struct SettingsView: View {
             engineSection
             recordingModeSection
             shortcutsSection
+            languageSection
             if engineType == "sensevoice" {
                 modelSection(for: .senseVoice)
             } else if engineType == "paraformer" {
@@ -173,6 +174,23 @@ struct SettingsView: View {
                 }
                 .font(.caption)
             }
+        }
+    }
+
+    // MARK: Language
+
+    @AppStorage("languagePreference") private var languagePreference = "Auto-detect"
+
+    private var languageSection: some View {
+        Section("Language") {
+            Picker("Recognition Language", selection: $languagePreference) {
+                ForEach(LanguagePreference.allCases) { lang in
+                    Text(lang.rawValue).tag(lang.rawValue)
+                }
+            }
+
+            Text("Auto-detect works best for mixed Chinese/English content. Select a specific language for faster, more accurate results.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

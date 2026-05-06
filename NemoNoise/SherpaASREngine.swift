@@ -4,14 +4,14 @@ final class SherpaASREngine: ASRService, @unchecked Sendable {
     private let recognizer: SherpaOfflineRecognizer
     private var accumulated: [Float] = []
 
-    init(modelDir: URL) {
+    init(modelDir: URL, language: String = LanguagePreference.current.sherpaCode) {
         let modelPath  = modelDir.appendingPathComponent("model.int8.onnx").path
         let tokensPath = modelDir.appendingPathComponent("tokens.txt").path
-        guard let r = SherpaOfflineRecognizer(modelPath: modelPath, tokensPath: tokensPath) else {
+        guard let r = SherpaOfflineRecognizer(modelPath: modelPath, tokensPath: tokensPath, language: language) else {
             fatalError("[SherpaASREngine] Failed to load model from \(modelDir.path)")
         }
         recognizer = r
-        print("[SherpaASREngine] Model loaded")
+        print("[SherpaASREngine] Model loaded, language: \(language)")
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {

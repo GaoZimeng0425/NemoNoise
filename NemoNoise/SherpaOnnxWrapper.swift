@@ -16,14 +16,14 @@ final class SherpaOfflineRecognizer {
     /// - Parameters:
     ///   - modelPath: Path to `model.int8.onnx`
     ///   - tokensPath: Path to `tokens.txt`
-    init?(modelPath: String, tokensPath: String) {
+    init?(modelPath: String, tokensPath: String, language: String = "auto") {
         // Strings need to be alive only for the duration of SherpaOnnxCreateOfflineRecognizer.
         // The C library copies them internally.
         var ptr: UnsafePointer<SherpaOnnxOfflineRecognizer>?
 
         modelPath.withCString { cModel in
             tokensPath.withCString { cTokens in
-                "auto".withCString { cLang in
+                language.withCString { cLang in
                     "cpu".withCString { cProvider in
                         "greedy_search".withCString { cDecoding in
 

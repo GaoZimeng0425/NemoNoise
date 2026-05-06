@@ -6,9 +6,16 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
     private var accumulated: [Float] = []
 
     init() {
-        recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
-            ?? SFSpeechRecognizer(locale: .current)
-            ?? SFSpeechRecognizer()!
+        let pref = LanguagePreference.current
+        if let localeId = pref.localeIdentifier {
+            recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeId))
+                ?? SFSpeechRecognizer(locale: .current)
+                ?? SFSpeechRecognizer()!
+        } else {
+            recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+                ?? SFSpeechRecognizer(locale: .current)
+                ?? SFSpeechRecognizer()!
+        }
         print("[AppleSpeechASREngine] locale: \(recognizer.locale.identifier)")
     }
 
