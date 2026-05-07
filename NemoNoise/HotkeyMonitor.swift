@@ -77,16 +77,17 @@ final class HotkeyMonitor: @unchecked Sendable {
         let optionNowDown = flags.contains(selectedFlag)
         let onlyOption = flags.intersection(allFlags) == selectedFlag
 
-        let wasDown = lock.withLock { $0.optionWasDown }
-
-        if optionNowDown && !wasDown && onlyOption {
-            lock.withLock { $0.optionWasDown = true }
-            let cb = onKeyDown
-            DispatchQueue.main.async { cb?() }
-        } else if !optionNowDown && wasDown {
-            lock.withLock { $0.optionWasDown = false }
-            let cb = onKeyUp
-            DispatchQueue.main.async { cb?() }
+        lock.withLock { state in
+            let wasDown = state.optionWasDown
+            if optionNowDown && !wasDown && onlyOption {
+                state.optionWasDown = true
+                let cb = onKeyDown
+                DispatchQueue.main.async { cb?() }
+            } else if !optionNowDown && wasDown {
+                state.optionWasDown = false
+                let cb = onKeyUp
+                DispatchQueue.main.async { cb?() }
+            }
         }
     }
 
