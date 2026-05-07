@@ -76,6 +76,7 @@
 			);
 			name = NemoNoise;
 			packageProductDependencies = (
+				AA0000022F9363C40037E18E /* CocoaLumberjackSwift */,
 			);
 			productName = NemoNoise;
 			productReference = 45ED16B02FA99BA6005FFD16 /* NemoNoise.app */;
@@ -105,6 +106,9 @@
 			);
 			mainGroup = 45ED16A72FA99BA5005FFD16;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 45ED16B12FA99BA6005FFD16 /* Products */;
 			projectDirPath = "";
@@ -378,6 +382,23 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+/* Begin XCRemoteSwiftPackageReference section */
+		AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/CocoaLumberjack/CocoaLumberjack.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.8.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+/* Begin XCSwiftPackageProductDependency section */
+		AA0000022F9363C40037E18E /* CocoaLumberjackSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */;
+			productName = CocoaLumberjackSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 45ED16A82FA99BA5005FFD16 /* Project object */;
 }

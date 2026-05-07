@@ -44,7 +44,7 @@ final class AudioCapture: Sendable {
         }
 
         try engine.start()
-        print("[AudioCapture] Engine started, sample rate: \(hardwareFormat.sampleRate)")
+        LogService.info("Engine started, sample rate: \(hardwareFormat.sampleRate)", category: "AudioCapture")
         return stream
     }
 
@@ -56,7 +56,7 @@ final class AudioCapture: Sendable {
     private func stopEngine() {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        print("[AudioCapture] Engine stopped")
+        LogService.info("Engine stopped", category: "AudioCapture")
     }
 
     nonisolated private func processTap(

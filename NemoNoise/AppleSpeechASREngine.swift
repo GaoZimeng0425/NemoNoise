@@ -23,7 +23,7 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
             throw ASRError.engineUnavailable
         }
         recognizer = resolved
-        print("[AppleSpeechASREngine] locale: \(recognizer.locale.identifier)")
+        LogService.info("locale: \(recognizer.locale.identifier)", category: "AppleSpeechASREngine")
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {

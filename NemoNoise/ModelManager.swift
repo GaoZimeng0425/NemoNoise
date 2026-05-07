@@ -141,13 +141,13 @@ final class ModelManager {
             }
 
             setState(.downloaded, for: descriptor)
-            print("[ModelManager] \(descriptor.displayName) downloaded to \(dir.path)")
+            LogService.info("\(descriptor.displayName) downloaded to \(dir.path)", category: "ModelManager")
         } catch is CancellationError {
             setState(.notDownloaded, for: descriptor)
             try? FileManager.default.removeItem(at: dir)
         } catch {
             setState(.error(error.localizedDescription), for: descriptor)
-            print("[ModelManager] Download failed: \(error)")
+            LogService.error("Download failed: \(error)", category: "ModelManager")
         }
     }
 

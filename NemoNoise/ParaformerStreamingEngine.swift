@@ -15,7 +15,7 @@ final class ParaformerStreamingEngine: ASRService, @unchecked Sendable {
             throw ASRError.engineInitFailed
         }
         recognizer = r
-        print("[ParaformerStreamingEngine] Model loaded")
+        LogService.info("Model loaded", category: "ParaformerStreamingEngine")
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {

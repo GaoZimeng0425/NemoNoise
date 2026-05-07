@@ -4,6 +4,10 @@ import SwiftUI
 struct NemoNoiseApp: App {
     @State private var controller = RecordingController()
 
+    init() {
+        _ = LogService.shared
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MenuBarPopoverView()

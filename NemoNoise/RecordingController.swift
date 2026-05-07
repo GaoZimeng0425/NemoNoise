@@ -111,7 +111,7 @@ final class RecordingController {
 
     private func startRecording() {
         guard recordingState == .idle else {
-            print("[RecordingController] Ignoring startRecording — state is \(recordingState)")
+            LogService.warn("Ignoring startRecording — state is \(recordingState)", category: "RecordingController")
             return
         }
 

@@ -12,7 +12,7 @@ final class SherpaASREngine: ASRService, @unchecked Sendable {
             throw ASRError.engineInitFailed
         }
         recognizer = r
-        print("[SherpaASREngine] Model loaded, language: \(language)")
+        LogService.info("Model loaded, language: \(language)", category: "SherpaASREngine")
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {

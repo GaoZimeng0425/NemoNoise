@@ -23,7 +23,7 @@ final class HotkeyMonitor: @unchecked Sendable {
         requestAccessibilityIfNeeded()
 
         guard AXIsProcessTrusted() else {
-            print("[HotkeyMonitor] Accessibility permission not granted — hotkey disabled")
+            LogService.warn("Accessibility permission not granted — hotkey disabled", category: "HotkeyMonitor")
             return
         }
 
@@ -45,7 +45,7 @@ final class HotkeyMonitor: @unchecked Sendable {
         )
 
         guard let tap else {
-            print("[HotkeyMonitor] CGEvent.tapCreate failed — check Accessibility permission")
+            LogService.error("CGEvent.tapCreate failed — check Accessibility permission", category: "HotkeyMonitor")
             Unmanaged<HotkeyMonitor>.fromOpaque(selfPtr).release()
             return
         }
@@ -56,7 +56,7 @@ final class HotkeyMonitor: @unchecked Sendable {
             CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         }
         CGEvent.tapEnable(tap: tap, enable: true)
-        print("[HotkeyMonitor] Event tap started")
+        LogService.info("Event tap started", category: "HotkeyMonitor")
     }
 
     func stop() {
