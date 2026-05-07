@@ -2,13 +2,12 @@ import SwiftUI
 import AVFoundation
 import ApplicationServices
 
-@Observable
+@MainActor @Observable
 final class RecordingController {
     var recordingState: RecordingState = .idle
     var confirmedSegments: [TranscriptionSegment] = []
     var partialText: String = ""
     var micLevel: Float = 0
-    var lastError: String?
     var showCopyButton: Bool = false
     var showErrorAlert: Bool = false
     var errorMessage: String = ""
@@ -39,6 +38,20 @@ final class RecordingController {
     private var recordingTask: Task<Void, Never>?
     private var accumulatedSamples: [Float] = []
     private var engine: (any ASRService)?
+
+    var hotkeyDisplayText: String {
+        let keyName: String
+        switch hotkeyMonitor.hotkeyOption {
+        case .option: keyName = "⌥ Option"
+        case .rightCommand: keyName = "Right ⌘"
+        }
+        switch recordingMode {
+        case .pushToTalk:
+            return "Hold **\(keyName)** to record"
+        case .toggle:
+            return "Press **\(keyName)** to start/stop"
+        }
+    }
 
     init() {
         hotkeyMonitor.onKeyDown = { [weak self] in
@@ -101,6 +114,16 @@ final class RecordingController {
             print("[RecordingController] Ignoring startRecording — state is \(recordingState)")
             return
         }
+
+        let newEngine: any ASRService
+        do {
+            newEngine = try makeEngine()
+        } catch {
+            errorMessage = "Failed to initialize engine: \(error.localizedDescription)"
+            showErrorAlert = true
+            return
+        }
+
         recordingState = .recording
         confirmedSegments = []
         partialText = ""
@@ -110,15 +133,7 @@ final class RecordingController {
         startTimer()
         recordingStartTime = Date()
 
-        do {
-            engine = try makeEngine()
-        } catch {
-            print("[RecordingController] Engine init failed: \(error)")
-            lastError = error.localizedDescription
-            recordingState = .idle
-            hideOverlay()
-            return
-        }
+        engine = newEngine
         engine?.reset()
 
         recordingTask = Task {
@@ -139,29 +154,37 @@ final class RecordingController {
                             resetSilenceTimer()
                         }
                     } catch {
-                        await MainActor.run {
-                            errorMessage = "ASR engine error: \(error.localizedDescription)"
-                            showErrorAlert = true
-                            recordingState = .idle
-                        }
+                        errorMessage = "ASR engine error: \(error.localizedDescription)"
+                        showErrorAlert = true
+                        recordingState = .idle
                         hideOverlay()
                         break
                     }
 
                     // Auto-checkpoint for long recordings (>120s)
                     if let startTime = recordingStartTime, Date().timeIntervalSince(startTime) > maxRecordingDuration {
-                        if let result = try? await engine?.finish(), !result.text.isEmpty {
-                            let segment = TranscriptionSegment(text: result.text, emotion: result.emotion)
-                            await MainActor.run { confirmedSegments.append(segment) }
+                        do {
+                            if let result = try await engine?.finish(), !result.text.isEmpty {
+                                let segment = TranscriptionSegment(text: result.text, emotion: result.emotion)
+                                confirmedSegments.append(segment)
+                            }
+                            accumulatedSamples.removeAll(keepingCapacity: true)
+                            let nextEngine = try makeEngine()
+                            nextEngine.reset()
+                            engine = nextEngine
+                            recordingStartTime = Date()
+                        } catch {
+                            errorMessage = "Recording checkpoint failed: \(error.localizedDescription)"
+                            showErrorAlert = true
+                            recordingState = .idle
+                            hideOverlay()
+                            break
                         }
-                        engine = try? makeEngine()
-                        engine?.reset()
-                        recordingStartTime = Date()
                     }
                 }
             } catch {
-                print("[RecordingController] Audio error: \(error)")
-                lastError = error.localizedDescription
+                errorMessage = "Audio error: \(error.localizedDescription)"
+                showErrorAlert = true
                 recordingState = .idle
                 hideOverlay()
             }
@@ -190,7 +213,8 @@ final class RecordingController {
                     await injectText(result.text)
                 }
             } catch {
-                lastError = error.localizedDescription
+                errorMessage = "Final transcription failed: \(error.localizedDescription)"
+                showErrorAlert = true
             }
         }
     }
@@ -238,9 +262,7 @@ final class RecordingController {
         timerTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                await MainActor.run {
-                    self.recordingDuration = Date().timeIntervalSince(startTime)
-                }
+                self.recordingDuration = Date().timeIntervalSince(startTime)
             }
         }
     }
