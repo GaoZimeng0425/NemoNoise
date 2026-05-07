@@ -3,6 +3,7 @@ import Foundation
 final class SherpaASREngine: ASRService, @unchecked Sendable {
     private let recognizer: SherpaOfflineRecognizer
     private var accumulated: [Float] = []
+    private var lastDecodeCount: Int = 0
 
     init(modelDir: URL, language: String = LanguagePreference.current.sherpaCode) throws {
         let modelPath  = modelDir.appendingPathComponent("model.int8.onnx").path
@@ -16,25 +17,38 @@ final class SherpaASREngine: ASRService, @unchecked Sendable {
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
         accumulated.append(contentsOf: samples)
-        // Run a quick partial decode every ~1s of audio
-        if accumulated.count >= 16000 {
-            let result = recognizer.decode(samples: accumulated, sampleRate: Int32(sampleRate))
-            return TranscriptionResult(text: result.text, isFinal: false, emotion: emotionEmoji(result.emotion))
+        let newSamples = accumulated.count - lastDecodeCount
+        guard newSamples >= 16000 else {
+            return TranscriptionResult(text: "", isFinal: false, emotion: nil)
         }
-        return TranscriptionResult(text: "", isFinal: false, emotion: nil)
+
+        lastDecodeCount = accumulated.count
+        let snapshot = accumulated
+
+        let result = await Task.detached { [recognizer] in
+            recognizer.decode(samples: snapshot, sampleRate: 16000)
+        }.value
+
+        return TranscriptionResult(text: result.text, isFinal: false, emotion: emotionEmoji(result.emotion))
     }
 
     func finish() async throws -> TranscriptionResult {
-        defer { accumulated.removeAll() }
+        defer { reset() }
         guard !accumulated.isEmpty else {
             return TranscriptionResult(text: "", isFinal: true, emotion: nil)
         }
-        let result = recognizer.decode(samples: accumulated, sampleRate: 16000)
+
+        let snapshot = accumulated
+        let result = await Task.detached { [recognizer] in
+            recognizer.decode(samples: snapshot, sampleRate: 16000)
+        }.value
+
         return TranscriptionResult(text: result.text, isFinal: true, emotion: emotionEmoji(result.emotion))
     }
 
     func reset() {
-        accumulated.removeAll()
+        accumulated.removeAll(keepingCapacity: true)
+        lastDecodeCount = 0
     }
 
     private func emotionEmoji(_ emotion: String) -> String? {
