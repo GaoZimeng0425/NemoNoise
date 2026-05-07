@@ -10,7 +10,7 @@ struct SherpaOnnxResult {
     let event: String     // "Speech", "BGM", "Laughter", etc.
 }
 
-final class SherpaOfflineRecognizer {
+final class SherpaOfflineRecognizer: @unchecked Sendable {
     private let recognizer: UnsafePointer<SherpaOnnxOfflineRecognizer>
 
     /// - Parameters:
@@ -59,7 +59,9 @@ final class SherpaOfflineRecognizer {
     }
 
     func decode(samples: [Float], sampleRate: Int32 = 16000) -> SherpaOnnxResult {
-        let stream = SherpaOnnxCreateOfflineStream(recognizer)!
+        guard let stream = SherpaOnnxCreateOfflineStream(recognizer) else {
+            return SherpaOnnxResult(text: "", lang: "", emotion: "", event: "")
+        }
         defer { SherpaOnnxDestroyOfflineStream(stream) }
 
         samples.withUnsafeBufferPointer { buf in

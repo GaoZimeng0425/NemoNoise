@@ -3,7 +3,7 @@ import Foundation
 final class ParaformerStreamingEngine: ASRService, @unchecked Sendable {
     private let recognizer: SherpaOnlineRecognizer
 
-    init(modelDir: URL) {
+    init(modelDir: URL) throws {
         let encoderPath = modelDir.appendingPathComponent("model_quant.onnx").path
         let decoderPath = modelDir.appendingPathComponent("decoder_quant.onnx").path
         let tokensPath  = modelDir.appendingPathComponent("tokens.txt").path
@@ -12,7 +12,7 @@ final class ParaformerStreamingEngine: ASRService, @unchecked Sendable {
             decoderPath: decoderPath,
             tokensPath: tokensPath
         ) else {
-            fatalError("[ParaformerStreamingEngine] Failed to load model from \(modelDir.path)")
+            throw ASRError.engineInitFailed
         }
         recognizer = r
         print("[ParaformerStreamingEngine] Model loaded")

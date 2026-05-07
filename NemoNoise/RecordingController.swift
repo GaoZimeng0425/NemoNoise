@@ -79,21 +79,21 @@ final class RecordingController {
         }
     }
 
-    private func makeEngine() -> any ASRService {
+    private func makeEngine() throws -> any ASRService {
         let choice = UserDefaults.standard.string(forKey: "engineType") ?? "apple"
         switch choice {
         case "sensevoice":
             if let dir = modelManager.modelPath(for: .senseVoice) {
-                return SherpaASREngine(modelDir: dir)
+                return try SherpaASREngine(modelDir: dir)
             }
         case "paraformer":
             if let dir = modelManager.modelPath(for: .paraformer) {
-                return ParaformerStreamingEngine(modelDir: dir)
+                return try ParaformerStreamingEngine(modelDir: dir)
             }
         default:
             break
         }
-        return AppleSpeechASREngine()
+        return try AppleSpeechASREngine()
     }
 
     private func startRecording() {
@@ -110,7 +110,15 @@ final class RecordingController {
         startTimer()
         recordingStartTime = Date()
 
-        engine = makeEngine()
+        do {
+            engine = try makeEngine()
+        } catch {
+            print("[RecordingController] Engine init failed: \(error)")
+            lastError = error.localizedDescription
+            recordingState = .idle
+            hideOverlay()
+            return
+        }
         engine?.reset()
 
         recordingTask = Task {
@@ -146,7 +154,7 @@ final class RecordingController {
                             let segment = TranscriptionSegment(text: result.text, emotion: result.emotion)
                             await MainActor.run { confirmedSegments.append(segment) }
                         }
-                        engine = makeEngine()
+                        engine = try? makeEngine()
                         engine?.reset()
                         recordingStartTime = Date()
                     }

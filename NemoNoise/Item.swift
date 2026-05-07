@@ -48,4 +48,6 @@ enum ASRError: Error {
     case audioCaptureFailed(String)
     case invalidPythonPath
     case socketDisconnected
+    case engineUnavailable
+    case engineInitFailed
 }

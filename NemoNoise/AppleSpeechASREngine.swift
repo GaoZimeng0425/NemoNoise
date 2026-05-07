@@ -5,17 +5,22 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
     private let recognizer: SFSpeechRecognizer
     private var accumulated: [Float] = []
 
-    init() {
+    init() throws {
         let pref = LanguagePreference.current
+        let resolved: SFSpeechRecognizer?
+
         if let localeId = pref.localeIdentifier {
-            recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeId))
+            resolved = SFSpeechRecognizer(locale: Locale(identifier: localeId))
                 ?? SFSpeechRecognizer(locale: .current)
-                ?? SFSpeechRecognizer()!
         } else {
-            recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+            resolved = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
                 ?? SFSpeechRecognizer(locale: .current)
-                ?? SFSpeechRecognizer()!
         }
+
+        guard let resolved else {
+            throw ASRError.engineUnavailable
+        }
+        recognizer = resolved
         print("[AppleSpeechASREngine] locale: \(recognizer.locale.identifier)")
     }
 
@@ -78,8 +83,9 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
         let count = AVAudioFrameCount(samples.count)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count) else { return nil }
         buffer.frameLength = count
-        samples.withUnsafeBufferPointer {
-            buffer.floatChannelData?[0].update(from: $0.baseAddress!, count: samples.count)
+        samples.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress, let channelData = buffer.floatChannelData else { return }
+            channelData[0].update(from: base, count: samples.count)
         }
         return buffer
     }
