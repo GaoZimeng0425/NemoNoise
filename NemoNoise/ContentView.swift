@@ -32,7 +32,7 @@ struct MenuBarPopoverView: View {
                     .foregroundStyle(.orange)
             }
 
-            Text("Hold **⌥ Option** to record")
+            Text(controller.hotkeyDisplayText)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
 
@@ -289,7 +289,7 @@ struct SettingsView: View {
 
     private var aboutSection: some View {
         Section("About") {
-            LabeledContent("Version", value: "0.1.0")
+            LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown")
             LabeledContent(
                 "Active engine",
                 value: activeEngineLabel
