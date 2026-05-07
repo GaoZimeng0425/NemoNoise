@@ -119,8 +119,10 @@ final class RecordingController {
         do {
             newEngine = try makeEngine()
         } catch {
-            errorMessage = "Failed to initialize engine: \(error.localizedDescription)"
-            showErrorAlert = true
+            let alert = NSAlert()
+            alert.messageText = "Failed to initialize speech engine"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
             return
         }
 

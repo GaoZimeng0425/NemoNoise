@@ -12,9 +12,11 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
         if let localeId = pref.localeIdentifier {
             resolved = SFSpeechRecognizer(locale: Locale(identifier: localeId))
                 ?? SFSpeechRecognizer(locale: .current)
+                ?? SFSpeechRecognizer()
         } else {
             resolved = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
                 ?? SFSpeechRecognizer(locale: .current)
+                ?? SFSpeechRecognizer()
         }
 
         guard let resolved else {
