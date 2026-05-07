@@ -1,4 +1,5 @@
 import AVFoundation
+import os
 
 struct AudioChunk: Sendable {
     let samples: [Float]
@@ -108,5 +109,9 @@ final class AudioCapture: Sendable {
 
 // AsyncStream.Continuation is not Sendable, wrap it to cross isolation boundaries safely
 final class ContinuationBox: @unchecked Sendable {
-    var value: AsyncStream<AudioChunk>.Continuation?
+    private let lock = OSAllocatedUnfairLock<AsyncStream<AudioChunk>.Continuation?>(initialState: nil)
+    var value: AsyncStream<AudioChunk>.Continuation? {
+        get { lock.withLock { $0 } }
+        set { lock.withLock { $0 = newValue } }
+    }
 }

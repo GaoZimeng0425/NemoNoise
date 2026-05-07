@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import os
 
 final class HotkeyMonitor: @unchecked Sendable {
     var onKeyDown: (() -> Void)?
@@ -7,7 +8,11 @@ final class HotkeyMonitor: @unchecked Sendable {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var optionWasDown = false
+
+    private struct State {
+        var optionWasDown = false
+    }
+    private let lock = OSAllocatedUnfairLock(initialState: State())
 
     var hotkeyOption: HotkeyOption {
         let raw = UserDefaults.standard.string(forKey: "hotkeyOption") ?? "option"
@@ -65,7 +70,6 @@ final class HotkeyMonitor: @unchecked Sendable {
         runLoopSource = nil
     }
 
-    // nonisolated: called from CGEventTap callback off the main thread
     nonisolated private func handleFlagsChangedSync(event: CGEvent) {
         let flags = event.flags
         let selectedFlag = hotkeyOption.cgFlags
@@ -73,14 +77,14 @@ final class HotkeyMonitor: @unchecked Sendable {
         let optionNowDown = flags.contains(selectedFlag)
         let onlyOption = flags.intersection(allFlags) == selectedFlag
 
-        var wasDown = optionWasDown
+        let wasDown = lock.withLock { $0.optionWasDown }
 
         if optionNowDown && !wasDown && onlyOption {
-            optionWasDown = true
+            lock.withLock { $0.optionWasDown = true }
             let cb = onKeyDown
             DispatchQueue.main.async { cb?() }
         } else if !optionNowDown && wasDown {
-            optionWasDown = false
+            lock.withLock { $0.optionWasDown = false }
             let cb = onKeyUp
             DispatchQueue.main.async { cb?() }
         }
