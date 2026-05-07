@@ -20,8 +20,6 @@ final class HotkeyMonitor: @unchecked Sendable {
     }
 
     func start() {
-        requestAccessibilityIfNeeded()
-
         guard AXIsProcessTrusted() else {
             LogService.warn("Accessibility permission not granted — hotkey disabled", category: "HotkeyMonitor")
             return
@@ -89,12 +87,6 @@ final class HotkeyMonitor: @unchecked Sendable {
                 DispatchQueue.main.async { cb?() }
             }
         }
-    }
-
-    private func requestAccessibilityIfNeeded() {
-        guard !AXIsProcessTrusted() else { return }
-        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
     }
 
     deinit { stop() }
