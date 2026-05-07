@@ -81,7 +81,11 @@ final class ModelManager {
 
     func startDownload(_ descriptor: ModelDescriptor) {
         guard case .notDownloaded = state(for: descriptor) else { return }
-        let task = Task { await download(descriptor) }
+        let id = descriptor.id
+        let task = Task {
+            await download(descriptor)
+            downloadTasks.removeValue(forKey: id)
+        }
         downloadTasks[descriptor.id] = task
     }
 
@@ -119,6 +123,10 @@ final class ModelManager {
     private func download(_ descriptor: ModelDescriptor) async {
         let dir = modelDir(for: descriptor)
         do {
+            // Clean any partial files from a previous failed download
+            if FileManager.default.fileExists(atPath: dir.path) {
+                try FileManager.default.removeItem(at: dir)
+            }
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
             let totalFiles = Double(descriptor.files.count)
