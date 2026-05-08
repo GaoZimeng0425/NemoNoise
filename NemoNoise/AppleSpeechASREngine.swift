@@ -49,7 +49,6 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in
                 guard let self else { return }
                 if let error {
-                    self.partialLock.withLock { _ in }
                     if let cont = self.finishContinuation {
                         self.finishContinuation = nil
                         cont.resume(throwing: error)
