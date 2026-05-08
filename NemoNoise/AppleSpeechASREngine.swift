@@ -1,9 +1,15 @@
 import Speech
 import AVFoundation
+import os
 
 final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
     private let recognizer: SFSpeechRecognizer
-    private var accumulated: [Float] = []
+
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var task: SFSpeechRecognitionTask?
+    private var finishContinuation: CheckedContinuation<TranscriptionResult, Error>?
+    private let partialLock = OSAllocatedUnfairLock(initialState: "")
+    private var finalResult: TranscriptionResult?
 
     init() throws {
         let pref = LanguagePreference.current
@@ -27,52 +33,82 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
-        accumulated.append(contentsOf: samples)
-        return TranscriptionResult(text: "", isFinal: false, emotion: nil)
-    }
-
-    func finish() async throws -> TranscriptionResult {
-        defer { accumulated.removeAll() }
-        guard !accumulated.isEmpty else {
-            return TranscriptionResult(text: "", isFinal: true, emotion: nil)
-        }
-        guard await requestPermission() else {
-            throw ASRError.audioCaptureFailed("Speech recognition permission denied")
-        }
         guard recognizer.isAvailable else {
             throw ASRError.audioCaptureFailed("Speech recognizer not available")
         }
-        guard let buffer = makePCMBuffer(from: accumulated, sampleRate: 16000) else {
-            return TranscriptionResult(text: "", isFinal: true, emotion: nil)
-        }
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = false
-        request.append(buffer)
-        request.endAudio()
+        if request == nil {
+            guard await requestPermission() else {
+                throw ASRError.audioCaptureFailed("Speech recognition permission denied")
+            }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            var resumed = false
-            recognizer.recognitionTask(with: request) { result, error in
-                guard !resumed else { return }
+            let req = SFSpeechAudioBufferRecognitionRequest()
+            req.shouldReportPartialResults = true
+            request = req
+
+            task = recognizer.recognitionTask(with: req) { [weak self] result, error in
+                guard let self else { return }
                 if let error {
-                    resumed = true
-                    continuation.resume(throwing: error)
+                    self.partialLock.withLock { _ in }
+                    if let cont = self.finishContinuation {
+                        self.finishContinuation = nil
+                        cont.resume(throwing: error)
+                    }
                     return
                 }
-                guard let result, result.isFinal else { return }
-                resumed = true
-                continuation.resume(returning: TranscriptionResult(
-                    text: result.bestTranscription.formattedString,
-                    isFinal: true,
-                    emotion: nil
-                ))
+                if let result {
+                    if result.isFinal {
+                        let transcription = TranscriptionResult(
+                            text: result.bestTranscription.formattedString,
+                            isFinal: true,
+                            emotion: nil
+                        )
+                        self.finalResult = transcription
+                        if let cont = self.finishContinuation {
+                            self.finishContinuation = nil
+                            cont.resume(returning: transcription)
+                        }
+                    } else {
+                        self.partialLock.withLock { partial in
+                            partial = result.bestTranscription.formattedString
+                        }
+                    }
+                }
             }
         }
+
+        if let buffer = makePCMBuffer(from: samples, sampleRate: sampleRate) {
+            request?.append(buffer)
+        }
+
+        let partial = partialLock.withLock { $0 }
+        return TranscriptionResult(text: partial, isFinal: false, emotion: nil)
+    }
+
+    func finish() async throws -> TranscriptionResult {
+        if let final = finalResult {
+            finalResult = nil
+            return final
+        }
+
+        request?.endAudio()
+
+        if task != nil {
+            return try await withCheckedThrowingContinuation { continuation in
+                self.finishContinuation = continuation
+            }
+        }
+
+        return TranscriptionResult(text: "", isFinal: true, emotion: nil)
     }
 
     func reset() {
-        accumulated.removeAll()
+        task?.cancel()
+        task = nil
+        request = nil
+        finishContinuation = nil
+        finalResult = nil
+        partialLock.withLock { $0 = "" }
     }
 
     private func makePCMBuffer(from samples: [Float], sampleRate: Int) -> AVAudioPCMBuffer? {
