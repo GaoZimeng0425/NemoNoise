@@ -200,7 +200,6 @@ final class RecordingController {
             defer {
                 recordingState = .idle
                 engine = nil
-                if !showCopyButton { hideOverlay() }
             }
             do {
                 guard !accumulatedSamples.isEmpty else { return }
@@ -275,6 +274,13 @@ final class RecordingController {
         let text = confirmedSegments.map(\.text).joined(separator: " ")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+        showCopyButton = false
+        hideOverlay()
+    }
+
+    func dismissOverlay() {
+        confirmedSegments = []
+        partialText = ""
         showCopyButton = false
         hideOverlay()
     }

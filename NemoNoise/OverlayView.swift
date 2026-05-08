@@ -76,6 +76,7 @@ struct OverlayView: View {
         }
     }
 
+    @ViewBuilder
     private var micLevelView: some View {
         if reduceMotion {
             Text("● REC")
@@ -96,7 +97,7 @@ struct OverlayView: View {
 
     private var closeButton: some View {
         Button {
-            // Cancel and hide via controller — actual hide happens when state resets
+            controller.dismissOverlay()
         } label: {
             Image(systemName: "xmark")
                 .font(.caption2)
