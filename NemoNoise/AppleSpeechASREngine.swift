@@ -7,9 +7,14 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
 
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
-    private var finishContinuation: CheckedContinuation<TranscriptionResult, Error>?
-    private let partialLock = OSAllocatedUnfairLock(initialState: "")
-    private var finalResult: TranscriptionResult?
+
+    private struct State {
+        var partialText: String = ""
+        var finalResult: TranscriptionResult?
+        var finishContinuation: CheckedContinuation<TranscriptionResult, Error>?
+        var pendingError: Error?
+    }
+    private let stateLock = OSAllocatedUnfairLock(initialState: State())
 
     init() throws {
         let pref = LanguagePreference.current
@@ -49,10 +54,13 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in
                 guard let self else { return }
                 if let error {
-                    if let cont = self.finishContinuation {
-                        self.finishContinuation = nil
-                        cont.resume(throwing: error)
+                    let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
+                        state.pendingError = error
+                        let cont = state.finishContinuation
+                        state.finishContinuation = nil
+                        return cont
                     }
+                    cont?.resume(throwing: error)
                     return
                 }
                 if let result {
@@ -62,15 +70,15 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
                             isFinal: true,
                             emotion: nil
                         )
-                        self.finalResult = transcription
-                        if let cont = self.finishContinuation {
-                            self.finishContinuation = nil
-                            cont.resume(returning: transcription)
+                        let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
+                            state.finalResult = transcription
+                            let cont = state.finishContinuation
+                            state.finishContinuation = nil
+                            return cont
                         }
+                        cont?.resume(returning: transcription)
                     } else {
-                        self.partialLock.withLock { partial in
-                            partial = result.bestTranscription.formattedString
-                        }
+                        self.stateLock.withLock { $0.partialText = result.bestTranscription.formattedString }
                     }
                 }
             }
@@ -80,21 +88,43 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
             request?.append(buffer)
         }
 
-        let partial = partialLock.withLock { $0 }
+        let partial = stateLock.withLock { $0.partialText }
         return TranscriptionResult(text: partial, isFinal: false, emotion: nil)
     }
 
     func finish() async throws -> TranscriptionResult {
-        if let final = finalResult {
-            finalResult = nil
+        request?.endAudio()
+
+        let snapshot = stateLock.withLock { state -> (TranscriptionResult?, Error?) in
+            (state.finalResult, state.pendingError)
+        }
+        if let error = snapshot.1 {
+            throw error
+        }
+        if let final = snapshot.0 {
+            stateLock.withLock { $0.finalResult = nil }
             return final
         }
 
-        request?.endAudio()
-
         if task != nil {
             return try await withCheckedThrowingContinuation { continuation in
-                self.finishContinuation = continuation
+                let resolved = self.stateLock.withLock { state -> (TranscriptionResult?, Error?) in
+                    if let error = state.pendingError {
+                        state.pendingError = nil
+                        return (nil, error)
+                    }
+                    if let final = state.finalResult {
+                        state.finalResult = nil
+                        return (final, nil)
+                    }
+                    state.finishContinuation = continuation
+                    return (nil, nil)
+                }
+                if let error = resolved.1 {
+                    continuation.resume(throwing: error)
+                } else if let final = resolved.0 {
+                    continuation.resume(returning: final)
+                }
             }
         }
 
@@ -105,9 +135,7 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
         task?.cancel()
         task = nil
         request = nil
-        finishContinuation = nil
-        finalResult = nil
-        partialLock.withLock { $0 = "" }
+        stateLock.withLock { state in state = State() }
     }
 
     private func makePCMBuffer(from samples: [Float], sampleRate: Int) -> AVAudioPCMBuffer? {
