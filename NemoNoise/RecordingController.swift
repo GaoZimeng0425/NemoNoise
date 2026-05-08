@@ -279,6 +279,7 @@ final class RecordingController {
     }
 
     func dismissOverlay() {
+        guard recordingState == .idle else { return }
         confirmedSegments = []
         partialText = ""
         showCopyButton = false
