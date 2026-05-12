@@ -28,9 +28,9 @@ struct OverlayView: View {
         .overlay(alignment: .bottom) {
             if showFallbackToast {
                 HStack(spacing: 6) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
+                    Image(systemName: "checkmark.circle")
                         .font(.caption)
-                    Text("Switched to local engine")
+                    Text(controller.toastMessage)
                         .font(.caption)
                         .fontWeight(.medium)
                 }
@@ -89,8 +89,6 @@ struct OverlayView: View {
                 isRecording: controller.recordingState == .recording
             )
             .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.7), value: controller.micLevel)
-            
-            closeButton
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -136,21 +134,6 @@ struct OverlayView: View {
         }
     }
 
-    private var closeButton: some View {
-        Button {
-            withAnimation(.easeOut(duration: 0.2)) {
-                controller.dismissOverlay()
-            }
-        } label: {
-            Image(systemName: "xmark.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary.opacity(0.5))
-                .symbolRenderingMode(.hierarchical)
-        }
-        .buttonStyle(.plain)
-        .help("Close Overlay")
-    }
-
     private var transcriptArea: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Confirmed Segments
@@ -194,18 +177,6 @@ struct OverlayView: View {
                 .padding(.vertical, 4)
             }
 
-            if controller.showCopyButton {
-                Button {
-                    controller.copyToClipboard()
-                } label: {
-                    Label("Copy to Clipboard", systemImage: "doc.on.doc.fill")
-                        .padding(.horizontal, 4)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding(.top, 4)
-                .transition(.scale.combined(with: .opacity))
-            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

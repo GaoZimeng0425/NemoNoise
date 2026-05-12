@@ -18,42 +18,17 @@ final class TextInjector {
     }
 
     @discardableResult
-    func inject(_ text: String) async -> Bool {
+    func injectAX(_ text: String) -> Bool {
         guard let element = targetElement else {
-            LogService.info("Injection method: clipboard (no target element), length: \(text.count)", category: "TextInjection")
-            await pasteViaPasteboard(text)
+            LogService.info("No target element for AX injection, length: \(text.count)", category: "TextInjection")
             return false
         }
-
         let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFString)
         if result == .success {
             LogService.info("Injection method: AX, length: \(text.count)", category: "TextInjection")
             return true
         }
-
-        LogService.warn("AX injection failed (error: \(result.rawValue)), falling back to clipboard", category: "TextInjection")
-        await pasteViaPasteboard(text)
+        LogService.warn("AX injection failed (error: \(result.rawValue))", category: "TextInjection")
         return false
-    }
-
-    private func pasteViaPasteboard(_ text: String) async {
-        let previousContents = NSPasteboard.general.string(forType: .string)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-
-        let source = CGEventSource(stateID: .hidSystemState)
-        let vKeyCode: CGKeyCode = 0x09
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true)
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false)
-        keyDown?.flags = .maskCommand
-        keyUp?.flags = .maskCommand
-        keyDown?.post(tap: .cgAnnotatedSessionEventTap)
-        keyUp?.post(tap: .cgAnnotatedSessionEventTap)
-
-        if let previous = previousContents {
-            try? await Task.sleep(for: .milliseconds(200))
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(previous, forType: .string)
-        }
     }
 }

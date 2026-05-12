@@ -101,3 +101,21 @@ after each iteration and it's included in prompts for context.
   - `.accentColor` is not a valid `ShapeStyle` member in newer SwiftUI — use `Color.accentColor` explicitly.
   - `PBXFileSystemSynchronizedRootGroup` in Xcode project means new files are auto-discovered — no manual pbxproj edits needed.
 ---
+
+## 2026-05-12 - US-006
+- Simplified overlay: removed manual close button and Copy to Clipboard button; overlay auto-fades after text injection.
+- On AX injection success: overlay auto-fades out after 2 seconds.
+- On AX injection failure: text copies to clipboard, toast "Copied to clipboard" shows for 3 seconds, then overlay fades.
+- When no text produced: overlay auto-fades after 2 seconds (no close button otherwise).
+- Toast text now uses `controller.toastMessage` (dynamic) instead of hardcoded string, so engine fallback and clipboard toast share the same UI.
+- `TextInjector.inject()` replaced with `injectAX()` (sync, AX-only, no clipboard paste fallback). Removed `pasteViaPasteboard`.
+- Removed from RecordingController: `showCopyButton`, `copyToClipboard()`, `dismissOverlay()`.
+- Files changed:
+  - `NemoNoise/Services/Output/TextInjector.swift` — replaced `inject()` with `injectAX()`, removed `pasteViaPasteboard`
+  - `NemoNoise/App/RecordingController.swift` — rewrote `injectText` for auto-fade/toast flow, removed unused properties/methods
+  - `NemoNoise/UI/Overlay/OverlayView.swift` — removed close button, removed Copy to Clipboard button, dynamic toast text
+- **Learnings:**
+  - When removing the only close/dismiss affordance from an overlay, handle the edge case of "no content produced" — otherwise the overlay hangs with no way to dismiss.
+  - Sharing a single toast mechanism (showToast/toastMessage) across different features (engine fallback, clipboard copy) keeps the UI consistent and avoids duplicate overlay code.
+  - Making `TextInjector.injectAX` synchronous is fine since AX calls are sync — no need for async when not doing clipboard paste with sleeps.
+---

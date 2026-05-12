@@ -9,7 +9,6 @@ final class RecordingController {
     var partialText: String = ""
     var isStreaming: Bool = true
     var micLevel: Float = 0
-    var showCopyButton: Bool = false
     var showErrorAlert: Bool = false
     var errorMessage: String = ""
     var showAccessibilityGuide: Bool = false
@@ -121,7 +120,6 @@ final class RecordingController {
         confirmedSegments = []
         partialText = ""
         isStreaming = orchestrator.isStreaming
-        showCopyButton = false
         showOverlay()
         startTimer()
 
@@ -164,6 +162,12 @@ final class RecordingController {
                     await injectText(finalResult.text)
                 } else {
                     LogService.info("Transcription complete, no text produced", category: "Recording")
+                    toastTask?.cancel()
+                    toastTask = Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        guard !Task.isCancelled else { return }
+                        hideOverlay()
+                    }
                 }
                 recordingState = .ready
                 LogService.endSession()
@@ -185,17 +189,32 @@ final class RecordingController {
 
     private func injectText(_ text: String) async {
         let start = ContinuousClock.now
-        let method = await textInjector.inject(text)
+        let success = textInjector.injectAX(text)
         let elapsed = ContinuousClock.now - start
-        if method {
+
+        if success {
             LogService.info("Text injected via AX, duration: \(elapsed.description)", category: "TextInjection")
+            toastTask?.cancel()
+            toastTask = Task {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                hideOverlay()
+            }
         } else {
-            LogService.warn("Text injection fell back to clipboard, duration: \(elapsed.description)", category: "TextInjection")
-        }
-        if !method {
-            showCopyButton = true
+            LogService.warn("AX injection failed, copying to clipboard, duration: \(elapsed.description)", category: "TextInjection")
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            toastMessage = "Copied to clipboard"
+            showToast = true
             if !AXIsProcessTrusted() {
                 showAccessibilityGuide = true
+            }
+            toastTask?.cancel()
+            toastTask = Task {
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                showToast = false
+                hideOverlay()
             }
         }
     }
@@ -243,19 +262,4 @@ final class RecordingController {
         timerTask = nil
     }
 
-    func copyToClipboard() {
-        let text = confirmedSegments.map(\.text).joined(separator: " ")
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        showCopyButton = false
-        hideOverlay()
-    }
-
-    func dismissOverlay() {
-        guard recordingState == .ready else { return }
-        confirmedSegments = []
-        partialText = ""
-        showCopyButton = false
-        hideOverlay()
-    }
 }
