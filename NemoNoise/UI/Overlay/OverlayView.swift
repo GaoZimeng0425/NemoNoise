@@ -20,10 +20,6 @@ struct OverlayView: View {
                 .fill(.ultraThickMaterial)
                 .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
         }
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(.white.opacity(0.15), lineWidth: 0.5)
-        }
         .overlay(alignment: .bottom) {
             if showFallbackToast {
                 HStack(spacing: 6) {
