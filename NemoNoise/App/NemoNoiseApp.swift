@@ -10,8 +10,10 @@ struct NemoNoiseApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarPopoverView()
-                .environment(controller)
+            OnboardingGate {
+                MenuBarPopoverView()
+                    .environment(controller)
+            }
         } label: {
             MenuBarLabel()
                 .environment(controller)
@@ -23,5 +25,25 @@ struct NemoNoiseApp: App {
                 .environment(controller)
                 .environment(controller.modelManager)
         }
+    }
+}
+
+private struct OnboardingGate: View {
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    let content: AnyView
+
+    init(@ViewBuilder content: () -> some View) {
+        self.content = AnyView(content())
+    }
+
+    var body: some View {
+        content
+            .onAppear {
+                if !hasCompletedOnboarding {
+                    OnboardingWindowController.show {
+                        hasCompletedOnboarding = true
+                    }
+                }
+            }
     }
 }

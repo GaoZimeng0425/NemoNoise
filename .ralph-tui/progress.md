@@ -81,3 +81,23 @@ after each iteration and it's included in prompts for context.
   - Using a static `currentSessionID` on the singleton LogService lets any service's log calls automatically pick up the session context without passing IDs around — minimal coupling.
   - `DDLog*` string-based macros are deprecated in CocoaLumberjack 3.9.1 in favor of `DDLogMessageFormat` — still compile but produce warnings. Not addressed per CLAUDE.md surgical changes policy.
 ---
+
+## 2026-05-12 - US-005
+- First-launch onboarding flow: 3-step wizard shown on first app launch.
+- Step 1: microphone permission request with visual feedback.
+- Step 2: engine selection — Paraformer (default) or Apple Speech, using selectable cards.
+- Step 3: hotkey display (Option / Right Cmd) with push-to-talk explanation.
+- Each step has Back/Next/Skip; final step has "Get Started" button.
+- On completion: `hasCompletedOnboarding` saved to UserDefaults — never shows again.
+- `OnboardingGate` wrapper view bridges `.onAppear` into `MenuBarExtra` content, since `MenuBarExtra` scene doesn't support `.onAppear` directly.
+- `OnboardingWindowController` uses a static `activePanel` to manage the onboarding window lifecycle outside the struct-based `App`.
+- Files changed:
+  - `NemoNoise/UI/Onboarding/OnboardingView.swift` — 3-step onboarding SwiftUI view
+  - `NemoNoise/UI/Onboarding/OnboardingWindowController.swift` — NSPanel-based window controller
+  - `NemoNoise/App/NemoNoiseApp.swift` — added OnboardingGate wrapper + onboarding trigger
+- **Learnings:**
+  - `MenuBarExtra` scene doesn't support `.onAppear` — need a wrapper view inside the content closure instead.
+  - `NemoNoiseApp` is a struct (SwiftUI `App` protocol), so you can't store mutable reference types or use `[weak self]`. Use a static property on a helper class instead.
+  - `.accentColor` is not a valid `ShapeStyle` member in newer SwiftUI — use `Color.accentColor` explicitly.
+  - `PBXFileSystemSynchronizedRootGroup` in Xcode project means new files are auto-discovered — no manual pbxproj edits needed.
+---
