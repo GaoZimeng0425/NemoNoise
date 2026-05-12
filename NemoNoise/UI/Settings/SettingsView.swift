@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
     @AppStorage("engineType") private var engineType = "paraformer"
+    @State private var cloudAPIKey: String = ""
 
     var body: some View {
         TabView {
@@ -13,13 +14,17 @@ struct SettingsView: View {
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 320)
+        .frame(width: 460, height: 420)
+        .onAppear {
+            cloudAPIKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey) ?? ""
+        }
     }
 
     // MARK: - Engine tab
 
     private var engineTab: some View {
         Form {
+            cloudAPIKeySection
             engineSection
             if engineType == "paraformer" {
                 modelSection(for: .paraformer)
@@ -43,6 +48,9 @@ struct SettingsView: View {
         Section("Speech Engine") {
             Picker("Engine", selection: $engineType) {
                 Label("Paraformer (streaming)", systemImage: "waveform").tag("paraformer")
+                if !cloudAPIKey.isEmpty {
+                    Label("Cloud Paraformer", systemImage: "cloud").tag("cloud")
+                }
                 Label("Apple Speech", systemImage: "apple.logo").tag("apple")
             }
             .pickerStyle(.radioGroup)
@@ -51,11 +59,33 @@ struct SettingsView: View {
             case "paraformer":
                 Text("Streaming Chinese ASR with real-time partial results. Requires ~50 MB download.")
                     .font(.caption).foregroundStyle(.secondary)
+            case "cloud":
+                Text("Cloud-based Paraformer for higher accuracy. Requires internet connection and API key.")
+                    .font(.caption).foregroundStyle(.secondary)
             case "apple":
                 Text("Uses Apple's on-device/cloud recognition. No download required.")
                     .font(.caption).foregroundStyle(.secondary)
             default: EmptyView()
             }
+        }
+    }
+
+    private var cloudAPIKeySection: some View {
+        Section("Cloud Engine") {
+            SecureField("DashScope API Key", text: $cloudAPIKey)
+                .textFieldStyle(.roundedBorder)
+                .onChange(of: cloudAPIKey) { _, newValue in
+                    if newValue.isEmpty {
+                        KeychainService.delete(key: KeychainService.Keys.cloudAPIKey)
+                        if engineType == "cloud" {
+                            engineType = "paraformer"
+                        }
+                    } else {
+                        try? KeychainService.save(key: KeychainService.Keys.cloudAPIKey, value: newValue)
+                    }
+                }
+            Text("Enter a DashScope API key to enable cloud-based Paraformer transcription.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -160,6 +190,9 @@ struct SettingsView: View {
         case "paraformer":
             return controller.modelManager.state(for: .paraformer) == .downloaded
                 ? "Paraformer (streaming)" : "Apple Speech (model not downloaded)"
+        case "cloud":
+            return cloudAPIKey.isEmpty
+                ? "Apple Speech (API key not set)" : "Cloud Paraformer"
         default:
             return "Apple Speech"
         }

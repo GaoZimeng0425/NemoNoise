@@ -62,3 +62,11 @@ enum ASRError: Error {
     case engineUnavailable
     case engineInitFailed
 }
+
+enum CloudASRError: Error {
+    case apiKeyNotSet
+    case authenticationFailed
+    case requestTimeout
+    case serverError(Int)
+    case invalidResponse
+}

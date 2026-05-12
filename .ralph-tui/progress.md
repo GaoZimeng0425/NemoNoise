@@ -178,3 +178,25 @@ after each iteration and it's included in prompts for context.
   - `SPUUpdaterDelegate` methods must be `nonisolated` when `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` — the ObjC protocol methods are called from Sparkle's internal queue, not necessarily the main actor.
   - pbxproj tab indentation for entries inside arrays uses 4 tabs (`\t\t\t\t`), not 3. The property name line uses 3 tabs (`\t\t\t`).
 ---
+
+## 2026-05-12 - US-011
+- CloudASREngine: sends accumulated audio to Alibaba Cloud DashScope Paraformer REST API for transcription.
+- `CloudASREngine` conforms to `ASRService` with `isStreaming=true`, accumulates audio in `feedChunk`, converts to WAV and calls API in `finish`.
+- `KeychainService`: enum-based wrapper around Security framework for save/load/delete of string values in macOS Keychain.
+- API key input via `SecureField` in Engine tab of Settings; stored in Keychain on change.
+- Cloud engine option appears in picker only when API key is non-empty; auto-reverts to "paraformer" if key is cleared while selected.
+- Error handling: timeout (up to 2 retries) → returns empty result + triggers fallback toast; auth failure (401/403) → toast "API key invalid. Please update in Settings."
+- Logging: request latency, HTTP status, audio bytes, retry count, transcribed char count.
+- Files changed:
+  - `NemoNoise/Utils/KeychainService.swift` — Keychain save/load/delete helper (new file)
+  - `NemoNoise/Services/ASR/CloudASREngine.swift` — Cloud ASR engine with DashScope API (new file)
+  - `NemoNoise/Models/ASRModels.swift` — added `CloudASRError` enum
+  - `NemoNoise/Services/ASR/SpeechOrchestrator.swift` — added "cloud" engine case in `makeEngine()`, cloud error handling in `finalize()`, simplified `isStreaming` fallback
+  - `NemoNoise/UI/Settings/SettingsView.swift` — added `cloudAPIKeySection` with SecureField, conditional "Cloud Paraformer" picker option, cloud description text, increased frame height to 420
+  - `NemoNoise/App/RecordingController.swift` — auth failure shows toast instead of error alert
+- **Learnings:**
+  - `Data.append()` in Swift does not accept `String` directly — must use `append(contentsOf: string.utf8)` or a helper.
+  - In a `Data` extension, `withUnsafeBytes(of:_:)` resolves to the instance method, not the global `Swift.withUnsafeBytes`. Use `Swift.withUnsafeBytes` explicitly.
+  - For enums without `Equatable` conformance, use `if case .foo = error` pattern matching instead of `error == .foo`.
+  - `SpeechOrchestrator.finalize()` needs its own error handling for cloud errors since the cloud API call happens in `finish()` (after recording stops), unlike the `feedChunk` fallback which works during recording.
+---

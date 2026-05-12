@@ -180,8 +180,21 @@ final class RecordingController {
     private func handleError(_ error: Error) {
         LogService.error("Recording error: \(error.localizedDescription)", category: "Recording")
         SentryService.capture(error: error)
-        errorMessage = error.localizedDescription
-        showErrorAlert = true
+
+        if let cloudError = error as? CloudASRError, case .authenticationFailed = cloudError {
+            toastMessage = "API key invalid. Please update in Settings."
+            showToast = true
+            toastTask?.cancel()
+            toastTask = Task {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { return }
+                showToast = false
+            }
+        } else {
+            errorMessage = error.localizedDescription
+            showErrorAlert = true
+        }
+
         recordingState = .ready
         orchestrator.stop()
         hideOverlay()

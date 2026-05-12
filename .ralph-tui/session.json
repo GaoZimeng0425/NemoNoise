@@ -3,10 +3,10 @@
   "sessionId": "6c99ef57-9e15-44e7-b6d6-77d3cffba716",
   "status": "running",
   "startedAt": "2026-05-12T04:58:58.737Z",
-  "updatedAt": "2026-05-12T06:52:34.049Z",
-  "currentIteration": 9,
+  "updatedAt": "2026-05-12T07:09:06.997Z",
+  "currentIteration": 10,
   "maxIterations": 0,
-  "tasksCompleted": 8,
+  "tasksCompleted": 9,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -71,8 +71,8 @@
       {
         "id": "US-010",
         "title": "Integrate Sparkle 2 for auto-updates",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-011",
@@ -190,6 +190,16 @@
       "durationMs": 2160213,
       "startedAt": "2026-05-12T05:58:16.817Z",
       "endedAt": "2026-05-12T06:34:17.030Z"
+    },
+    {
+      "iteration": 10,
+      "status": "completed",
+      "taskId": "US-010",
+      "taskTitle": "Integrate Sparkle 2 for auto-updates",
+      "taskCompleted": true,
+      "durationMs": 1095898,
+      "startedAt": "2026-05-12T06:34:18.144Z",
+      "endedAt": "2026-05-12T06:52:34.042Z"
     }
   ],
   "skippedTaskIds": [],

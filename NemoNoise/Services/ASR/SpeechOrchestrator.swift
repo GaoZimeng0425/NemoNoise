@@ -17,7 +17,7 @@ final class SpeechOrchestrator {
     var onEngineFallback: ((String) -> Void)?
 
     var isStreaming: Bool {
-        engine?.isStreaming ?? (UserDefaults.standard.string(forKey: "engineType") != "sensevoice")
+        engine?.isStreaming ?? true
     }
 
     init(modelManager: ModelManager) {
@@ -81,9 +81,25 @@ final class SpeechOrchestrator {
         guard let engine = engine else {
             return TranscriptionResult(text: "", isFinal: true, emotion: nil)
         }
-        let result = try await engine.finish()
-        stop()
-        return result
+
+        do {
+            let result = try await engine.finish()
+            stop()
+            return result
+        } catch let error as CloudASRError {
+            stop()
+            switch error {
+            case .authenticationFailed:
+                onEngineFallback?("CloudASREngine")
+                throw error
+            case .requestTimeout:
+                LogService.warn("Cloud timeout, returning empty result", category: "ASR")
+                onEngineFallback?("CloudASREngine")
+                return TranscriptionResult(text: "", isFinal: true, emotion: nil)
+            default:
+                throw error
+            }
+        }
     }
     
     func stop() {
@@ -115,6 +131,11 @@ final class SpeechOrchestrator {
                 }
             }
             LogService.warn("Paraformer model not found, falling back to Apple", category: "ASR")
+        case "cloud":
+            if let apiKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey), !apiKey.isEmpty {
+                return CloudASREngine(apiKey: apiKey)
+            }
+            LogService.warn("Cloud API key not set, falling back to Apple", category: "ASR")
         default:
             break
         }
