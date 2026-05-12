@@ -33,10 +33,10 @@ struct OverlayView: View {
                         .font(.caption)
                         .fontWeight(.medium)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(.black.opacity(0.7), in: Capsule())
+                .background(.regularMaterial, in: Capsule())
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .padding(.bottom, 8)
             }
@@ -46,7 +46,6 @@ struct OverlayView: View {
                 showFallbackToast = newValue
             }
         }
-        .padding(12)
         .alert("Accessibility Permission Required", isPresented: Binding(
             get: { controller.showAccessibilityGuide },
             set: { controller.showAccessibilityGuide = $0 }
@@ -89,8 +88,7 @@ struct OverlayView: View {
             )
             .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.7), value: controller.micLevel)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(16)
     }
 
     private var statusIndicator: some View {
