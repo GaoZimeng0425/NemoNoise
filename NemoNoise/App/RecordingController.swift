@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import ApplicationServices
+import KeyboardShortcuts
 
 @MainActor @Observable
 final class RecordingController {
@@ -39,13 +40,18 @@ final class RecordingController {
         }
     }
 
-    // TODO: Task 6 — rewrite using KeyboardShortcuts.getShortcut(for: .toggleRecording)
     var hotkeyDisplayText: String {
+        let keyName: String
+        if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleRecording) {
+            keyName = shortcut.description
+        } else {
+            keyName = "Not set"
+        }
         switch recordingMode {
         case .pushToTalk:
-            return "Hold **hotkey** to record"
+            return "Hold **\(keyName)** to record"
         case .toggle:
-            return "Press **hotkey** to start/stop"
+            return "Press **\(keyName)** to start/stop"
         }
     }
 
@@ -71,6 +77,7 @@ final class RecordingController {
         hotkeyMonitor.onKeyUp = { [weak self] in
             Task { @MainActor [weak self] in self?.handleHotkeyUp() }
         }
+        HotkeyMigration.run()
         hotkeyMonitor.start()
     }
 
