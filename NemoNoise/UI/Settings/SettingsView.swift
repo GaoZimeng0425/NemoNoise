@@ -7,7 +7,6 @@ struct SettingsView: View {
     @State private var cloudAPIKey: String = ""
     @State private var showExportAlert = false
     @State private var exportedLogPath = ""
-    @State private var conflictWarning = false
 
     var body: some View {
         TabView {
@@ -105,15 +104,7 @@ struct SettingsView: View {
 
     private var shortcutsSection: some View {
         Section("Shortcuts") {
-            KeyboardShortcuts.Recorder("Activation Key:", name: .toggleRecording) { shortcut in
-                conflictWarning = shortcut?.isTakenBySystem == true
-            }
-
-            if conflictWarning {
-                Label("This shortcut may conflict with a system shortcut", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.yellow)
-                    .font(.caption)
-            }
+            KeyboardShortcuts.Recorder("Activation Key:", name: .toggleRecording)
 
             Picker("Mode", selection: Binding(
                 get: { controller.recordingMode },
