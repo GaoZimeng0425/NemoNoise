@@ -37,6 +37,8 @@ final class OverlayWindowController: NSObject {
                 .environment(controller)
         )
         hostingView.sizingOptions = .preferredContentSize
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = .clear
 
         let panel = NSPanel(
             contentRect: .zero,
@@ -47,7 +49,7 @@ final class OverlayWindowController: NSObject {
         panel.level = .floating
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
         panel.contentView = hostingView
