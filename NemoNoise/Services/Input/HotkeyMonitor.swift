@@ -1,10 +1,9 @@
 import ApplicationServices
-import Combine
 import KeyboardShortcuts
 import os
 
 @MainActor
-final class HotkeyMonitor: ObservableObject {
+final class HotkeyMonitor {
     var onKeyDown: (() -> Void)?
     var onKeyUp: (() -> Void)?
 
@@ -24,6 +23,7 @@ final class HotkeyMonitor: ObservableObject {
     }
 
     func start() {
+        guard eventTask == nil else { return }
         guard AXIsProcessTrusted() else {
             LogService.warn("Accessibility permission not granted — hotkey disabled", category: "HotkeyMonitor")
             return
