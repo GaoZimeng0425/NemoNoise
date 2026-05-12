@@ -1,14 +1,14 @@
 {
-  "id": "6c99ef57-9e15-44e7-b6d6-77d3cffba716",
+  "id": "a1495961-4118-4598-86d2-b20fba16da00",
   "status": "running",
-  "startedAt": "2026-05-12T04:58:58.669Z",
-  "updatedAt": "2026-05-12T07:09:07.105Z",
+  "startedAt": "2026-05-12T07:36:35.054Z",
+  "updatedAt": "2026-05-12T07:36:35.054Z",
   "agentPlugin": "claude",
   "trackerPlugin": "json",
   "prdPath": "./tasks/prd.json",
-  "currentIteration": 11,
+  "currentIteration": 0,
   "maxIterations": 0,
   "totalTasks": 0,
-  "tasksCompleted": 10,
+  "tasksCompleted": 0,
   "cwd": "/Users/gaozimeng/Learn/macOS/NemoNoise"
 }

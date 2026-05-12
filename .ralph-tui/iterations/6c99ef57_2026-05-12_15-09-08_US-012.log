@@ -1,0 +1,91 @@
+# Iteration 12 Log
+
+## Metadata
+
+- **Task ID**: US-012
+- **Task Title**: One-click log export with sanitization
+- **Description**: As a user reporting a bug, I can export recent logs with one click, with PII removed.
+- **Status**: completed
+- **Task Completed**: Yes
+- **Promise Detected**: Yes
+- **Started At**: 2026-05-12T07:09:08.107Z
+- **Ended At**: 2026-05-12T07:21:13.913Z
+- **Duration**: 12m 5s
+- **Input Tokens**: 38756
+- **Output Tokens**: 14039
+- **Total Tokens**: 52795
+- **Agent**: claude
+- **Model**: glm-5.1
+- **Sandbox Mode**: auto
+- **Sandbox Network**: Enabled
+--- RAW OUTPUT ---
+I'll start by studying the progress file and codebase structure to understand the current state.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/.ralph-tui/progress.md[0m
+[94m[Agent][0m Explore NemoNoise codebase structure
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/tasks/prd.json[0m
+[94m[Bash][0m $ find /Users/gaozimeng/Learn/macOS/NemoNoise -type f -name "*.swift" -o -name "*.xcodeproj" -o -name ...
+[94m[Bash][0m $ ls -la /Users/gaozimeng/Learn/macOS/NemoNoise/
+[94m[Bash][0m $ find /Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise -type d | sort
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/App/NemoNoiseApp.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Settings/SettingsView.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Utils/LogService.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Menubar/MenubarView.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/App/RecordingController.swift[0m
+[94m[Bash][0m $ find /Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services -type f -name "*.swift" | sort
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/SpeechOrchestrator.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/Sentry/SentryService.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ModelManagement/ModelManager.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m
+[94m[Bash][0m $ find /Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise -name "*.swift" | wc -l
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise[0m pattern: [96mdebug|Debug|DEBUG|log|Log|LOG[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayWindowController.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/Input/HotkeyMonitor.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Onboarding/OnboardingView.swift[0m
+[94m[Bash][0m $ ls -la /Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Utils/
+[94m[Bash][0m $ ls -la /Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Models/
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Models/ASRModels.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Utils/KeychainService.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/Audio/AudioCapture.swift[0m
+[94m[Bash][0m $ find /Users/gaozimeng/Learn/macOS/NemoNoise -name "*.plist" -o -name "Package.swift" -o -name "Podfi...
+[94m[Bash][0m $ cat /Users/gaozimeng/Learn/macOS/NemoNoise/build/export/NemoNoise.app/Contents/Info.plist 2>/dev/nul...
+[94m[Bash][0m $ find /Users/gaozimeng/Learn/macOS/NemoNoise -name "*Test*" -o -name "*test*" | head -10
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/CLAUDE.md[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/ASRService.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/Output/TextInjector.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/ParaformerStreamingEngine.swift[0m
+Now let me read the key files I'll need to modify.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Utils/LogService.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Settings/SettingsView.swift[0m
+Let me also check what TextInjector logs to understand the sanitization needs.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/Output/TextInjector.swift[0m
+Good. I have a clear picture of the codebase. Now let me implement US-012.
+
+**Plan:**
+1. Add `exportLogs()` and `sanitize()` methods to `LogService`
+2. Add "Export Logs" button in SettingsView's About section with confirmation alert
+3. Build and verify
+[94m[TodoWrite][0m
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Utils/LogService.swift[0m edit: "    nonisolated static func error(_ message: Strin..." → "    nonisolated static func error(_ message: Strin..."
+[94m[TodoWrite][0m
+Now adding the Export Logs button to SettingsView.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Settings/SettingsView.swift[0m edit: "    @AppStorage("engineType") private var engineTy..." → "    @AppStorage("engineType") private var engineTy..."
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Settings/SettingsView.swift[0m edit: "    private var engineTab: some View {
+        For..." → "    private var engineTab: some View {
+        For..."
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Settings/SettingsView.swift[0m edit: "    private var aboutSection: some View {
+        ..." → "    private var aboutSection: some View {
+        ..."
+[94m[TodoWrite][0m
+Building to verify.
+[94m[Bash][0m Build NemoNoise with xcodebuild $ xcodebuild build -scheme NemoNoise -configuration Debug -destination 'platform=macOS' 2>&1 | tail -3...
+Build succeeded. Now let me update progress.md.
+[94m[TodoWrite][0m
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/.ralph-tui/progress.md[0m edit: "  - `Data.append()` in Swift does not accept `Stri..." → "  - `Data.append()` in Swift does not accept `Stri..."
+[94m[TodoWrite][0m
+US-012 complete. Summary:
+
+- **LogService.swift**: Added `exportLogs()` — reads last 7 days of log files from `~/.NemoNoise/logs/`, sanitizes user paths (`/Users/<name>` → `/Users/[USER]`), writes combined output to Desktop with timestamped filename.
+- **SettingsView.swift**: Added "Export Logs…" button in About section. On success, alert shows file path with "Show in Finder" button.
+- Build succeeds.
+
+<promise>COMPLETE</promise>

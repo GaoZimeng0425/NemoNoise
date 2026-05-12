@@ -6,429 +6,555 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXFileReference section */
-		45ED16B02FA99BA6005FFD16 /* NemoNoise.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NemoNoise.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AABB0001AABB0001AABB0001 /* sherpa-onnx.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "NemoNoise/Resources/sherpa-onnx.xcframework"; sourceTree = "<group>"; };
-		AABB0003AABB0003AABB0003 /* libonnxruntime.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libonnxruntime.a; path = "NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a"; sourceTree = "<group>"; };
-/* End PBXFileReference section */
-
 /* Begin PBXBuildFile section */
-		AABB0002AABB0002AABB0002 /* sherpa-onnx.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = AABB0001AABB0001AABB0001 /* sherpa-onnx.xcframework */; };
-		AABB0004AABB0004AABB0004 /* libonnxruntime.a in Frameworks */ = {isa = PBXBuildFile; fileRef = AABB0003AABB0003AABB0003 /* libonnxruntime.a */; };
+			AABB0002AABB0002AABB0002 /* sherpa-onnx.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = AABB0001AABB0001AABB0001 /* sherpa-onnx.xcframework */; };
+			AABB0004AABB0004AABB0004 /* libonnxruntime.a in Frameworks */ = {isa = PBXBuildFile; fileRef = AABB0003AABB0003AABB0003 /* libonnxruntime.a */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+			DD000003DD000003DD000003 /* PBXContainerItemProxy */ = {
+				isa = PBXContainerItemProxy;
+				containerPortal = 45ED16A82FA99BA5005FFD16 /* Project object */;
+				proxyType = 1;
+				remoteGlobalIDString = 45ED16AF2FA99BA6005FFD16;
+				remoteInfo = NemoNoise;
+			};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+			45ED16B02FA99BA6005FFD16 /* NemoNoise.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NemoNoise.app; sourceTree = BUILT_PRODUCTS_DIR; };
+			DD000001DD000001DD000001 /* NemoNoiseTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NemoNoiseTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+			AABB0001AABB0001AABB0001 /* sherpa-onnx.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "NemoNoise/Resources/sherpa-onnx.xcframework"; sourceTree = "<group>"; };
+			AABB0003AABB0003AABB0003 /* libonnxruntime.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libonnxruntime.a; path = "NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		45ED16B22FA99BA6005FFD16 /* NemoNoise */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = NemoNoise;
-			sourceTree = "<group>";
-		};
+			45ED16B22FA99BA6005FFD16 /* NemoNoise */ = {
+				isa = PBXFileSystemSynchronizedRootGroup;
+				path = NemoNoise;
+				sourceTree = "<group>";
+			};
+			DD000002DD000002DD000002 /* NemoNoiseTests */ = {
+				isa = PBXFileSystemSynchronizedRootGroup;
+				path = NemoNoiseTests;
+				sourceTree = "<group>";
+			};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		45ED16AD2FA99BA6005FFD16 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				AABB0002AABB0002AABB0002 /* sherpa-onnx.xcframework in Frameworks */,
-				AABB0004AABB0004AABB0004 /* libonnxruntime.a in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+			45ED16AD2FA99BA6005FFD16 /* Frameworks */ = {
+				isa = PBXFrameworksBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+					AABB0002AABB0002AABB0002 /* sherpa-onnx.xcframework in Frameworks */,
+					AABB0004AABB0004AABB0004 /* libonnxruntime.a in Frameworks */,
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
+			DD000006DD000006DD000006 /* Frameworks */ = {
+				isa = PBXFrameworksBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		45ED16A72FA99BA5005FFD16 = {
-			isa = PBXGroup;
-			children = (
-				45ED16B22FA99BA6005FFD16 /* NemoNoise */,
-				45ED16B12FA99BA6005FFD16 /* Products */,
-				AABB0001AABB0001AABB0001 /* sherpa-onnx.xcframework */,
-				AABB0003AABB0003AABB0003 /* libonnxruntime.a */,
-			);
-			sourceTree = "<group>";
-		};
-		45ED16B12FA99BA6005FFD16 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				45ED16B02FA99BA6005FFD16 /* NemoNoise.app */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
+			45ED16A72FA99BA5005FFD16 = {
+				isa = PBXGroup;
+				children = (
+					45ED16B22FA99BA6005FFD16 /* NemoNoise */,
+					DD000002DD000002DD000002 /* NemoNoiseTests */,
+					45ED16B12FA99BA6005FFD16 /* Products */,
+					AABB0001AABB0001AABB0001 /* sherpa-onnx.xcframework */,
+					AABB0003AABB0003AABB0003 /* libonnxruntime.a */,
+				);
+				sourceTree = "<group>";
+			};
+			45ED16B12FA99BA6005FFD16 /* Products */ = {
+				isa = PBXGroup;
+				children = (
+					45ED16B02FA99BA6005FFD16 /* NemoNoise.app */,
+					DD000001DD000001DD000001 /* NemoNoiseTests.xctest */,
+				);
+				name = Products;
+				sourceTree = "<group>";
+			};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		45ED16AF2FA99BA6005FFD16 /* NemoNoise */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 45ED16BD2FA99BA7005FFD16 /* Build configuration list for PBXNativeTarget "NemoNoise" */;
-			buildPhases = (
-				45ED16AC2FA99BA6005FFD16 /* Sources */,
-				45ED16AD2FA99BA6005FFD16 /* Frameworks */,
-				45ED16AE2FA99BA6005FFD16 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				45ED16B22FA99BA6005FFD16 /* NemoNoise */,
-			);
-			name = NemoNoise;
-			packageProductDependencies = (
-				AA0000022F9363C40037E18E /* CocoaLumberjackSwift */,
-				BB0000022F9363C40037E18E /* Sentry */,
-				CC0000022F9363C40037E18E /* Sparkle */,
-			);
-			productName = NemoNoise;
-			productReference = 45ED16B02FA99BA6005FFD16 /* NemoNoise.app */;
-			productType = "com.apple.product-type.application";
-		};
+			45ED16AF2FA99BA6005FFD16 /* NemoNoise */ = {
+				isa = PBXNativeTarget;
+				buildConfigurationList = 45ED16BD2FA99BA7005FFD16 /* Build configuration list for PBXNativeTarget "NemoNoise" */;
+				buildPhases = (
+					45ED16AC2FA99BA6005FFD16 /* Sources */,
+					45ED16AD2FA99BA6005FFD16 /* Frameworks */,
+					45ED16AE2FA99BA6005FFD16 /* Resources */,
+				);
+				buildRules = (
+				);
+				dependencies = (
+				);
+				fileSystemSynchronizedGroups = (
+					45ED16B22FA99BA6005FFD16 /* NemoNoise */,
+				);
+				name = NemoNoise;
+				packageProductDependencies = (
+					AA0000022F9363C40037E18E /* CocoaLumberjackSwift */,
+					BB0000022F9363C40037E18E /* Sentry */,
+					CC0000022F9363C40037E18E /* Sparkle */,
+				);
+				productName = NemoNoise;
+				productReference = 45ED16B02FA99BA6005FFD16 /* NemoNoise.app */;
+				productType = "com.apple.product-type.application";
+			};
+			DD000008DD000008DD000008 /* NemoNoiseTests */ = {
+				isa = PBXNativeTarget;
+				buildConfigurationList = DD00000BDD00000BDD00000B /* Build configuration list for PBXNativeTarget "NemoNoiseTests" */;
+				buildPhases = (
+					DD000005DD000005DD000005 /* Sources */,
+					DD000006DD000006DD000006 /* Frameworks */,
+					DD000007DD000007DD000007 /* Resources */,
+				);
+				buildRules = (
+				);
+				dependencies = (
+					DD000004DD000004DD000004 /* PBXTargetDependency */,
+				);
+				fileSystemSynchronizedGroups = (
+					DD000002DD000002DD000002 /* NemoNoiseTests */,
+				);
+				name = NemoNoiseTests;
+				packageProductDependencies = (
+				);
+				productName = NemoNoiseTests;
+				productReference = DD000001DD000001DD000001 /* NemoNoiseTests.xctest */;
+				productType = "com.apple.product-type.bundle.unit-test";
+			};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		45ED16A82FA99BA5005FFD16 /* Project object */ = {
-			isa = PBXProject;
-			attributes = {
-				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2640;
-				LastUpgradeCheck = 2640;
-				TargetAttributes = {
-					45ED16AF2FA99BA6005FFD16 = {
-						CreatedOnToolsVersion = 26.4.1;
+			45ED16A82FA99BA5005FFD16 /* Project object */ = {
+				isa = PBXProject;
+				attributes = {
+					BuildIndependentTargetsInParallel = 1;
+					LastSwiftUpdateCheck = 2640;
+					LastUpgradeCheck = 2640;
+					TargetAttributes = {
+						45ED16AF2FA99BA6005FFD16 = {
+							CreatedOnToolsVersion = 26.4.1;
+						};
+						DD000008DD000008DD000008 = {
+							CreatedOnToolsVersion = 26.4.1;
+							TestTargetID = 45ED16AF2FA99BA6005FFD16;
+						};
 					};
 				};
+				buildConfigurationList = 45ED16AB2FA99BA5005FFD16 /* Build configuration list for PBXProject "NemoNoise" */;
+				developmentRegion = en;
+				hasScannedForEncodings = 0;
+				knownRegions = (
+					en,
+					Base,
+				);
+				mainGroup = 45ED16A72FA99BA5005FFD16;
+				minimizedProjectReferenceProxies = 1;
+				packageReferences = (
+					AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
+					BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */,
+					CC0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sparkle" */,
+				);
+				preferredProjectObjectVersion = 77;
+				productRefGroup = 45ED16B12FA99BA6005FFD16 /* Products */;
+				projectDirPath = "";
+				projectRoot = "";
+				targets = (
+					45ED16AF2FA99BA6005FFD16 /* NemoNoise */,
+					DD000008DD000008DD000008 /* NemoNoiseTests */,
+				);
 			};
-			buildConfigurationList = 45ED16AB2FA99BA5005FFD16 /* Build configuration list for PBXProject "NemoNoise" */;
-			developmentRegion = en;
-			hasScannedForEncodings = 0;
-			knownRegions = (
-				en,
-				Base,
-			);
-			mainGroup = 45ED16A72FA99BA5005FFD16;
-			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
-				BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */,
-				CC0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sparkle" */,
-			);
-			preferredProjectObjectVersion = 77;
-			productRefGroup = 45ED16B12FA99BA6005FFD16 /* Products */;
-			projectDirPath = "";
-			projectRoot = "";
-			targets = (
-				45ED16AF2FA99BA6005FFD16 /* NemoNoise */,
-			);
-		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		45ED16AE2FA99BA6005FFD16 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+			45ED16AE2FA99BA6005FFD16 /* Resources */ = {
+				isa = PBXResourcesBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
+			DD000007DD000007DD000007 /* Resources */ = {
+				isa = PBXResourcesBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		45ED16AC2FA99BA6005FFD16 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+			45ED16AC2FA99BA6005FFD16 /* Sources */ = {
+				isa = PBXSourcesBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
+			DD000005DD000005DD000005 /* Sources */ = {
+				isa = PBXSourcesBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+			DD000004DD000004DD000004 /* PBXTargetDependency */ = {
+				isa = PBXTargetDependency;
+				target = 45ED16AF2FA99BA6005FFD16 /* NemoNoise */;
+				targetProxy = DD000003DD000003DD000003 /* PBXContainerItemProxy */;
+			};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
-		45ED16BB2FA99BA7005FFD16 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = YHT8FN67G3;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.4;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			45ED16BB2FA99BA7005FFD16 /* Debug */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					ALWAYS_SEARCH_USER_PATHS = NO;
+					ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+					CLANG_ANALYZER_NONNULL = YES;
+					CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+					CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+					CLANG_ENABLE_MODULES = YES;
+					CLANG_ENABLE_OBJC_ARC = YES;
+					CLANG_ENABLE_OBJC_WEAK = YES;
+					CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+					CLANG_WARN_BOOL_CONVERSION = YES;
+					CLANG_WARN_COMMA = YES;
+					CLANG_WARN_CONSTANT_CONVERSION = YES;
+					CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+					CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+					CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+					CLANG_WARN_EMPTY_BODY = YES;
+					CLANG_WARN_ENUM_CONVERSION = YES;
+					CLANG_WARN_INFINITE_RECURSION = YES;
+					CLANG_WARN_INT_CONVERSION = YES;
+					CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+					CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+					CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+					CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+					CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+					CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+					CLANG_WARN_STRICT_PROTOTYPES = YES;
+					CLANG_WARN_SUSPICIOUS_MOVE = YES;
+					CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+					CLANG_WARN_UNREACHABLE_CODE = YES;
+					CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+					COPY_PHASE_STRIP = NO;
+					DEBUG_INFORMATION_FORMAT = dwarf;
+					DEVELOPMENT_TEAM = YHT8FN67G3;
+					ENABLE_STRICT_OBJC_MSGSEND = YES;
+					ENABLE_TESTABILITY = YES;
+					ENABLE_USER_SCRIPT_SANDBOXING = YES;
+					GCC_C_LANGUAGE_STANDARD = gnu17;
+					GCC_DYNAMIC_NO_PIC = NO;
+					GCC_NO_COMMON_BLOCKS = YES;
+					GCC_OPTIMIZATION_LEVEL = 0;
+					GCC_PREPROCESSOR_DEFINITIONS = (
+						"DEBUG=1",
+						"$(inherited)",
+					);
+					GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+					GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+					GCC_WARN_UNDECLARED_SELECTOR = YES;
+					GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+					GCC_WARN_UNUSED_FUNCTION = YES;
+					GCC_WARN_UNUSED_VARIABLE = YES;
+					LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+					MACOSX_DEPLOYMENT_TARGET = 26.4;
+					MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+					MTL_FAST_MATH = YES;
+					ONLY_ACTIVE_ARCH = YES;
+					SDKROOT = macosx;
+					SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+					SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				};
+				name = Debug;
 			};
-			name = Debug;
-		};
-		45ED16BC2FA99BA7005FFD16 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = YHT8FN67G3;
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.4;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				SDKROOT = macosx;
-				SWIFT_COMPILATION_MODE = wholemodule;
+			45ED16BC2FA99BA7005FFD16 /* Release */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					ALWAYS_SEARCH_USER_PATHS = NO;
+					ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+					CLANG_ANALYZER_NONNULL = YES;
+					CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+					CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+					CLANG_ENABLE_MODULES = YES;
+					CLANG_ENABLE_OBJC_ARC = YES;
+					CLANG_ENABLE_OBJC_WEAK = YES;
+					CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+					CLANG_WARN_BOOL_CONVERSION = YES;
+					CLANG_WARN_COMMA = YES;
+					CLANG_WARN_CONSTANT_CONVERSION = YES;
+					CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+					CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+					CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+					CLANG_WARN_EMPTY_BODY = YES;
+					CLANG_WARN_ENUM_CONVERSION = YES;
+					CLANG_WARN_INFINITE_RECURSION = YES;
+					CLANG_WARN_INT_CONVERSION = YES;
+					CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+					CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+					CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+					CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+					CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+					CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+					CLANG_WARN_STRICT_PROTOTYPES = YES;
+					CLANG_WARN_SUSPICIOUS_MOVE = YES;
+					CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+					CLANG_WARN_UNREACHABLE_CODE = YES;
+					CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+					COPY_PHASE_STRIP = NO;
+					DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+					DEVELOPMENT_TEAM = YHT8FN67G3;
+					ENABLE_NS_ASSERTIONS = NO;
+					ENABLE_STRICT_OBJC_MSGSEND = YES;
+					ENABLE_USER_SCRIPT_SANDBOXING = YES;
+					GCC_C_LANGUAGE_STANDARD = gnu17;
+					GCC_NO_COMMON_BLOCKS = YES;
+					GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+					GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+					GCC_WARN_UNDECLARED_SELECTOR = YES;
+					GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+					GCC_WARN_UNUSED_FUNCTION = YES;
+					GCC_WARN_UNUSED_VARIABLE = YES;
+					LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+					MACOSX_DEPLOYMENT_TARGET = 26.4;
+					MTL_ENABLE_DEBUG_INFO = NO;
+					MTL_FAST_MATH = YES;
+					SDKROOT = macosx;
+					SWIFT_COMPILATION_MODE = wholemodule;
+				};
+				name = Release;
 			};
-			name = Release;
-		};
-		45ED16BE2FA99BA7005FFD16 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NemoNoise/App/NemoNoise.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YHT8FN67G3;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers",
-				);
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "NemoNoise uses the microphone to transcribe your speech.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "NemoNoise uses speech recognition to convert your speech to text.";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64",
-				);
-				MARKETING_VERSION = 1.0;
-				OTHER_LDFLAGS = (
-					"-lc++",
-					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a",
-				);
-				OTHER_SWIFT_FLAGS = "-Xcc -I$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers";
-				PRODUCT_BUNDLE_IDENTIFIER = com.nemo.NemoNoise;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = NemoNoise/Resources/SherpaOnnx-Bridging-Header.h;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+			45ED16BE2FA99BA7005FFD16 /* Debug */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+					ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+					CODE_SIGN_ENTITLEMENTS = NemoNoise/App/NemoNoise.entitlements;
+					CODE_SIGN_STYLE = Automatic;
+					COMBINE_HIDPI_IMAGES = YES;
+					CURRENT_PROJECT_VERSION = 1;
+					DEVELOPMENT_TEAM = YHT8FN67G3;
+					ENABLE_APP_SANDBOX = YES;
+					ENABLE_HARDENED_RUNTIME = YES;
+					ENABLE_PREVIEWS = YES;
+					ENABLE_USER_SELECTED_FILES = readonly;
+					GENERATE_INFOPLIST_FILE = YES;
+					HEADER_SEARCH_PATHS = (
+						"$(inherited)",
+						"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers",
+					);
+					INFOPLIST_KEY_LSUIElement = YES;
+					INFOPLIST_KEY_NSHumanReadableCopyright = "";
+					INFOPLIST_KEY_NSMicrophoneUsageDescription = "NemoNoise uses the microphone to transcribe your speech.";
+					INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "NemoNoise uses speech recognition to convert your speech to text.";
+					LD_RUNPATH_SEARCH_PATHS = (
+						"$(inherited)",
+						"@executable_path/../Frameworks",
+					);
+					LIBRARY_SEARCH_PATHS = (
+						"$(inherited)",
+						"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64",
+					);
+					MARKETING_VERSION = 1.0;
+					OTHER_LDFLAGS = (
+						"-lc++",
+						"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a",
+					);
+					OTHER_SWIFT_FLAGS = "-Xcc -I$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers";
+					PRODUCT_BUNDLE_IDENTIFIER = com.nemo.NemoNoise;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					REGISTER_APP_GROUPS = YES;
+					STRING_CATALOG_GENERATE_SYMBOLS = YES;
+					SWIFT_APPROACHABLE_CONCURRENCY = YES;
+					SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+					SWIFT_EMIT_LOC_STRINGS = YES;
+					SWIFT_OBJC_BRIDGING_HEADER = NemoNoise/Resources/SherpaOnnx-Bridging-Header.h;
+					SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+					SWIFT_VERSION = 5.0;
+				};
+				name = Debug;
 			};
-			name = Debug;
-		};
-		45ED16BF2FA99BA7005FFD16 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NemoNoise/App/NemoNoise.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = YHT8FN67G3;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers",
-				);
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "NemoNoise uses the microphone to transcribe your speech.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "NemoNoise uses speech recognition to convert your speech to text.";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64",
-				);
-				MARKETING_VERSION = 1.0;
-				OTHER_LDFLAGS = (
-					"-lc++",
-					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a",
-				);
-				OTHER_SWIFT_FLAGS = "-Xcc -I$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers";
-				PRODUCT_BUNDLE_IDENTIFIER = com.nemo.NemoNoise;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = NemoNoise/Resources/SherpaOnnx-Bridging-Header.h;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+			45ED16BF2FA99BA7005FFD16 /* Release */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+					ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+					CODE_SIGN_ENTITLEMENTS = NemoNoise/App/NemoNoise.entitlements;
+					CODE_SIGN_STYLE = Automatic;
+					COMBINE_HIDPI_IMAGES = YES;
+					CURRENT_PROJECT_VERSION = 1;
+					DEVELOPMENT_TEAM = YHT8FN67G3;
+					ENABLE_APP_SANDBOX = YES;
+					ENABLE_HARDENED_RUNTIME = YES;
+					ENABLE_PREVIEWS = YES;
+					ENABLE_USER_SELECTED_FILES = readonly;
+					GENERATE_INFOPLIST_FILE = YES;
+					HEADER_SEARCH_PATHS = (
+						"$(inherited)",
+						"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers",
+					);
+					INFOPLIST_KEY_LSUIElement = YES;
+					INFOPLIST_KEY_NSHumanReadableCopyright = "";
+					INFOPLIST_KEY_NSMicrophoneUsageDescription = "NemoNoise uses the microphone to transcribe your speech.";
+					INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "NemoNoise uses speech recognition to convert your speech to text.";
+					LD_RUNPATH_SEARCH_PATHS = (
+						"$(inherited)",
+						"@executable_path/../Frameworks",
+					);
+					LIBRARY_SEARCH_PATHS = (
+						"$(inherited)",
+						"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64",
+					);
+					MARKETING_VERSION = 1.0;
+					OTHER_LDFLAGS = (
+						"-lc++",
+						"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a",
+					);
+					OTHER_SWIFT_FLAGS = "-Xcc -I$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers";
+					PRODUCT_BUNDLE_IDENTIFIER = com.nemo.NemoNoise;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					REGISTER_APP_GROUPS = YES;
+					STRING_CATALOG_GENERATE_SYMBOLS = YES;
+					SWIFT_APPROACHABLE_CONCURRENCY = YES;
+					SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+					SWIFT_EMIT_LOC_STRINGS = YES;
+					SWIFT_OBJC_BRIDGING_HEADER = NemoNoise/Resources/SherpaOnnx-Bridging-Header.h;
+					SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+					SWIFT_VERSION = 5.0;
+				};
+				name = Release;
 			};
-			name = Release;
-		};
+			DD000009DD000009DD000009 /* Debug */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					BUNDLE_LOADER = "$(TEST_HOST)";
+					CODE_SIGN_STYLE = Automatic;
+					CURRENT_PROJECT_VERSION = 1;
+					DEVELOPMENT_TEAM = YHT8FN67G3;
+					GENERATE_INFOPLIST_FILE = YES;
+					MACOSX_DEPLOYMENT_TARGET = 26.4;
+					MARKETING_VERSION = 1.0;
+					PRODUCT_BUNDLE_IDENTIFIER = com.nemo.NemoNoiseTests;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SWIFT_APPROACHABLE_CONCURRENCY = YES;
+					SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+					SWIFT_EMIT_LOC_STRINGS = NO;
+					SWIFT_VERSION = 5.0;
+					TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NemoNoise.app/Contents/MacOS/NemoNoise";
+				};
+				name = Debug;
+			};
+			DD00000ADD00000ADD00000A /* Release */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					BUNDLE_LOADER = "$(TEST_HOST)";
+					CODE_SIGN_STYLE = Automatic;
+					CURRENT_PROJECT_VERSION = 1;
+					DEVELOPMENT_TEAM = YHT8FN67G3;
+					GENERATE_INFOPLIST_FILE = YES;
+					MACOSX_DEPLOYMENT_TARGET = 26.4;
+					MARKETING_VERSION = 1.0;
+					PRODUCT_BUNDLE_IDENTIFIER = com.nemo.NemoNoiseTests;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SWIFT_APPROACHABLE_CONCURRENCY = YES;
+					SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+					SWIFT_EMIT_LOC_STRINGS = NO;
+					SWIFT_VERSION = 5.0;
+					TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NemoNoise.app/Contents/MacOS/NemoNoise";
+				};
+				name = Release;
+			};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		45ED16AB2FA99BA5005FFD16 /* Build configuration list for PBXProject "NemoNoise" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				45ED16BB2FA99BA7005FFD16 /* Debug */,
-				45ED16BC2FA99BA7005FFD16 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		45ED16BD2FA99BA7005FFD16 /* Build configuration list for PBXNativeTarget "NemoNoise" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				45ED16BE2FA99BA7005FFD16 /* Debug */,
-				45ED16BF2FA99BA7005FFD16 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
+			45ED16AB2FA99BA5005FFD16 /* Build configuration list for PBXProject "NemoNoise" */ = {
+				isa = XCConfigurationList;
+				buildConfigurations = (
+					45ED16BB2FA99BA7005FFD16 /* Debug */,
+					45ED16BC2FA99BA7005FFD16 /* Release */,
+				);
+				defaultConfigurationIsVisible = 0;
+				defaultConfigurationName = Release;
+			};
+			45ED16BD2FA99BA7005FFD16 /* Build configuration list for PBXNativeTarget "NemoNoise" */ = {
+				isa = XCConfigurationList;
+				buildConfigurations = (
+					45ED16BE2FA99BA7005FFD16 /* Debug */,
+					45ED16BF2FA99BA7005FFD16 /* Release */,
+				);
+				defaultConfigurationIsVisible = 0;
+				defaultConfigurationName = Release;
+			};
+			DD00000BDD00000BDD00000B /* Build configuration list for PBXNativeTarget "NemoNoiseTests" */ = {
+				isa = XCConfigurationList;
+				buildConfigurations = (
+					DD000009DD000009DD000009 /* Debug */,
+					DD00000ADD00000ADD00000A /* Release */,
+				);
+				defaultConfigurationIsVisible = 0;
+				defaultConfigurationName = Release;
+			};
 /* End XCConfigurationList section */
+
 /* Begin XCRemoteSwiftPackageReference section */
-		AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/CocoaLumberjack/CocoaLumberjack.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 3.8.0;
+			AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */ = {
+				isa = XCRemoteSwiftPackageReference;
+				repositoryURL = "https://github.com/CocoaLumberjack/CocoaLumberjack.git";
+				requirement = {
+					kind = upToNextMajorVersion;
+					minimumVersion = 3.8.0;
+				};
 			};
-		};
-		BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 8.0.0;
+			BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */ = {
+				isa = XCRemoteSwiftPackageReference;
+				repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
+				requirement = {
+					kind = upToNextMajorVersion;
+					minimumVersion = 8.0.0;
+				};
 			};
-		};
-		CC0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.0;
+			CC0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+				isa = XCRemoteSwiftPackageReference;
+				repositoryURL = "https://github.com/sparkle-project/Sparkle.git";
+				requirement = {
+					kind = upToNextMajorVersion;
+					minimumVersion = 2.0.0;
+				};
 			};
-		};
 /* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
-		AA0000022F9363C40037E18E /* CocoaLumberjackSwift */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */;
-			productName = CocoaLumberjackSwift;
-		};
-		BB0000022F9363C40037E18E /* Sentry */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */;
-			productName = Sentry;
-		};
-		CC0000022F9363C40037E18E /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = CC0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
-		};
+			AA0000022F9363C40037E18E /* CocoaLumberjackSwift */ = {
+				isa = XCSwiftPackageProductDependency;
+				package = AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */;
+				productName = CocoaLumberjackSwift;
+			};
+			BB0000022F9363C40037E18E /* Sentry */ = {
+				isa = XCSwiftPackageProductDependency;
+				package = BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */;
+				productName = Sentry;
+			};
+			CC0000022F9363C40037E18E /* Sparkle */ = {
+				isa = XCSwiftPackageProductDependency;
+				package = CC0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sparkle" */;
+				productName = Sparkle;
+			};
 /* End XCSwiftPackageProductDependency section */
-	};
-	rootObject = 45ED16A82FA99BA5005FFD16 /* Project object */;
+		};
+		rootObject = 45ED16A82FA99BA5005FFD16 /* Project object */;
 }

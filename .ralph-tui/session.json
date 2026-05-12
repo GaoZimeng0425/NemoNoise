@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "sessionId": "6c99ef57-9e15-44e7-b6d6-77d3cffba716",
+  "sessionId": "a1495961-4118-4598-86d2-b20fba16da00",
   "status": "running",
-  "startedAt": "2026-05-12T04:58:58.737Z",
-  "updatedAt": "2026-05-12T07:21:13.914Z",
-  "currentIteration": 11,
+  "startedAt": "2026-05-12T07:36:35.123Z",
+  "updatedAt": "2026-05-12T08:02:17.140Z",
+  "currentIteration": 0,
   "maxIterations": 0,
-  "tasksCompleted": 10,
+  "tasksCompleted": 0,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -18,43 +18,43 @@
         "id": "US-001",
         "title": "Add isStreaming property to ASRService protocol",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-002",
         "title": "Overlay waveform-only mode for non-streaming engines",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-003",
         "title": "Engine auto-fallback on crash or failure",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-004",
         "title": "Structured logging with session ID correlation",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-005",
         "title": "First-launch onboarding flow",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-006",
         "title": "Simplify overlay: auto-fade and toast for failures",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-007",
         "title": "Simplify settings to 2 tabs",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-008",
@@ -66,24 +66,24 @@
         "id": "US-009",
         "title": "Integrate Sentry crash reporting",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-010",
         "title": "Integrate Sparkle 2 for auto-updates",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-011",
         "title": "CloudASREngine with Alibaba Cloud Paraformer API",
         "status": "completed",
-        "completedInSession": true
+        "completedInSession": false
       },
       {
         "id": "US-012",
         "title": "One-click log export with sanitization",
-        "status": "open",
+        "status": "completed",
         "completedInSession": false
       },
       {
@@ -100,122 +100,9 @@
       }
     ]
   },
-  "iterations": [
-    {
-      "iteration": 1,
-      "status": "completed",
-      "taskId": "US-001",
-      "taskTitle": "Add isStreaming property to ASRService protocol",
-      "taskCompleted": true,
-      "durationMs": 125799,
-      "startedAt": "2026-05-12T04:59:01.758Z",
-      "endedAt": "2026-05-12T05:01:07.557Z"
-    },
-    {
-      "iteration": 2,
-      "status": "completed",
-      "taskId": "US-002",
-      "taskTitle": "Overlay waveform-only mode for non-streaming engines",
-      "taskCompleted": true,
-      "durationMs": 487018,
-      "startedAt": "2026-05-12T05:01:10.847Z",
-      "endedAt": "2026-05-12T05:09:17.865Z"
-    },
-    {
-      "iteration": 3,
-      "status": "completed",
-      "taskId": "US-003",
-      "taskTitle": "Engine auto-fallback on crash or failure",
-      "taskCompleted": true,
-      "durationMs": 417547,
-      "startedAt": "2026-05-12T05:09:18.968Z",
-      "endedAt": "2026-05-12T05:16:16.515Z"
-    },
-    {
-      "iteration": 4,
-      "status": "completed",
-      "taskId": "US-004",
-      "taskTitle": "Structured logging with session ID correlation",
-      "taskCompleted": true,
-      "durationMs": 598868,
-      "startedAt": "2026-05-12T05:16:17.618Z",
-      "endedAt": "2026-05-12T05:26:16.486Z"
-    },
-    {
-      "iteration": 5,
-      "status": "completed",
-      "taskId": "US-005",
-      "taskTitle": "First-launch onboarding flow",
-      "taskCompleted": true,
-      "durationMs": 435083,
-      "startedAt": "2026-05-12T05:26:17.589Z",
-      "endedAt": "2026-05-12T05:33:32.672Z"
-    },
-    {
-      "iteration": 6,
-      "status": "completed",
-      "taskId": "US-006",
-      "taskTitle": "Simplify overlay: auto-fade and toast for failures",
-      "taskCompleted": true,
-      "durationMs": 539683,
-      "startedAt": "2026-05-12T05:33:33.768Z",
-      "endedAt": "2026-05-12T05:42:33.451Z"
-    },
-    {
-      "iteration": 7,
-      "status": "completed",
-      "taskId": "US-007",
-      "taskTitle": "Simplify settings to 2 tabs",
-      "taskCompleted": true,
-      "durationMs": 366084,
-      "startedAt": "2026-05-12T05:42:34.549Z",
-      "endedAt": "2026-05-12T05:48:40.633Z"
-    },
-    {
-      "iteration": 8,
-      "status": "failed",
-      "taskId": "US-008",
-      "taskTitle": "Add test target with key path coverage",
-      "taskCompleted": false,
-      "durationMs": 574067,
-      "startedAt": "2026-05-12T05:48:41.738Z",
-      "endedAt": "2026-05-12T05:58:15.805Z"
-    },
-    {
-      "iteration": 9,
-      "status": "completed",
-      "taskId": "US-009",
-      "taskTitle": "Integrate Sentry crash reporting",
-      "taskCompleted": true,
-      "durationMs": 2160213,
-      "startedAt": "2026-05-12T05:58:16.817Z",
-      "endedAt": "2026-05-12T06:34:17.030Z"
-    },
-    {
-      "iteration": 10,
-      "status": "completed",
-      "taskId": "US-010",
-      "taskTitle": "Integrate Sparkle 2 for auto-updates",
-      "taskCompleted": true,
-      "durationMs": 1095898,
-      "startedAt": "2026-05-12T06:34:18.144Z",
-      "endedAt": "2026-05-12T06:52:34.042Z"
-    },
-    {
-      "iteration": 11,
-      "status": "completed",
-      "taskId": "US-011",
-      "taskTitle": "CloudASREngine with Alibaba Cloud Paraformer API",
-      "taskCompleted": true,
-      "durationMs": 991824,
-      "startedAt": "2026-05-12T06:52:35.171Z",
-      "endedAt": "2026-05-12T07:09:06.995Z"
-    }
-  ],
+  "iterations": [],
   "skippedTaskIds": [],
   "cwd": "/Users/gaozimeng/Learn/macOS/NemoNoise",
-  "activeTaskIds": [
-    "US-008"
-  ],
+  "activeTaskIds": [],
   "subagentPanelVisible": false
 }
