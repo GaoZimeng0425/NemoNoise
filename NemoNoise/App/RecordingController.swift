@@ -49,9 +49,9 @@ final class RecordingController {
         }
         switch recordingMode {
         case .pushToTalk:
-            return "Hold **\(keyName)** to record"
+            return "Hold \(keyName) to record"
         case .toggle:
-            return "Press **\(keyName)** to start/stop"
+            return "Press \(keyName) to start/stop"
         }
     }
 
