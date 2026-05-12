@@ -1,10 +1,15 @@
+import Sparkle
 import SwiftUI
 
 @main
 struct NemoNoiseApp: App {
     @State private var controller = RecordingController()
+    private let updaterDelegate = UpdaterFeedProvider()
+    private let updaterController: SPUStandardUpdaterController
 
     init() {
+        let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: updaterDelegate, userDriverDelegate: nil)
+        self.updaterController = updater
         _ = LogService.shared
         SentryService.initialize()
     }
@@ -12,7 +17,7 @@ struct NemoNoiseApp: App {
     var body: some Scene {
         MenuBarExtra {
             OnboardingGate {
-                MenuBarPopoverView()
+                MenuBarPopoverView(updater: updaterController.updater)
                     .environment(controller)
             }
         } label: {
@@ -46,5 +51,11 @@ private struct OnboardingGate: View {
                     }
                 }
             }
+    }
+}
+
+final class UpdaterFeedProvider: NSObject, SPUUpdaterDelegate {
+    nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
+        "https://gaozimeng0425.github.io/NemoNoise/appcast.xml"
     }
 }

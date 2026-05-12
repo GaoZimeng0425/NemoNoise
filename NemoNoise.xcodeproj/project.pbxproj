@@ -78,6 +78,7 @@
 			packageProductDependencies = (
 				AA0000022F9363C40037E18E /* CocoaLumberjackSwift */,
 				BB0000022F9363C40037E18E /* Sentry */,
+				CC0000022F9363C40037E18E /* Sparkle */,
 			);
 			productName = NemoNoise;
 			productReference = 45ED16B02FA99BA6005FFD16 /* NemoNoise.app */;
@@ -110,6 +111,7 @@
 			packageReferences = (
 				AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
 				BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */,
+				CC0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 45ED16B12FA99BA6005FFD16 /* Products */;
@@ -401,6 +403,14 @@
 				minimumVersion = 8.0.0;
 			};
 		};
+		CC0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 /* Begin XCSwiftPackageProductDependency section */
 		AA0000022F9363C40037E18E /* CocoaLumberjackSwift */ = {
@@ -412,6 +422,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */;
 			productName = Sentry;
+		};
+		CC0000022F9363C40037E18E /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CC0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

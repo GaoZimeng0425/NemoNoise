@@ -1,7 +1,9 @@
+import Sparkle
 import SwiftUI
 
 struct MenuBarPopoverView: View {
     @Environment(RecordingController.self) private var controller
+    let updater: SPUUpdater
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -37,9 +39,16 @@ struct MenuBarPopoverView: View {
             Divider()
 
             HStack {
+                Button("Check for Updates…") { updater.checkForUpdates() }
+                    .buttonStyle(.plain)
+                Spacer()
                 SettingsLink {
                     Label("Settings", systemImage: "gear")
                 }
+            }
+            .font(.subheadline)
+
+            HStack {
                 Spacer()
                 Button("Quit") { NSApp.terminate(nil) }
                     .foregroundStyle(.secondary)

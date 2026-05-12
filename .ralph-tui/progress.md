@@ -161,3 +161,20 @@ after each iteration and it's included in prompts for context.
   - `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` is set project-wide, but `enum` types with static methods don't cause issues for thread-safe SDKs like Sentry.
   - Sentry opt-out pattern: store `sentryEnabled` (Bool, default false) in UserDefaults. `SentryService.isEnabled` setter handles runtime enable/disable by calling `SentrySDK.start()`/`SentrySDK.close()`.
 ---
+
+## 2026-05-12 - US-010
+- Integrated Sparkle 2 (v2.9.1 via SPM) for automatic app updates.
+- `SPUStandardUpdaterController` initialized in `NemoNoiseApp` with `startingUpdater: true`.
+- Feed URL provided via `UpdaterFeedProvider` (NSObject + SPUUpdaterDelegate) since `INFOPLIST_KEY_SUFeedURL` build setting doesn't generate custom third-party plist keys.
+- "Check for Updates…" button added to menu bar popover alongside Settings and Quit.
+- Sparkle's built-in preferences UI handles automatic update preferences (check interval, auto-download) — no custom UI needed.
+- Files changed:
+  - `NemoNoise.xcodeproj/project.pbxproj` — added Sparkle SPM package reference + product dependency
+  - `NemoNoise/App/NemoNoiseApp.swift` — added `import Sparkle`, `UpdaterFeedProvider` delegate class, `SPUStandardUpdaterController` init
+  - `NemoNoise/UI/Menubar/MenubarView.swift` — added `import Sparkle`, `updater: SPUUpdater` parameter, "Check for Updates…" button
+- **Learnings:**
+  - `INFOPLIST_KEY_*` build settings only work for Apple-defined plist keys (NSMicrophoneUsageDescription, etc.). Custom keys like `SUFeedURL` are silently ignored. Use `SPUUpdaterDelegate.feedURLString(for:)` instead.
+  - For SwiftUI `App` structs with Sparkle 2: store the `SPUStandardUpdaterController` as a `let` property, create it in `init()`, and pass `updaterController.updater` to views that need "Check for Updates".
+  - `SPUUpdaterDelegate` methods must be `nonisolated` when `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` — the ObjC protocol methods are called from Sparkle's internal queue, not necessarily the main actor.
+  - pbxproj tab indentation for entries inside arrays uses 4 tabs (`\t\t\t\t`), not 3. The property name line uses 3 tabs (`\t\t\t`).
+---
