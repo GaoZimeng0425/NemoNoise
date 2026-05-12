@@ -5,6 +5,8 @@ final class SherpaASREngine: ASRService, @unchecked Sendable {
     private var accumulated: [Float] = []
     private var lastDecodeCount: Int = 0
 
+    let isStreaming = false
+
     init(modelDir: URL, language: String = LanguagePreference.current.sherpaCode) throws {
         let modelPath  = modelDir.appendingPathComponent("model.int8.onnx").path
         let tokensPath = modelDir.appendingPathComponent("tokens.txt").path

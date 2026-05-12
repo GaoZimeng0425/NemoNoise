@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "sessionId": "6c99ef57-9e15-44e7-b6d6-77d3cffba716",
+  "status": "running",
+  "startedAt": "2026-05-12T04:58:58.737Z",
+  "updatedAt": "2026-05-12T05:01:07.558Z",
+  "currentIteration": 0,
+  "maxIterations": 0,
+  "tasksCompleted": 0,
+  "isPaused": false,
+  "agentPlugin": "claude",
+  "trackerState": {
+    "plugin": "json",
+    "prdPath": "./tasks/prd.json",
+    "totalTasks": 14,
+    "tasks": [
+      {
+        "id": "US-001",
+        "title": "Add isStreaming property to ASRService protocol",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-002",
+        "title": "Overlay waveform-only mode for non-streaming engines",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-003",
+        "title": "Engine auto-fallback on crash or failure",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-004",
+        "title": "Structured logging with session ID correlation",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-005",
+        "title": "First-launch onboarding flow",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-006",
+        "title": "Simplify overlay: auto-fade and toast for failures",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-007",
+        "title": "Simplify settings to 2 tabs",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-008",
+        "title": "Add test target with key path coverage",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-009",
+        "title": "Integrate Sentry crash reporting",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-010",
+        "title": "Integrate Sparkle 2 for auto-updates",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-011",
+        "title": "CloudASREngine with Alibaba Cloud Paraformer API",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-012",
+        "title": "One-click log export with sanitization",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-013",
+        "title": "GitHub Actions CI for auto-build",
+        "status": "open",
+        "completedInSession": false
+      },
+      {
+        "id": "US-014",
+        "title": "dmg packaging and GitHub Releases v1.0",
+        "status": "open",
+        "completedInSession": false
+      }
+    ]
+  },
+  "iterations": [],
+  "skippedTaskIds": [],
+  "cwd": "/Users/gaozimeng/Learn/macOS/NemoNoise",
+  "activeTaskIds": [],
+  "subagentPanelVisible": false
+}

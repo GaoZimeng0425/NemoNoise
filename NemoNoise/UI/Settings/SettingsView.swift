@@ -1,94 +1,10 @@
 import SwiftUI
 
-// MARK: - Menu Bar Popover
-
-struct MenuBarPopoverView: View {
-    @Environment(RecordingController.self) private var controller
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "waveform")
-                    .foregroundStyle(.tint)
-                Text("NemoNoise")
-                    .font(.headline)
-                Spacer()
-            }
-
-            Divider()
-
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(statusColor)
-                    .frame(width: 8, height: 8)
-                Text(statusText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let warning = engineFallbackWarning {
-                Text(warning)
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-            }
-
-            Text(controller.hotkeyDisplayText)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-
-            Divider()
-
-            HStack {
-                SettingsLink {
-                    Label("Settings", systemImage: "gear")
-                }
-                Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .font(.subheadline)
-        }
-        .padding(16)
-        .frame(width: 220)
-    }
-
-    private var statusColor: Color {
-        switch controller.recordingState {
-        case .idle: .green
-        case .recording: .red
-        case .processing: .orange
-        }
-    }
-
-    private var statusText: String {
-        switch controller.recordingState {
-        case .idle: "Ready"
-        case .recording: "Recording…"
-        case .processing: "Processing…"
-        }
-    }
-
-    private var engineFallbackWarning: String? {
-        let choice = UserDefaults.standard.string(forKey: "engineType") ?? "apple"
-        switch choice {
-        case "sensevoice" where controller.modelManager.state(for: .senseVoice) != .downloaded:
-            return "SenseVoice model not downloaded — using Apple Speech"
-        case "paraformer" where controller.modelManager.state(for: .paraformer) != .downloaded:
-            return "Paraformer model not downloaded — using Apple Speech"
-        default:
-            return nil
-        }
-    }
-}
-
-// MARK: - Settings
-
 struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
     @AppStorage("engineType") private var engineType = "apple"
-
     @AppStorage("showEmotionTags") private var showEmotionTags = true
+    @AppStorage("languagePreference") private var languagePreference = "Auto-detect"
 
     var body: some View {
         TabView {
@@ -223,8 +139,6 @@ struct SettingsView: View {
     }
 
     // MARK: Language
-
-    @AppStorage("languagePreference") private var languagePreference = "Auto-detect"
 
     private var languageSection: some View {
         Section("Language") {

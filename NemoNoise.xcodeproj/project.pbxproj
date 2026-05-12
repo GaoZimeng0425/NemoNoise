@@ -8,8 +8,8 @@
 
 /* Begin PBXFileReference section */
 		45ED16B02FA99BA6005FFD16 /* NemoNoise.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NemoNoise.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AABB0001AABB0001AABB0001 /* sherpa-onnx.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "NemoNoise/sherpa-onnx.xcframework"; sourceTree = "<group>"; };
-		AABB0003AABB0003AABB0003 /* libonnxruntime.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libonnxruntime.a; path = "NemoNoise/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a"; sourceTree = "<group>"; };
+		AABB0001AABB0001AABB0001 /* sherpa-onnx.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = "NemoNoise/Resources/sherpa-onnx.xcframework"; sourceTree = "<group>"; };
+		AABB0003AABB0003AABB0003 /* libonnxruntime.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libonnxruntime.a; path = "NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXBuildFile section */
@@ -265,7 +265,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NemoNoise/NemoNoise.entitlements;
+				CODE_SIGN_ENTITLEMENTS = NemoNoise/App/NemoNoise.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -277,7 +277,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/NemoNoise/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers",
+					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers",
 				);
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -289,14 +289,14 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/NemoNoise/sherpa-onnx.xcframework/macos-arm64_x86_64",
+					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64",
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"-lc++",
-					"$(PROJECT_DIR)/NemoNoise/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a",
+					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a",
 				);
-				OTHER_SWIFT_FLAGS = "-Xcc -I$(PROJECT_DIR)/NemoNoise/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers";
+				OTHER_SWIFT_FLAGS = "-Xcc -I$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers";
 				PRODUCT_BUNDLE_IDENTIFIER = com.nemo.NemoNoise;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -304,7 +304,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = NemoNoise/SherpaOnnx-Bridging-Header.h;
+				SWIFT_OBJC_BRIDGING_HEADER = NemoNoise/Resources/SherpaOnnx-Bridging-Header.h;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -315,7 +315,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = NemoNoise/NemoNoise.entitlements;
+				CODE_SIGN_ENTITLEMENTS = NemoNoise/App/NemoNoise.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -327,7 +327,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/NemoNoise/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers",
+					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers",
 				);
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -339,14 +339,14 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/NemoNoise/sherpa-onnx.xcframework/macos-arm64_x86_64",
+					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64",
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"-lc++",
-					"$(PROJECT_DIR)/NemoNoise/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a",
+					"$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/libonnxruntime.a",
 				);
-				OTHER_SWIFT_FLAGS = "-Xcc -I$(PROJECT_DIR)/NemoNoise/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers";
+				OTHER_SWIFT_FLAGS = "-Xcc -I$(PROJECT_DIR)/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers";
 				PRODUCT_BUNDLE_IDENTIFIER = com.nemo.NemoNoise;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -354,7 +354,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = NemoNoise/SherpaOnnx-Bridging-Header.h;
+				SWIFT_OBJC_BRIDGING_HEADER = NemoNoise/Resources/SherpaOnnx-Bridging-Header.h;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};

@@ -1,0 +1,277 @@
+{
+  "name": "NemoNoise Commercial Readiness",
+  "description": "Upgrade NemoNoise from prototype to polished, distributable macOS voice dictation app. Focus: ASR quality, minimalist UX, engineering rigor, and release infrastructure.",
+  "branchName": "ralph/commercial-readiness",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add isStreaming property to ASRService protocol",
+      "description": "As a developer, I need to distinguish streaming vs batch engines so the UI can show real-time text or waveform accordingly.",
+      "acceptanceCriteria": [
+        "Add `var isStreaming: Bool { get }` to ASRService protocol with default extension returning true",
+        "SherpaASREngine (SenseVoice) returns isStreaming=false",
+        "ParaformerStreamingEngine returns isStreaming=true",
+        "AppleSpeechASREngine returns isStreaming=true",
+        "All existing conforming types compile without changes beyond the new property",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "",
+      "dependsOn": [],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-002",
+      "title": "Overlay waveform-only mode for non-streaming engines",
+      "description": "As a user, when using a batch ASR engine, I should see only a volume waveform during recording, with text appearing once after recording ends.",
+      "acceptanceCriteria": [
+        "Overlay reads engine's isStreaming property to decide display mode",
+        "When isStreaming=false: overlay shows only LiveWaveformView animation, hides transcript area during recording",
+        "When isStreaming=true: overlay shows streaming text as before",
+        "On recording end with batch engine: waveform replaced by final transcription text in one shot",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-001"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Engine auto-fallback on crash or failure",
+      "description": "As a user, if my chosen ASR engine fails during recording, the app should silently fall back to Apple Speech and notify me.",
+      "acceptanceCriteria": [
+        "SpeechOrchestrator catches errors from active ASR engine during recording",
+        "On engine error: auto-switches to AppleSpeechASREngine as fallback",
+        "Shows a non-intrusive toast: 'switched to local engine'",
+        "Logs the fallback event with original engine name and error details",
+        "Recording continues without interruption after fallback",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-001"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Structured logging with session ID correlation",
+      "description": "As a developer, I need structured logs with session IDs so I can debug per-recording-session issues.",
+      "acceptanceCriteria": [
+        "Each recording session generates a unique UUID session ID",
+        "All log calls during a session include the session ID in the log message",
+        "Log levels follow the spec: Error/Warn/Info/Debug with defined categories",
+        "Audio capture logs: device change, sample rate, buffer size, start/stop",
+        "ASR engine logs: init duration, recognition duration, result length, error codes",
+        "Text injection logs: injection method (AX/clipboard), duration",
+        "CocoaLumberjack config: 5MB max file size, 7 day retention, auto-rotate",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "",
+      "dependsOn": []
+    },
+    {
+      "id": "US-005",
+      "title": "First-launch onboarding flow",
+      "description": "As a new user, I want a quick 3-step onboarding so I can start using the app immediately.",
+      "acceptanceCriteria": [
+        "On first launch, show a 3-step onboarding: Step 1: request microphone permission",
+        "Step 2: select engine (default Paraformer, with Apple Speech as option)",
+        "Step 3: show hotkey (Right Cmd or Option) and explain push-to-talk",
+        "Each step has Next/Skip button, final step has 'Get Started' button",
+        "Onboarding completes: save flag to UserDefaults so it never shows again",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "",
+      "dependsOn": []
+    },
+    {
+      "id": "US-006",
+      "title": "Simplify overlay: auto-fade and toast for failures",
+      "description": "As a user, I want the overlay to auto-fade after text injection and show a subtle notification if injection fails.",
+      "acceptanceCriteria": [
+        "Remove manual close button from overlay",
+        "After successful text injection: overlay auto-fades out over 2 seconds",
+        "On injection failure: text copies to clipboard, show toast 'copied to clipboard' for 3 seconds, then fade",
+        "No big 'Copy to Clipboard' button, just the toast notification",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-005"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Simplify settings to 2 tabs",
+      "description": "As a user, I want minimal settings — just engine choice and hotkey — so the app feels simple.",
+      "acceptanceCriteria": [
+        "Settings window has exactly 2 tabs: Engine and Shortcuts",
+        "Engine tab: engine picker (local Paraformer default / Apple Speech), model download/delete section",
+        "Shortcuts tab: hotkey selector, accessibility permission prompt",
+        "Remove: General tab, Language selection, Recording mode toggle, Emotion tag toggle",
+        "All removed preferences default to sensible values (auto-detect language, push-to-talk mode, no emotion UI)",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-005"
+      ]
+    },
+    {
+      "id": "US-008",
+      "title": "Add test target with key path coverage",
+      "description": "As a developer, I need automated tests for critical paths to ship with confidence.",
+      "acceptanceCriteria": [
+        "New test target NemoNoiseTests added to Xcode project",
+        "ASRService mock test: verify protocol conformance and isStreaming property",
+        "SpeechOrchestrator test: verify engine selection and fallback logic",
+        "AudioCapture lifecycle test: start/stop/re-entry handling",
+        "TextInjector test: AX injection path and clipboard fallback",
+        "ModelManager test: download state machine transitions",
+        "All tests pass via xcodebuild test"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-001"
+      ]
+    },
+    {
+      "id": "US-009",
+      "title": "Integrate Sentry crash reporting",
+      "description": "As a developer, I need crash reports from users to fix issues I can't reproduce locally.",
+      "acceptanceCriteria": [
+        "Add Sentry Swift SDK dependency (SPM)",
+        "Initialize Sentry in NemoNoiseApp with DSN from config",
+        "Capture crashes and non-fatal errors (engine init failure, audio session exceptions)",
+        "Add opt-out toggle in settings (off by default for privacy)",
+        "Respect opt-out: skip Sentry init when disabled",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-007"
+      ]
+    },
+    {
+      "id": "US-010",
+      "title": "Integrate Sparkle 2 for auto-updates",
+      "description": "As a user, I want the app to update automatically so I always have the latest version.",
+      "acceptanceCriteria": [
+        "Add Sparkle 2 framework via SPM or XCFramework",
+        "Configure SUFeedURL to point at GitHub Releases appcast",
+        "Add 'Check for Updates' menu item in app menu",
+        "Sparkle respects user's automatic update preferences",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-009"
+      ]
+    },
+    {
+      "id": "US-011",
+      "title": "CloudASREngine with Alibaba Cloud Paraformer API",
+      "description": "As a user who provides an API key, I can use cloud-based Paraformer for higher accuracy transcription.",
+      "acceptanceCriteria": [
+        "New CloudASREngine conforms to ASRService protocol with isStreaming=true",
+        "Sends audio chunks to Alibaba Cloud Paraformer REST API",
+        "API Key stored in and retrieved from macOS Keychain",
+        "API Key input field in Engine tab of settings",
+        "When API Key is set: cloud engine appears as option in engine picker",
+        "When API Key is empty: cloud engine not shown",
+        "Handles API errors: timeout → fallback to local engine with toast, auth failure → prompt re-enter key",
+        "Logs: request latency, HTTP status, token count, retry count",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-001",
+        "US-003",
+        "US-007"
+      ]
+    },
+    {
+      "id": "US-012",
+      "title": "One-click log export with sanitization",
+      "description": "As a user reporting a bug, I can export recent logs with one click, with PII removed.",
+      "acceptanceCriteria": [
+        "Add 'Export Logs' button in settings or debug menu",
+        "Clicking it saves last 7 days of logs to a file on Desktop",
+        "Sanitize exported logs: remove target app names, file paths containing usernames",
+        "Show confirmation with file path after export",
+        "xcodebuild build succeeds"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-004"
+      ]
+    },
+    {
+      "id": "US-013",
+      "title": "GitHub Actions CI for auto-build",
+      "description": "As a developer, I need CI to verify every PR builds successfully before merge.",
+      "acceptanceCriteria": [
+        "Create .github/workflows/ci.yml",
+        "Trigger on push to main/develop and on pull requests",
+        "Job: checkout, install Xcode, xcodebuild build for macOS",
+        "Job: xcodebuild test for NemoNoiseTests target",
+        "Build fails on compilation errors or test failures",
+        "Status badge in README"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-008"
+      ]
+    },
+    {
+      "id": "US-014",
+      "title": "dmg packaging and GitHub Releases v1.0",
+      "description": "As a user, I can download a dmg from GitHub Releases and drag the app to Applications.",
+      "acceptanceCriteria": [
+        "Create a build script that produces a signed .dmg",
+        "dmg contains NemoNoise.app and Applications symlink",
+        "App icon set (placeholder if no professional icon yet)",
+        "README with: features list, screenshot, install instructions, supported OS version",
+        "GitHub Release created as v1.0 with dmg artifact and release notes",
+        "Sparkle appcast.xml generated alongside the release"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "",
+      "dependsOn": [
+        "US-010",
+        "US-011",
+        "US-013"
+      ]
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-05-12T05:01:07.557Z"
+  }
+}
