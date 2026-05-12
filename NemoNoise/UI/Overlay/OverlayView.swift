@@ -9,8 +9,10 @@ struct OverlayView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             headerBar
-            Divider().opacity(0.3)
-            transcriptArea
+            if shouldShowTranscript {
+                Divider().opacity(0.3)
+                transcriptArea
+            }
         }
         .frame(minWidth: 360, maxWidth: 520)
         .background {
@@ -42,6 +44,10 @@ struct OverlayView: View {
         } message: {
             Text(controller.errorMessage)
         }
+    }
+
+    private var shouldShowTranscript: Bool {
+        !(controller.recordingState == .recording && !controller.isStreaming)
     }
 
     private var headerBar: some View {
@@ -91,16 +97,19 @@ struct OverlayView: View {
             return String(format: "%d:%02d", minutes, seconds)
         case .processing:
             return "--:--"
-        case .idle:
+        case .ready:
             return "0:00"
+        case .failed:
+            return "--:--"
         }
     }
     
     private var statusText: String {
         switch controller.recordingState {
-        case .idle: return "READY"
+        case .ready: return "READY"
         case .recording: return "RECORDING"
         case .processing: return "THINKING"
+        case .failed: return "ERROR"
         }
     }
 

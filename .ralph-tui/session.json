@@ -3,10 +3,10 @@
   "sessionId": "6c99ef57-9e15-44e7-b6d6-77d3cffba716",
   "status": "running",
   "startedAt": "2026-05-12T04:58:58.737Z",
-  "updatedAt": "2026-05-12T05:01:07.558Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-05-12T05:09:17.866Z",
+  "currentIteration": 1,
   "maxIterations": 0,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -17,8 +17,8 @@
       {
         "id": "US-001",
         "title": "Add isStreaming property to ASRService protocol",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-002",
@@ -100,7 +100,18 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "US-001",
+      "taskTitle": "Add isStreaming property to ASRService protocol",
+      "taskCompleted": true,
+      "durationMs": 125799,
+      "startedAt": "2026-05-12T04:59:01.758Z",
+      "endedAt": "2026-05-12T05:01:07.557Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/Users/gaozimeng/Learn/macOS/NemoNoise",
   "activeTaskIds": [],

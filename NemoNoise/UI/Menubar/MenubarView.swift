@@ -56,14 +56,16 @@ struct MenuBarPopoverView: View {
         case .ready: .green
         case .recording: .red
         case .processing: .orange
+        case .failed: .red
         }
     }
 
     private var statusText: String {
         switch controller.recordingState {
-        case .idle: "Ready"
+        case .ready: "Ready"
         case .recording: "Recording…"
         case .processing: "Processing…"
+        case .failed: "Error"
         }
     }
 

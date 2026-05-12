@@ -14,6 +14,10 @@ final class SpeechOrchestrator {
     private let modelManager: ModelManager
     private let audioCapture = AudioCapture()
     private var engine: (any ASRService)?
+
+    var isStreaming: Bool {
+        engine?.isStreaming ?? (UserDefaults.standard.string(forKey: "engineType") != "sensevoice")
+    }
     
     init(modelManager: ModelManager) {
         self.modelManager = modelManager

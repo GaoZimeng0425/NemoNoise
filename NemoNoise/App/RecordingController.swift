@@ -7,6 +7,7 @@ final class RecordingController {
     var recordingState: RecordingState = .ready
     var confirmedSegments: [TranscriptionSegment] = []
     var partialText: String = ""
+    var isStreaming: Bool = true
     var micLevel: Float = 0
     var showCopyButton: Bool = false
     var showErrorAlert: Bool = false
@@ -95,11 +96,12 @@ final class RecordingController {
 
     private func startRecording() {
         guard recordingState == .ready else { return }
-        
+
         textInjector.captureTarget()
         recordingState = .recording
         confirmedSegments = []
         partialText = ""
+        isStreaming = orchestrator.isStreaming
         showCopyButton = false
         showOverlay()
         startTimer()
