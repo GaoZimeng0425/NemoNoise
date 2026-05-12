@@ -2,8 +2,7 @@ import SwiftUI
 
 struct OverlayView: View {
     @Environment(RecordingController.self) private var controller
-    @AppStorage("showEmotionTags") private var showEmotionTags = true
-    
+
     @State private var isPulsing = false
     @State private var showFallbackToast = false
 
@@ -145,10 +144,6 @@ struct OverlayView: View {
                                 .font(.system(size: 19, weight: .medium, design: .rounded))
                                 .foregroundStyle(.primary)
                                 .fixedSize(horizontal: false, vertical: true)
-                            
-                            if showEmotionTags, let emotion = segment.emotion {
-                                emotionTag(emotion)
-                            }
                         }
                         .transition(.asymmetric(insertion: .push(from: .bottom).combined(with: .opacity), removal: .opacity))
                     }
@@ -183,12 +178,4 @@ struct OverlayView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: controller.confirmedSegments.count)
     }
 
-    private func emotionTag(_ emotion: String) -> some View {
-        Text(emotion)
-            .font(.system(size: 12, weight: .bold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.blue.opacity(0.15), in: Capsule())
-            .foregroundStyle(.blue)
-    }
 }

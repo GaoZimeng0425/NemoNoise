@@ -119,3 +119,23 @@ after each iteration and it's included in prompts for context.
   - Sharing a single toast mechanism (showToast/toastMessage) across different features (engine fallback, clipboard copy) keeps the UI consistent and avoids duplicate overlay code.
   - Making `TextInjector.injectAX` synchronous is fine since AX calls are sync — no need for async when not doing clipboard paste with sleeps.
 ---
+
+## 2026-05-12 - US-007
+- Simplified settings from 4 tabs to 2: Engine and Shortcuts only.
+- Removed: General tab (recording mode, language, about), Display tab (emotion tags).
+- Engine picker: only Paraformer (default) and Apple Speech (removed SenseVoice option).
+- Removed preferences: language selection (auto-detect), recording mode toggle (push-to-talk), emotion tag toggle (off).
+- All removed prefs default to sensible values via existing UserDefaults fallbacks.
+- OverlayView: removed `@AppStorage("showEmotionTags")` and emotion tag display code.
+- MenubarView: removed SenseVoice fallback warning case.
+- SpeechOrchestrator: default engine changed from "apple" to "paraformer".
+- Files changed:
+  - `NemoNoise/UI/Settings/SettingsView.swift` — rewrote to 2 tabs, removed General/Display/recordingMode/language/emotion
+  - `NemoNoise/UI/Overlay/OverlayView.swift` — removed showEmotionTags AppStorage and emotion tag rendering
+  - `NemoNoise/UI/Menubar/MenubarView.swift` — removed SenseVoice fallback warning
+  - `NemoNoise/Services/ASR/SpeechOrchestrator.swift` — default engineType "apple" → "paraformer"
+- **Learnings:**
+  - When removing a user-facing toggle (emotion tags, recording mode), keep the underlying infrastructure in place — `RecordingMode` enum and `recordingMode` property in RecordingController still exist with hardcoded defaults, so the app logic is unchanged.
+  - When simplifying a picker, also update all default values throughout the codebase (SpeechOrchestrator, MenubarView) to match the new default engine.
+  - `@AppStorage` bindings in removed views need to be cleaned from the view file, but the UserDefaults key itself can remain for existing users — the fallback value handles it.
+---

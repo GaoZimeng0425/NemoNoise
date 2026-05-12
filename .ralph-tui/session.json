@@ -3,10 +3,10 @@
   "sessionId": "6c99ef57-9e15-44e7-b6d6-77d3cffba716",
   "status": "running",
   "startedAt": "2026-05-12T04:58:58.737Z",
-  "updatedAt": "2026-05-12T05:42:33.452Z",
-  "currentIteration": 5,
+  "updatedAt": "2026-05-12T05:48:40.634Z",
+  "currentIteration": 6,
   "maxIterations": 0,
-  "tasksCompleted": 5,
+  "tasksCompleted": 6,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -47,8 +47,8 @@
       {
         "id": "US-006",
         "title": "Simplify overlay: auto-fade and toast for failures",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-007",
@@ -150,6 +150,16 @@
       "durationMs": 435083,
       "startedAt": "2026-05-12T05:26:17.589Z",
       "endedAt": "2026-05-12T05:33:32.672Z"
+    },
+    {
+      "iteration": 6,
+      "status": "completed",
+      "taskId": "US-006",
+      "taskTitle": "Simplify overlay: auto-fade and toast for failures",
+      "taskCompleted": true,
+      "durationMs": 539683,
+      "startedAt": "2026-05-12T05:33:33.768Z",
+      "endedAt": "2026-05-12T05:42:33.451Z"
     }
   ],
   "skippedTaskIds": [],

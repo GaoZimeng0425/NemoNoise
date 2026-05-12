@@ -91,7 +91,7 @@ final class SpeechOrchestrator {
     }
     
     private func makeEngine() throws -> any ASRService {
-        let choice = UserDefaults.standard.string(forKey: "engineType") ?? "apple"
+        let choice = UserDefaults.standard.string(forKey: "engineType") ?? "paraformer"
         LogService.info("Creating engine: \(choice)", category: "ASR")
         switch choice {
         case "sensevoice":

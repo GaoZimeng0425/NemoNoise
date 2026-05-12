@@ -70,10 +70,8 @@ struct MenuBarPopoverView: View {
     }
 
     private var engineFallbackWarning: String? {
-        let choice = UserDefaults.standard.string(forKey: "engineType") ?? "apple"
+        let choice = UserDefaults.standard.string(forKey: "engineType") ?? "paraformer"
         switch choice {
-        case "sensevoice" where controller.modelManager.state(for: .senseVoice) != .downloaded:
-            return "SenseVoice model not downloaded — using Apple Speech"
         case "paraformer" where controller.modelManager.state(for: .paraformer) != .downloaded:
             return "Paraformer model not downloaded — using Apple Speech"
         default:
