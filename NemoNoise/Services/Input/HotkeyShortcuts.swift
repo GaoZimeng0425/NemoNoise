@@ -5,6 +5,10 @@ extension KeyboardShortcuts.Name {
     static let toggleRecording = Self("toggleRecording")
 }
 
+extension Notification.Name {
+    static let recordingShortcutDidChange = Self("recordingShortcutDidChange")
+}
+
 enum HotkeyMigration {
     static func run() {
         guard let old = UserDefaults.standard.string(forKey: "hotkeyOption") else { return }

@@ -23,6 +23,7 @@ final class RecordingController {
     private let maxRecordingDuration: TimeInterval = 120
     private var timerTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
+    private var escMonitor: Any?
     
     let modelManager = ModelManager()
     private let orchestrator: SpeechOrchestrator
@@ -125,6 +126,7 @@ final class RecordingController {
         isStreaming = orchestrator.isStreaming
         showOverlay()
         startTimer()
+        startEscMonitor()
 
         transcriptionTask = Task {
             let stream = orchestrator.startTranscription()
@@ -153,6 +155,7 @@ final class RecordingController {
         recordingState = .processing
         stopTimer()
         invalidateSilenceTimer()
+        stopEscMonitor()
 
         Task {
             do {
@@ -200,6 +203,7 @@ final class RecordingController {
 
         recordingState = .ready
         orchestrator.stop()
+        stopEscMonitor()
         hideOverlay()
         LogService.endSession()
     }
@@ -277,6 +281,25 @@ final class RecordingController {
     private func stopTimer() {
         timerTask?.cancel()
         timerTask = nil
+    }
+
+    private func startEscMonitor() {
+        guard recordingMode == .toggle else { return }
+        escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.keyCode == 53 else { return event }
+            if recordingState == .recording {
+                performHaptic()
+                stopRecording()
+            }
+            return nil
+        }
+    }
+
+    private func stopEscMonitor() {
+        if let monitor = escMonitor {
+            NSEvent.removeMonitor(monitor)
+            escMonitor = nil
+        }
     }
 
 }

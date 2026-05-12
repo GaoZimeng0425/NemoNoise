@@ -104,7 +104,9 @@ struct SettingsView: View {
 
     private var shortcutsSection: some View {
         Section("Shortcuts") {
-            KeyboardShortcuts.Recorder("Activation Key:", name: .toggleRecording)
+            KeyboardShortcuts.Recorder("Activation Key:", name: .toggleRecording) { _ in
+                NotificationCenter.default.post(name: .recordingShortcutDidChange, object: nil)
+            }
 
             Picker("Mode", selection: Binding(
                 get: { controller.recordingMode },
