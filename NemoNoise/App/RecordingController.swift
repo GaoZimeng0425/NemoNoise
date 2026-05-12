@@ -29,13 +29,7 @@ final class RecordingController {
     private var overlayController: OverlayWindowController?
 
     var recordingMode: RecordingMode {
-        get {
-            let raw = UserDefaults.standard.string(forKey: "recordingMode") ?? "pushToTalk"
-            return RecordingMode(rawValue: raw) ?? .pushToTalk
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: "recordingMode")
-        }
+        didSet { UserDefaults.standard.set(recordingMode.rawValue, forKey: "recordingMode") }
     }
 
     var hotkeyDisplayText: String {
@@ -54,6 +48,8 @@ final class RecordingController {
     }
 
     init() {
+        let raw = UserDefaults.standard.string(forKey: "recordingMode") ?? "pushToTalk"
+        self.recordingMode = RecordingMode(rawValue: raw) ?? .pushToTalk
         self.orchestrator = SpeechOrchestrator(modelManager: modelManager)
 
         orchestrator.onEngineFallback = { [weak self] failedEngine in
