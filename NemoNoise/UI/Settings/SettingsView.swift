@@ -4,6 +4,8 @@ struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
     @AppStorage("engineType") private var engineType = "paraformer"
     @State private var cloudAPIKey: String = ""
+    @State private var showExportAlert = false
+    @State private var exportedLogPath = ""
 
     var body: some View {
         TabView {
@@ -31,6 +33,14 @@ struct SettingsView: View {
             }
             privacySection
             aboutSection
+        }
+        .alert("Logs Exported", isPresented: $showExportAlert) {
+            Button("Show in Finder") {
+                NSWorkspace.shared.selectFile(exportedLogPath, inFileViewerRootedAtPath: "")
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Sanitized logs saved to:\n\(exportedLogPath)")
         }
     }
 
@@ -182,6 +192,12 @@ struct SettingsView: View {
                 "Active engine",
                 value: activeEngineLabel
             )
+            Button("Export Logs…") {
+                if let path = LogService.exportLogs() {
+                    exportedLogPath = path
+                    showExportAlert = true
+                }
+            }
         }
     }
 

@@ -200,3 +200,18 @@ after each iteration and it's included in prompts for context.
   - For enums without `Equatable` conformance, use `if case .foo = error` pattern matching instead of `error == .foo`.
   - `SpeechOrchestrator.finalize()` needs its own error handling for cloud errors since the cloud API call happens in `finish()` (after recording stops), unlike the `feedChunk` fallback which works during recording.
 ---
+
+## 2026-05-12 - US-012
+- One-click log export with PII sanitization.
+- `LogService.exportLogs()`: reads all log files from `~/.NemoNoise/logs/`, filters to last 7 days by modification date, sanitizes user paths, concatenates with a header, and saves to Desktop as `NemoNoise_logs_<timestamp>.txt`.
+- `sanitize()`: replaces home directory path and `/Users/<username>` patterns with `/Users/[USER]`.
+- "Export Logs…" button added to About section of Engine tab in Settings.
+- On success: alert shows file path with "Show in Finder" button that uses `NSWorkspace.selectFile`.
+- Files changed:
+  - `NemoNoise/Utils/LogService.swift` — added `exportLogs()` and `sanitize()` static methods
+  - `NemoNoise/UI/Settings/SettingsView.swift` — added Export Logs button, alert state, and Show in Finder action
+- **Learnings:**
+  - `NSWorkspace.shared.selectFile(_:inFileViewerRootedAtPath:)` reveals a specific file in Finder — cleaner than opening the parent directory.
+  - For log export, filtering by `FileManager.attributes[.modificationDate]` works well for "last N days" semantics since log files are rotated daily by DDFileLogger.
+  - SwiftUI `.alert` with `isPresented` binding is straightforward for one-shot confirmations — no need for custom sheet or overlay.
+---

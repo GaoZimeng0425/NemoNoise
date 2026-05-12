@@ -73,4 +73,56 @@ extension LogService {
         _ = shared
         DDLogError(formatted(message, category: category))
     }
+
+    // MARK: - Export
+
+    @discardableResult
+    nonisolated static func exportLogs() -> String? {
+        let fm = FileManager.default
+        let logDir = NSHomeDirectory() + "/.NemoNoise/logs"
+
+        guard let files = try? fm.contentsOfDirectory(atPath: logDir) else { return nil }
+
+        let sevenDaysAgo = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+        let username = NSUserName()
+        let homeDir = NSHomeDirectory()
+
+        var allLogs: [String] = []
+
+        for file in files.sorted() {
+            let filePath = (logDir as NSString).appendingPathComponent(file)
+            guard let attrs = try? fm.attributesOfItem(atPath: filePath),
+                  let modDate = attrs[.modificationDate] as? Date,
+                  modDate > sevenDaysAgo else { continue }
+
+            guard let content = try? String(contentsOfFile: filePath, encoding: .utf8) else { continue }
+            allLogs.append(sanitize(content, username: username, homeDir: homeDir))
+        }
+
+        guard !allLogs.isEmpty else { return nil }
+
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        let header = "NemoNoise Log Export\nExported: \(df.string(from: Date()))\nNote: User paths sanitized for privacy.\n---\n"
+
+        df.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let desktopPath = NSSearchPathForDirectoriesInDomains(.desktopDirectory, .userDomainMask, true).first!
+        let exportPath = (desktopPath as NSString).appendingPathComponent("NemoNoise_logs_\(df.string(from: Date())).txt")
+
+        do {
+            try (header + allLogs.joined(separator: "\n---\n")).write(toFile: exportPath, atomically: true, encoding: .utf8)
+            return exportPath
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated private static func sanitize(_ text: String, username: String, homeDir: String) -> String {
+        var result = text
+        result = result.replacingOccurrences(of: homeDir, with: "/Users/[USER]")
+        if !username.isEmpty {
+            result = result.replacingOccurrences(of: "/Users/\(username)", with: "/Users/[USER]")
+        }
+        return result
+    }
 }
