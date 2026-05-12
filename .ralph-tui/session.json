@@ -3,10 +3,10 @@
   "sessionId": "6c99ef57-9e15-44e7-b6d6-77d3cffba716",
   "status": "running",
   "startedAt": "2026-05-12T04:58:58.737Z",
-  "updatedAt": "2026-05-12T05:09:17.866Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-05-12T05:16:16.516Z",
+  "currentIteration": 2,
   "maxIterations": 0,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "US-002",
         "title": "Overlay waveform-only mode for non-streaming engines",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-003",
@@ -110,6 +110,16 @@
       "durationMs": 125799,
       "startedAt": "2026-05-12T04:59:01.758Z",
       "endedAt": "2026-05-12T05:01:07.557Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "US-002",
+      "taskTitle": "Overlay waveform-only mode for non-streaming engines",
+      "taskCompleted": true,
+      "durationMs": 487018,
+      "startedAt": "2026-05-12T05:01:10.847Z",
+      "endedAt": "2026-05-12T05:09:17.865Z"
     }
   ],
   "skippedTaskIds": [],

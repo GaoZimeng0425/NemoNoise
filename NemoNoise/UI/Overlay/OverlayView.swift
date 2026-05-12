@@ -5,6 +5,7 @@ struct OverlayView: View {
     @AppStorage("showEmotionTags") private var showEmotionTags = true
     
     @State private var isPulsing = false
+    @State private var showFallbackToast = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -23,6 +24,28 @@ struct OverlayView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(.white.opacity(0.15), lineWidth: 0.5)
+        }
+        .overlay(alignment: .bottom) {
+            if showFallbackToast {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.caption)
+                    Text("Switched to local engine")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.black.opacity(0.7), in: Capsule())
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .padding(.bottom, 8)
+            }
+        }
+        .onChange(of: controller.showToast) { _, newValue in
+            withAnimation(.easeOut(duration: 0.3)) {
+                showFallbackToast = newValue
+            }
         }
         .padding(12)
         .alert("Accessibility Permission Required", isPresented: Binding(

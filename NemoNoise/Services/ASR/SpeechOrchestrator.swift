@@ -14,48 +14,65 @@ final class SpeechOrchestrator {
     private let modelManager: ModelManager
     private let audioCapture = AudioCapture()
     private var engine: (any ASRService)?
+    var onEngineFallback: ((String) -> Void)?
 
     var isStreaming: Bool {
         engine?.isStreaming ?? (UserDefaults.standard.string(forKey: "engineType") != "sensevoice")
     }
-    
+
     init(modelManager: ModelManager) {
         self.modelManager = modelManager
     }
-    
+
     func startTranscription() -> AsyncThrowingStream<OrchestratorResult, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let currentEngine = try makeEngine()
-                    self.engine = currentEngine
-                    currentEngine.reset()
-                    
+                    let initialEngine = try makeEngine()
+                    self.engine = initialEngine
+                    let originalEngineName = String(describing: type(of: initialEngine))
+                    initialEngine.reset()
+
                     let audioStream = try await audioCapture.start()
-                    
+
                     continuation.onTermination = { @Sendable _ in
                         Task { @MainActor in
                             self.stop()
                         }
                     }
-                    
+
+                    var hasFallenBack = false
+
                     for await chunk in audioStream {
-                        let result = try await currentEngine.feedChunk(chunk.samples, sampleRate: 16000)
-                        
-                        let orchestratorResult = OrchestratorResult(
-                            text: result.text,
-                            isFinal: result.isFinal,
-                            emotion: result.emotion,
-                            rmsLevel: chunk.rmsLevel
-                        )
-                        continuation.yield(orchestratorResult)
+                        guard let activeEngine = self.engine else { break }
+                        do {
+                            let result = try await activeEngine.feedChunk(chunk.samples, sampleRate: 16000)
+                            continuation.yield(OrchestratorResult(
+                                text: result.text,
+                                isFinal: result.isFinal,
+                                emotion: result.emotion,
+                                rmsLevel: chunk.rmsLevel
+                            ))
+                        } catch where !hasFallenBack {
+                            hasFallenBack = true
+                            LogService.error("Engine \(originalEngineName) failed: \(error.localizedDescription)", category: "ASR")
+                            LogService.info("Falling back to AppleSpeechASREngine", category: "ASR")
+
+                            let fallbackEngine = try AppleSpeechASREngine()
+                            fallbackEngine.reset()
+                            self.engine = fallbackEngine
+                            self.onEngineFallback?(originalEngineName)
+
+                            continuation.yield(OrchestratorResult(
+                                text: "", isFinal: false, emotion: nil, rmsLevel: chunk.rmsLevel
+                            ))
+                        }
                     }
+                    continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
-            
-            // Handle early termination if needed
         }
     }
     

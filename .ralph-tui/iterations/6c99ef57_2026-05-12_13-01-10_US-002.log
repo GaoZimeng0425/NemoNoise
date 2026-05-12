@@ -1,0 +1,133 @@
+# Iteration 2 Log
+
+## Metadata
+
+- **Task ID**: US-002
+- **Task Title**: Overlay waveform-only mode for non-streaming engines
+- **Description**: As a user, when using a batch ASR engine, I should see only a volume waveform during recording, with text appearing once after recording ends.
+- **Status**: completed
+- **Task Completed**: Yes
+- **Promise Detected**: Yes
+- **Started At**: 2026-05-12T05:01:10.847Z
+- **Ended At**: 2026-05-12T05:09:17.865Z
+- **Duration**: 8m 7s
+- **Input Tokens**: 32266
+- **Output Tokens**: 8644
+- **Total Tokens**: 40910
+- **Agent**: claude
+- **Model**: glm-5.1
+- **Sandbox Mode**: auto
+- **Sandbox Network**: Enabled
+--- RAW OUTPUT ---
+I'll start by studying the PRD context and progress file to understand the current state of the project.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/.ralph-tui/progress.md[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/tasks/prd.json[0m
+Now let me explore the current overlay and ASR-related code to understand the implementation.
+[94m[Agent][0m Explore overlay and ASR architecture
+[94m[Glob][0m pattern: [96m**/*.{swift,h,m}[0m
+[94m[Grep][0m pattern: [96moverlay|Overlay[0m
+[94m[Grep][0m pattern: [96mASRService[0m
+[94m[Grep][0m pattern: [96mSherpaASR[0m
+[94m[Grep][0m pattern: [96mLiveWaveform|Waveform[0m
+[94m[Grep][0m pattern: [96mSpeechOrchestrator[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/ASRService.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/SherpaASREngine.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/LiveWaveformView.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/SpeechOrchestrator.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/App/RecordingController.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayWindowController.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Models/ASRModels.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/AppleSpeechASREngine.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/ParaformerStreamingEngine.swift[0m
+[94m[Grep][0m pattern: [96mpartialText|partial[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/App/RecordingController.swift[0m pattern: [96mconfirmedSegments|partialText[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m pattern: [96mtranscriptArea|confirmedSegments|partialText[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/SherpaOnnxWrapper.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/Audio/AudioCapture.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ModelManagement/ModelManager.swift[0m
+Let me read the key files I need to modify.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/App/RecordingController.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/SpeechOrchestrator.swift[0m
+Now I have a clear picture. Let me implement the changes.
+[94m[TodoWrite][0m
+First, add `isStreaming` to `SpeechOrchestrator` so the controller can read it before recording starts.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/SpeechOrchestrator.swift[0m edit: "@MainActor
+final class SpeechOrchestrator {
+    pr..." → "@MainActor
+final class SpeechOrchestrator {
+    pr..."
+[94m[TodoWrite][0m
+Now add `isStreaming` to `RecordingController` and set it when starting recording.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/App/RecordingController.swift[0m edit: "    var recordingState: RecordingState = .ready
+  ..." → "    var recordingState: RecordingState = .ready
+  ..."
+Now set `isStreaming` in `startRecording()` right before showing the overlay.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/App/RecordingController.swift[0m edit: "    private func startRecording() {
+        guard ..." → "    private func startRecording() {
+        guard ..."
+[94m[TodoWrite][0m
+Now update `OverlayView` to hide the transcript area during recording when `isStreaming=false`.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m edit: "    var body: some View {
+        VStack(alignment..." → "    var body: some View {
+        VStack(alignment..."
+Now add the `shouldShowTranscript` computed property.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m edit: "    private var headerBar: some View {" → "    private var shouldShowTranscript: Bool {
+     ..."
+[94m[TodoWrite][0m
+Now let me verify the build succeeds.
+[94m[Bash][0m Build NemoNoise to verify changes compile $ xcodebuild build -scheme NemoNoise -destination 'platform=macOS' 2>&1 | tail -30
+The build error is a pre-existing issue in `MenubarView.swift` (noted in US-001 progress). Let me check the `RecordingState` enum to confirm.
+[94m[Grep][0m pattern: [96menum RecordingState[0m
+The only failure is the pre-existing `MenubarView.swift` issue (`.idle` should be `.ready`). My changes compile fine. Let me fix this pre-existing error so the build succeeds.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Menubar/MenubarView.swift[0m
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Menubar/MenubarView.swift[0m edit: "        case .idle: "Ready"" → "        case .ready: "Ready""
+Let me also check if there's a `.failed` case handling issue in the switch since the enum has `failed(String)`.
+[94m[Bash][0m Rebuild to verify all errors are fixed $ xcodebuild build -scheme NemoNoise -destination 'platform=macOS' 2>&1 | tail -20
+[94m[Bash][0m Get specific error messages $ xcodebuild build -scheme NemoNoise -destination 'platform=macOS' 2>&1 | grep "error:"
+The switches are missing the `.failed` case. Let me read the full context and fix it.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Menubar/MenubarView.swift[0m
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Menubar/MenubarView.swift[0m edit: "    private var statusColor: Color {
+        switc..." → "    private var statusColor: Color {
+        switc..."
+[94m[Bash][0m Rebuild to verify build succeeds $ xcodebuild build -scheme NemoNoise -destination 'platform=macOS' 2>&1 | tail -5
+[94m[Bash][0m Get specific error messages $ xcodebuild build -scheme NemoNoise -destination 'platform=macOS' 2>&1 | grep "error:"
+Same `.idle` issue in OverlayView. Let me fix those too.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m edit: "        case .idle:
+            return "0:00"" → "        case .ready:
+            return "0:00""
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m edit: "    private var statusText: String {
+        switc..." → "    private var statusText: String {
+        switc..."
+I also need to fix the `timerText` switch to be exhaustive.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m edit: "    private var timerText: String {
+        switch..." → "    private var timerText: String {
+        switch..."
+Let me also check if there are `.idle` references elsewhere in the status indicator's recording state check.
+[94m[Grep][0m pattern: [96m\.idle[0m
+Good, all `.idle` references are fixed. Let me rebuild.
+[94m[Bash][0m Rebuild to verify all errors are fixed $ xcodebuild build -scheme NemoNoise -destination 'platform=macOS' 2>&1 | tail -5
+Build succeeded. Now let me update the progress file.
+[94m[TodoWrite][0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/.ralph-tui/progress.md[0m
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/.ralph-tui/progress.md[0m edit: "  - Pre-existing build errors exist in `MenubarVie..." → "  - Pre-existing build errors exist in `MenubarVie..."
+Now let me also add the enum pattern to the Codebase Patterns section since it caused build failures across two stories.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/.ralph-tui/progress.md[0m edit: "## Codebase Patterns (Study These First)
+
+*Add reu..." → "## Codebase Patterns (Study These First)
+
+- **Reco..."
+[94m[TodoWrite][0m
+Let me do a final verification that all acceptance criteria are met:
+
+- **Overlay reads engine's isStreaming property**: `RecordingController.isStreaming` is set from `SpeechOrchestrator.isStreaming` at recording start, which reads `engine?.isStreaming` or falls back to UserDefaults heuristic.
+- **When isStreaming=false**: `OverlayView.shouldShowTranscript` returns false during recording, hiding the transcript area — only the header with `LiveWaveformView` is visible.
+- **When isStreaming=true**: `shouldShowTranscript` returns true, showing streaming text as before.
+- **On recording end with batch engine**: State transitions to `.processing`/`.ready`, `shouldShowTranscript` becomes true, and `confirmedSegments` shows the final text in one shot.
+- **xcodebuild build succeeds**: Confirmed with `BUILD SUCCEEDED`.
+
+<promise>COMPLETE</promise>

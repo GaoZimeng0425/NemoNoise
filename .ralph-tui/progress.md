@@ -40,3 +40,19 @@ after each iteration and it's included in prompts for context.
   - Pre-existing `.idle`/`.ready` enum mismatch was blocking builds — now fixed.
   - SwiftUI conditional view rendering (if/else around VStack children) works cleanly for mode-dependent layouts.
 ---
+
+## 2026-05-12 - US-003
+- Engine auto-fallback: when the active ASR engine throws during `feedChunk`, SpeechOrchestrator silently switches to AppleSpeechASREngine and continues recording.
+- Non-intrusive toast notification ("Switched to local engine") shown at bottom of overlay for 3 seconds after fallback.
+- Fallback events logged via LogService with original engine name and error description.
+- One-shot fallback only — if the Apple fallback engine also fails, error propagates normally.
+- `isStreaming` updated to `true` on fallback (Apple engine is streaming).
+- Files changed:
+  - `NemoNoise/Services/ASR/SpeechOrchestrator.swift` — inner do/catch around `feedChunk` with `catch where !hasFallenBack`, creates AppleSpeechASREngine, calls `onEngineFallback` callback
+  - `NemoNoise/App/RecordingController.swift` — added `showToast`/`toastMessage`/`toastTask`, wired `onEngineFallback` callback with 3-second auto-dismiss
+  - `NemoNoise/UI/Overlay/OverlayView.swift` — added `showFallbackToast` state, toast overlay with capsule background at bottom, `.onChange` bridge from controller state
+- **Learnings:**
+  - `catch where condition` in Swift lets you selectively handle errors inside a loop — unhandled errors propagate to outer catch naturally. Useful for one-shot fallback patterns.
+  - Using `self.engine` (instance property) instead of a local `let` for the engine reference allows mid-loop engine replacement without restructuring the loop.
+  - Toast animation bridging: controller drives `showToast` (Bool), view uses `.onChange` to animate its own `@State` copy — decouples model updates from animation timing.
+---

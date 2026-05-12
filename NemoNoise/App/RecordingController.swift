@@ -15,8 +15,11 @@ final class RecordingController {
     var showAccessibilityGuide: Bool = false
     var isListeningSilence: Bool = false
     var recordingDuration: TimeInterval = 0
-    
+    var showToast: Bool = false
+    var toastMessage: String = ""
+
     private var silenceTimer: Timer?
+    private var toastTask: Task<Void, Never>?
     private let maxRecordingDuration: TimeInterval = 120
     private var timerTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
@@ -53,7 +56,20 @@ final class RecordingController {
 
     init() {
         self.orchestrator = SpeechOrchestrator(modelManager: modelManager)
-        
+
+        orchestrator.onEngineFallback = { [weak self] failedEngine in
+            guard let self else { return }
+            self.isStreaming = true
+            self.toastMessage = "Switched to local engine"
+            self.showToast = true
+            self.toastTask?.cancel()
+            self.toastTask = Task {
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                self.showToast = false
+            }
+        }
+
         hotkeyMonitor.onKeyDown = { [weak self] in
             Task { @MainActor [weak self] in self?.handleHotkeyDown() }
         }
