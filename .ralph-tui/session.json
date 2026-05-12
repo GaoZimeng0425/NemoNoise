@@ -3,10 +3,10 @@
   "sessionId": "a1495961-4118-4598-86d2-b20fba16da00",
   "status": "running",
   "startedAt": "2026-05-12T07:36:35.123Z",
-  "updatedAt": "2026-05-12T08:02:17.140Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-05-12T08:05:31.326Z",
+  "currentIteration": 1,
   "maxIterations": 0,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -59,8 +59,8 @@
       {
         "id": "US-008",
         "title": "Add test target with key path coverage",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-009",
@@ -100,7 +100,18 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "US-008",
+      "taskTitle": "Add test target with key path coverage",
+      "taskCompleted": true,
+      "durationMs": 1538585,
+      "startedAt": "2026-05-12T07:36:38.553Z",
+      "endedAt": "2026-05-12T08:02:17.138Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/Users/gaozimeng/Learn/macOS/NemoNoise",
   "activeTaskIds": [],

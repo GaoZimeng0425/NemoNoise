@@ -27,4 +27,14 @@ after each iteration and it's included in prompts for context.
   - Adding a test target requires: PBXFileReference, PBXContainerItemProxy, PBXTargetDependency, PBXFileSystemSynchronizedRootGroup, PBXNativeTarget, build phases, build configs, and config list
   - `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` on main target makes ALL types MainActor-isolated; test target must match this setting
   - ModelManager's @Observable properties are directly settable in tests for state machine verification
+
+## 2026-05-12 - US-013
+- Created GitHub Actions CI workflow and README with status badge
+- Files changed:
+  - .github/workflows/ci.yml (build + test job on macos-15, triggers on push/PR to main/develop)
+  - README.md (new file with CI badge, features, build/test instructions)
+- **Learnings:**
+  - GitHub Actions macos-15 runners have Xcode 16.x pre-installed; select specific version with `xcode-select`
+  - Disable code signing in CI with `CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO`
+  - xcpretty pipes xcodebuild output for cleaner CI logs; use `PIPESTATUS[0]` to preserve exit code
 ---
