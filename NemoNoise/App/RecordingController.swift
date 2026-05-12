@@ -10,9 +10,6 @@ final class RecordingController {
     var partialText: String = ""
     var isStreaming: Bool = true
     var micLevel: Float = 0
-    var showErrorAlert: Bool = false
-    var errorMessage: String = ""
-    var showAccessibilityGuide: Bool = false
     var isListeningSilence: Bool = false
     var recordingDuration: TimeInterval = 0
     var showToast: Bool = false
@@ -197,8 +194,7 @@ final class RecordingController {
                 showToast = false
             }
         } else {
-            errorMessage = error.localizedDescription
-            showErrorAlert = true
+            presentAlert(title: "Error", message: error.localizedDescription)
         }
 
         recordingState = .ready
@@ -228,7 +224,7 @@ final class RecordingController {
             toastMessage = "Copied to clipboard"
             showToast = true
             if !AXIsProcessTrusted() {
-                showAccessibilityGuide = true
+                presentAccessibilityAlert()
             }
             toastTask?.cancel()
             toastTask = Task {
@@ -299,6 +295,32 @@ final class RecordingController {
         if let monitor = escMonitor {
             NSEvent.removeMonitor(monitor)
             escMonitor = nil
+        }
+    }
+
+    private func presentAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.window.level = .floating
+        alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        alert.runModal()
+    }
+
+    private func presentAccessibilityAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Accessibility Permission Required"
+        alert.informativeText = "NemoNoise needs Accessibility permission to inject text into other apps.\n\nGo to System Settings → Privacy & Security → Accessibility, then enable NemoNoise."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.level = .floating
+        alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
     }
 

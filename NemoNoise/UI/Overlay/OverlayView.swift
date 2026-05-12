@@ -46,25 +46,6 @@ struct OverlayView: View {
                 showFallbackToast = newValue
             }
         }
-        .alert("Accessibility Permission Required", isPresented: Binding(
-            get: { controller.showAccessibilityGuide },
-            set: { controller.showAccessibilityGuide = $0 }
-        )) {
-            Button("Open System Settings") {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("NemoNoise needs Accessibility permission to inject text into other apps.\n\nGo to System Settings → Privacy & Security → Accessibility, then enable NemoNoise.")
-        }
-        .alert("Error", isPresented: Binding(
-            get: { controller.showErrorAlert },
-            set: { controller.showErrorAlert = $0 }
-        )) {
-            Button("OK") { controller.showErrorAlert = false }
-        } message: {
-            Text(controller.errorMessage)
-        }
     }
 
     private var shouldShowTranscript: Bool {
