@@ -37,4 +37,19 @@ after each iteration and it's included in prompts for context.
   - GitHub Actions macos-15 runners have Xcode 16.x pre-installed; select specific version with `xcode-select`
   - Disable code signing in CI with `CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO`
   - xcpretty pipes xcodebuild output for cleaner CI logs; use `PIPESTATUS[0]` to preserve exit code
+
+## 2026-05-12 - US-014
+- Created DMG packaging and GitHub Releases v1.0 infrastructure
+- Files changed:
+  - build.sh (enhanced with version extraction, Sparkle appcast.xml generation, SHA-256 output)
+  - .github/workflows/release.yml (new: release workflow triggered by version tags)
+  - README.md (updated with full features, install instructions, OS requirements, build-from-source)
+  - NemoNoise/Resources/Assets.xcassets/AppIcon.appiconset/ (placeholder blue icon with "N" letter, all sizes)
+  - NemoNoise/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json (updated with filenames)
+- **Learnings:**
+  - Placeholder icons can be generated purely in Python with `struct`+`zlib` for raw PNG creation — no PIL needed
+  - Sparkle appcast.xml needs `sparkle:edSignature` for secure updates; left empty for now since ad-hoc signing doesn't produce EdDSA keys
+  - GitHub Actions release workflow uses `softprops/action-gh-release@v2` to create releases with DMG + appcast artifacts
+  - `hdiutil create -srcfolder` handles DMG creation with Applications symlink automatically
+  - Version extraction from Xcode project: `xcodebuild -showBuildSettings | grep MARKETING_VERSION`
 ---

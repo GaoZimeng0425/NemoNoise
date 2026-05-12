@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and create DMG
+        run: |
+          rm -rf build
+          mkdir -p build
+
+          echo "==> Archiving..."
+          xcodebuild archive \
+            -project NemoNoise.xcodeproj \
+            -scheme NemoNoise \
+            -configuration Release \
+            -archivePath build/NemoNoise.xcarchive \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ENABLE_HARDENED_RUNTIME=NO \
+            | tail -1
+
+          echo "==> Exporting .app..."
+          xcodebuild -exportArchive \
+            -archivePath build/NemoNoise.xcarchive \
+            -exportPath build/export \
+            -exportOptionsPlist ExportOptions.plist
+
+          echo "==> Ad-hoc signing..."
+          codesign --force --deep --sign - build/export/NemoNoise.app
+
+          echo "==> Creating DMG..."
+          mkdir -p build/dmg_staging
+          cp -R build/export/NemoNoise.app build/dmg_staging/
+          ln -s /Applications build/dmg_staging/Applications
+          hdiutil create -volname NemoNoise \
+            -srcfolder build/dmg_staging \
+            -ov -format UDZO \
+            build/NemoNoise.dmg
+
+      - name: Generate appcast.xml
+        run: |
+          DMG_SIZE=$(stat -f%z build/NemoNoise.dmg)
+          BUILD_NUMBER=$(xcodebuild -project NemoNoise.xcodeproj -showBuildSettings -configuration Release 2>/dev/null | grep -m1 CURRENT_PROJECT_VERSION | awk '{print $3}')
+          BUILD_NUMBER="${BUILD_NUMBER:-1}"
+          PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S %z")
+          VERSION="${{ steps.version.outputs.VERSION }}"
+
+          cat > build/appcast.xml << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <channel>
+              <title>NemoNoise</title>
+              <link>https://github.com/GaoZimeng0425/NemoNoise/releases/latest</link>
+              <description>NemoNoise release feed</description>
+              <language>en</language>
+              <item>
+                <title>NemoNoise ${VERSION}</title>
+                <description>Release ${VERSION} of NemoNoise</description>
+                <pubDate>${PUB_DATE}</pubDate>
+                <sparkle:version>${BUILD_NUMBER}</sparkle:version>
+                <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+                <enclosure
+                  url="https://github.com/GaoZimeng0425/NemoNoise/releases/download/v${VERSION}/NemoNoise.dmg"
+                  sparkle:edSignature=""
+                  length="${DMG_SIZE}"
+                  type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          EOF
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          cat > build/release_notes.md << 'NOTES'
+          ## What's New
+
+          - **Multiple ASR engines**: Local SenseVoice, Paraformer streaming, Apple Speech, and cloud-based Paraformer
+          - **Push-to-talk**: Use Right Cmd or Option to record your voice
+          - **Floating overlay**: Shows waveform during recording, transcript after
+          - **Auto text injection**: Types recognized text directly into the active app
+          - **Auto-updates**: Sparkle 2 integration for seamless updates
+          - **Crash reporting**: Sentry integration (opt-in)
+
+          ## Installation
+
+          1. Download **NemoNoise.dmg** below
+          2. Open the DMG and drag NemoNoise to your Applications folder
+          3. Launch NemoNoise from Applications
+          4. On first launch, right-click and select Open (required for unsigned apps)
+
+          ## Requirements
+
+          - macOS 15.0 (Sequoia) or later
+          NOTES
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: NemoNoise v${{ steps.version.outputs.VERSION }}
+          body_path: build/release_notes.md
+          files: |
+            build/NemoNoise.dmg
+            build/appcast.xml
+          draft: false
+          prerelease: false

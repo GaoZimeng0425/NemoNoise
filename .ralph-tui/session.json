@@ -3,10 +3,10 @@
   "sessionId": "a1495961-4118-4598-86d2-b20fba16da00",
   "status": "running",
   "startedAt": "2026-05-12T07:36:35.123Z",
-  "updatedAt": "2026-05-12T08:05:31.326Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-05-12T08:15:43.374Z",
+  "currentIteration": 2,
   "maxIterations": 0,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -89,8 +89,8 @@
       {
         "id": "US-013",
         "title": "GitHub Actions CI for auto-build",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-014",
@@ -110,6 +110,16 @@
       "durationMs": 1538585,
       "startedAt": "2026-05-12T07:36:38.553Z",
       "endedAt": "2026-05-12T08:02:17.138Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "US-013",
+      "taskTitle": "GitHub Actions CI for auto-build",
+      "taskCompleted": true,
+      "durationMs": 193080,
+      "startedAt": "2026-05-12T08:02:18.245Z",
+      "endedAt": "2026-05-12T08:05:31.325Z"
     }
   ],
   "skippedTaskIds": [],

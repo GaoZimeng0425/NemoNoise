@@ -274,16 +274,17 @@
         "Sparkle appcast.xml generated alongside the release"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "",
       "dependsOn": [
         "US-010",
         "US-011",
         "US-013"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     }
   ],
   "metadata": {
-    "updatedAt": "2026-05-12T08:05:31.325Z"
+    "updatedAt": "2026-05-12T08:15:43.374Z"
   }
 }
