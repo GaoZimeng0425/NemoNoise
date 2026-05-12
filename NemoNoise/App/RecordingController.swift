@@ -179,6 +179,7 @@ final class RecordingController {
 
     private func handleError(_ error: Error) {
         LogService.error("Recording error: \(error.localizedDescription)", category: "Recording")
+        SentryService.capture(error: error)
         errorMessage = error.localizedDescription
         showErrorAlert = true
         recordingState = .ready

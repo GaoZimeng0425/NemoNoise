@@ -1,0 +1,112 @@
+# Iteration 7 Log
+
+## Metadata
+
+- **Task ID**: US-007
+- **Task Title**: Simplify settings to 2 tabs
+- **Description**: As a user, I want minimal settings — just engine choice and hotkey — so the app feels simple.
+- **Status**: completed
+- **Task Completed**: Yes
+- **Promise Detected**: Yes
+- **Started At**: 2026-05-12T05:42:34.549Z
+- **Ended At**: 2026-05-12T05:48:40.633Z
+- **Duration**: 6m 6s
+- **Input Tokens**: 36675
+- **Output Tokens**: 5984
+- **Total Tokens**: 42659
+- **Agent**: claude
+- **Model**: glm-5.1
+- **Sandbox Mode**: auto
+- **Sandbox Network**: Enabled
+--- RAW OUTPUT ---
+I'll start by studying the project context and current progress, then implement the settings simplification.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/.ralph-tui/progress.md[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/tasks/prd.json[0m
+Now let me explore the current settings UI to understand what needs to be simplified.
+[94m[Agent][0m Find settings UI files
+[94m[Glob][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96m**/*Settings*[0m
+[94m[Glob][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96m**/*Preference*[0m
+[94m[Glob][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96m**/*Settings*[0m
+[94m[Glob][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96m**/*Preference*[0m
+[94m[Glob][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96m**/*Settings*.swift[0m
+[94m[Glob][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96m**/*Preference*.swift[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96mUserDefaults[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96m@AppStorage[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96mpreference|setting[0m
+[94m[Bash][0m Find all Swift files with "setting" in the name $ find /Users/gaozimeng/Learn/macOS/NemoNoise -type f -name "*.swift" | grep -i setting
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Settings/SettingsView.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Models/LanguagePreference.swift[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96mUserDefaults\.standard\.(string|bool|integer|set|object)[0m
+[94m[Bash][0m Find Settings or Preferences directories $ find /Users/gaozimeng/Learn/macOS/NemoNoise -type d -name "Settings" -o -type d -name "Preferences"
+[94m[Bash][0m List contents of Settings directory $ ls -la /Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Settings/
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96menum.*Mode|enum.*Option|enum.*Preference[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96mextension.*UserDefaults[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/Input/HotkeyMonitor.swift[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96m@AppStorage[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/App/RecordingController.swift[0m
+[94m[Bash][0m List Swift files to understand project structure $ find /Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise -name "*.swift" | head -30
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96menum RecordingMode[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96menum HotkeyOption[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Models/ASRModels.swift[0m
+[94m[Bash][0m Find all UserDefaults key definitions $ grep -r "forKey:" /Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise --include="*.swift" | grep -v ".s...
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96mforKey:[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/SpeechOrchestrator.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ModelManagement/ModelManager.swift[0m
+[94m[Grep][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise[0m pattern: [96mshowEmotionTags|hasCompletedOnboarding[0m
+[94m[Bash][0m List all unique Swift filenames $ | sort -u
+Let me read the key files I need to modify.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Settings/SettingsView.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Models/LanguagePreference.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Models/ASRModels.swift[0m
+Let me check how the removed preferences are used across the codebase to ensure I handle defaults correctly.
+[94m[Grep][0m pattern: [96mshowEmotionTags|recordingMode|languagePreference[0m
+Let me read the RecordingController to see how `recordingMode` is used there, and the OverlayView for `showEmotionTags`.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/App/RecordingController.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m
+Let me also check the OnboardingView and SpeechOrchestrator to understand the full picture.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Onboarding/OnboardingView.swift[0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/SpeechOrchestrator.swift[0m
+Let me check the MenubarView for any settings references.
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Menubar/MenubarView.swift[0m
+Now I have a complete picture. Let me implement the changes.
+[94m[TodoWrite][0m
+Now let me rewrite the SettingsView with only 2 tabs.
+[94m[Write][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Settings/SettingsView.swift[0m "import SwiftUI
+
+struct SettingsView: View {
+    @Environment(RecordingController.self) private var controller
+    @AppStorage("engineType") private var engineType = "paraformer"
+
+    var body: some Vi... (5569 chars)"
+Now remove the emotion tags from OverlayView.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m edit: "    @Environment(RecordingController.self) private..." → "    @Environment(RecordingController.self) private..."
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m edit: "                            Text(segment.text)
+   ..." → "                            Text(segment.text)
+   ..."
+Now remove the unused `emotionTag` function from OverlayView.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Overlay/OverlayView.swift[0m edit: "    private func emotionTag(_ emotion: String) -> ..." → "}
+"
+[94m[TodoWrite][0m
+Now remove the SenseVoice fallback warning from MenubarView since we're removing SenseVoice from the picker.
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/UI/Menubar/MenubarView.swift[0m edit: "    private var engineFallbackWarning: String? {
+ ..." → "    private var engineFallbackWarning: String? {
+ ..."
+Now let me also update the SpeechOrchestrator's default engine fallback from "apple" to "paraformer".
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/NemoNoise/Services/ASR/SpeechOrchestrator.swift[0m edit: "        let choice = UserDefaults.standard.string(..." → "        let choice = UserDefaults.standard.string(..."
+[94m[TodoWrite][0m
+Now let me verify the build.
+[94m[Bash][0m Build NemoNoise to verify changes compile $ xcodebuild build -scheme NemoNoise -configuration Debug -destination 'platform=macOS' build 2>&1 | t...
+Build succeeded. Now let me document learnings and signal completion.
+[94m[TodoWrite][0m
+[94m[Read][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/.ralph-tui/progress.md[0m
+[94m[Edit][0m [95m/Users/gaozimeng/Learn/macOS/NemoNoise/.ralph-tui/progress.md[0m edit: "  - Making `TextInjector.injectAX` synchronous is ..." → "  - Making `TextInjector.injectAX` synchronous is ..."
+[94m[TodoWrite][0m
+US-007 complete. Settings simplified to exactly 2 tabs:
+
+- **Engine tab**: Paraformer (default) / Apple Speech picker + model download/delete + about section
+- **Shortcuts tab**: hotkey selector + accessibility permission prompt
+- **Removed**: General tab, Display tab, language selection, recording mode toggle, emotion tag toggle
+- All removed preferences default to sensible values (auto-detect language, push-to-talk, no emotion UI)
+- Build verified passing
+
+<promise>COMPLETE</promise>

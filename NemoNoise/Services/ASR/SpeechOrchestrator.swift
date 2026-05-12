@@ -57,6 +57,7 @@ final class SpeechOrchestrator {
                             hasFallenBack = true
                             LogService.error("Engine \(originalEngineName) failed: \(error.localizedDescription)", category: "ASR")
                             LogService.info("Falling back to AppleSpeechASREngine", category: "ASR")
+                            SentryService.capture(message: "Engine \(originalEngineName) failed, falling back: \(error.localizedDescription)")
 
                             let fallbackEngine = try AppleSpeechASREngine()
                             fallbackEngine.reset()

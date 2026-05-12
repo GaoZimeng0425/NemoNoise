@@ -77,6 +77,7 @@
 			name = NemoNoise;
 			packageProductDependencies = (
 				AA0000022F9363C40037E18E /* CocoaLumberjackSwift */,
+				BB0000022F9363C40037E18E /* Sentry */,
 			);
 			productName = NemoNoise;
 			productReference = 45ED16B02FA99BA6005FFD16 /* NemoNoise.app */;
@@ -108,6 +109,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
+				BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 45ED16B12FA99BA6005FFD16 /* Products */;
@@ -391,12 +393,25 @@
 				minimumVersion = 3.8.0;
 			};
 		};
+		BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 /* Begin XCSwiftPackageProductDependency section */
 		AA0000022F9363C40037E18E /* CocoaLumberjackSwift */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = AA0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "CocoaLumberjack" */;
 			productName = CocoaLumberjackSwift;
+		};
+		BB0000022F9363C40037E18E /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB0000012F9363C40037E18E /* XCRemoteSwiftPackageReference "Sentry" */;
+			productName = Sentry;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

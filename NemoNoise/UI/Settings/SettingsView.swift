@@ -24,6 +24,7 @@ struct SettingsView: View {
             if engineType == "paraformer" {
                 modelSection(for: .paraformer)
             }
+            privacySection
             aboutSection
         }
     }
@@ -80,6 +81,19 @@ struct SettingsView: View {
                 }
                 .font(.caption)
             }
+        }
+    }
+
+    // MARK: Privacy
+
+    private var privacySection: some View {
+        Section("Privacy") {
+            Toggle("Enable Crash Reporting", isOn: Binding(
+                get: { SentryService.isEnabled },
+                set: { SentryService.isEnabled = $0 }
+            ))
+            Text("Send anonymous crash reports to help improve NemoNoise.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

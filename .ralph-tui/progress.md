@@ -139,3 +139,25 @@ after each iteration and it's included in prompts for context.
   - When simplifying a picker, also update all default values throughout the codebase (SpeechOrchestrator, MenubarView) to match the new default engine.
   - `@AppStorage` bindings in removed views need to be cleaned from the view file, but the UserDefaults key itself can remain for existing users — the fallback value handles it.
 ---
+
+## 2026-05-12 - US-009
+- Integrated Sentry crash reporting SDK (v8.58.2 via SPM).
+- `SentryConfig` holds the DSN as a static constant (empty by default = Sentry disabled).
+- `SentryService` manages initialization and error capture; checks `sentryEnabled` UserDefaults key before any Sentry call.
+- Opt-out toggle (off by default) added as Privacy section in Engine tab of settings.
+- Runtime enable/disable: enabling calls `SentrySDK.start()`, disabling calls `SentrySDK.close()`.
+- Non-fatal errors captured: `RecordingController.handleError()` captures recording errors, `SpeechOrchestrator` captures engine fallback messages.
+- Files changed:
+  - `NemoNoise.xcodeproj/project.pbxproj` — added Sentry SPM package reference + product dependency
+  - `NemoNoise/Services/Sentry/SentryConfig.swift` — DSN config constant (new file)
+  - `NemoNoise/Services/Sentry/SentryService.swift` — init, opt-out, capture helpers (new file)
+  - `NemoNoise/App/NemoNoiseApp.swift` — added `SentryService.initialize()` call in init
+  - `NemoNoise/UI/Settings/SettingsView.swift` — added Privacy section with crash reporting toggle
+  - `NemoNoise/App/RecordingController.swift` — added `SentryService.capture(error:)` in handleError
+  - `NemoNoise/Services/ASR/SpeechOrchestrator.swift` — added `SentryService.capture(message:)` on engine fallback
+- **Learnings:**
+  - `PBXFileSystemSynchronizedRootGroup` means new Swift files in NemoNoise/ are auto-discovered — no pbxproj edits needed for source files, only for SPM package references.
+  - Editing pbxproj requires exact tab characters; the Read tool renders tabs as variable-width spaces, making Edit unreliable for pbxproj. Use Python/sed scripts instead.
+  - `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` is set project-wide, but `enum` types with static methods don't cause issues for thread-safe SDKs like Sentry.
+  - Sentry opt-out pattern: store `sentryEnabled` (Bool, default false) in UserDefaults. `SentryService.isEnabled` setter handles runtime enable/disable by calling `SentrySDK.start()`/`SentrySDK.close()`.
+---

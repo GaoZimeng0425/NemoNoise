@@ -6,6 +6,7 @@ struct NemoNoiseApp: App {
 
     init() {
         _ = LogService.shared
+        SentryService.initialize()
     }
 
     var body: some Scene {
