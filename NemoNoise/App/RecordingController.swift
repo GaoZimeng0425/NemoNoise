@@ -39,17 +39,13 @@ final class RecordingController {
         }
     }
 
+    // TODO: Task 6 — rewrite using KeyboardShortcuts.getShortcut(for: .toggleRecording)
     var hotkeyDisplayText: String {
-        let keyName: String
-        switch hotkeyMonitor.hotkeyOption {
-        case .option: keyName = "⌥ Option"
-        case .rightCommand: keyName = "Right ⌘"
-        }
         switch recordingMode {
         case .pushToTalk:
-            return "Hold **\(keyName)** to record"
+            return "Hold **hotkey** to record"
         case .toggle:
-            return "Press **\(keyName)** to start/stop"
+            return "Press **hotkey** to start/stop"
         }
     }
 

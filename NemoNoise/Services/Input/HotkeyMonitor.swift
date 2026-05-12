@@ -1,22 +1,26 @@
-import AppKit
 import ApplicationServices
+import Combine
+import KeyboardShortcuts
 import os
 
-final class HotkeyMonitor: @unchecked Sendable {
+@MainActor
+final class HotkeyMonitor: ObservableObject {
     var onKeyDown: (() -> Void)?
     var onKeyUp: (() -> Void)?
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private var eventTask: Task<Void, Never>?
+    private var isActive = true
 
-    private struct State {
-        var optionWasDown = false
+    /// For testing: simulate a keyDown event
+    func simulateKeyDown() {
+        guard isActive else { return }
+        onKeyDown?()
     }
-    private let lock = OSAllocatedUnfairLock(initialState: State())
 
-    var hotkeyOption: HotkeyOption {
-        let raw = UserDefaults.standard.string(forKey: "hotkeyOption") ?? "option"
-        return HotkeyOption(rawValue: raw) ?? .option
+    /// For testing: simulate a keyUp event
+    func simulateKeyUp() {
+        guard isActive else { return }
+        onKeyUp?()
     }
 
     func start() {
@@ -25,69 +29,28 @@ final class HotkeyMonitor: @unchecked Sendable {
             return
         }
 
-        let mask: CGEventMask = 1 << CGEventType.flagsChanged.rawValue
-        let selfPtr = Unmanaged.passRetained(self).toOpaque()
-
-        let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: mask,
-            callback: { _, _, event, userInfo -> Unmanaged<CGEvent>? in
-                guard let userInfo else { return Unmanaged.passRetained(event) }
-                let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(userInfo).takeUnretainedValue()
-                monitor.handleFlagsChangedSync(event: event)
-                return Unmanaged.passRetained(event)
-            },
-            userInfo: selfPtr
-        )
-
-        guard let tap else {
-            LogService.error("CGEvent.tapCreate failed — check Accessibility permission", category: "HotkeyMonitor")
-            Unmanaged<HotkeyMonitor>.fromOpaque(selfPtr).release()
-            return
+        isActive = true
+        eventTask = Task { [weak self] in
+            for await event in KeyboardShortcuts.events(for: .toggleRecording) {
+                guard let self else { return }
+                switch event {
+                case .keyDown:
+                    self.onKeyDown?()
+                case .keyUp:
+                    self.onKeyUp?()
+                }
+            }
         }
-
-        eventTap = tap
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        if let source = runLoopSource {
-            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        }
-        CGEvent.tapEnable(tap: tap, enable: true)
-        LogService.info("Event tap started", category: "HotkeyMonitor")
+        LogService.info("Hotkey event stream started", category: "HotkeyMonitor")
     }
 
     func stop() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let source = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-        }
-        eventTap = nil
-        runLoopSource = nil
+        eventTask?.cancel()
+        eventTask = nil
+        isActive = false
     }
 
-    nonisolated private func handleFlagsChangedSync(event: CGEvent) {
-        let flags = event.flags
-        let selectedFlag = hotkeyOption.cgFlags
-        let allFlags: CGEventFlags = [.maskCommand, .maskControl, .maskShift, .maskAlternate]
-        let optionNowDown = flags.contains(selectedFlag)
-        let onlyOption = flags.intersection(allFlags) == selectedFlag
-
-        lock.withLock { state in
-            let wasDown = state.optionWasDown
-            if optionNowDown && !wasDown && onlyOption {
-                state.optionWasDown = true
-                let cb = onKeyDown
-                DispatchQueue.main.async { cb?() }
-            } else if !optionNowDown && wasDown {
-                state.optionWasDown = false
-                let cb = onKeyUp
-                DispatchQueue.main.async { cb?() }
-            }
-        }
+    deinit {
+        eventTask?.cancel()
     }
-
-    deinit { stop() }
 }

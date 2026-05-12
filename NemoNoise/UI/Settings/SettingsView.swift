@@ -101,16 +101,11 @@ struct SettingsView: View {
 
     // MARK: Shortcuts
 
+    // TODO: Task 5 — replace with KeyboardShortcuts.Recorder
     private var shortcutsSection: some View {
         Section("Shortcuts") {
-            Picker("Activation Key", selection: Binding(
-                get: { controller.hotkeyMonitor.hotkeyOption },
-                set: { UserDefaults.standard.set($0.rawValue, forKey: "hotkeyOption") }
-            )) {
-                ForEach(HotkeyOption.allCases, id: \.self) { option in
-                    Text(option.rawValue).tag(option)
-                }
-            }
+            Text("Shortcut configuration will be updated in Task 5")
+                .foregroundStyle(.secondary)
 
             if !AXIsProcessTrusted() {
                 Label("Accessibility permission required for global hotkey", systemImage: "exclamationmark.triangle.fill")
