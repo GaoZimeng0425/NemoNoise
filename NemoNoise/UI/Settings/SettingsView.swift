@@ -1,4 +1,5 @@
 import SwiftUI
+import KeyboardShortcuts
 
 struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
@@ -6,6 +7,7 @@ struct SettingsView: View {
     @State private var cloudAPIKey: String = ""
     @State private var showExportAlert = false
     @State private var exportedLogPath = ""
+    @State private var conflictWarning = false
 
     var body: some View {
         TabView {
@@ -101,11 +103,26 @@ struct SettingsView: View {
 
     // MARK: Shortcuts
 
-    // TODO: Task 5 — replace with KeyboardShortcuts.Recorder
     private var shortcutsSection: some View {
         Section("Shortcuts") {
-            Text("Shortcut configuration will be updated in Task 5")
-                .foregroundStyle(.secondary)
+            KeyboardShortcuts.Recorder("Activation Key:", name: .toggleRecording) { shortcut in
+                conflictWarning = shortcut?.isTakenBySystem == true
+            }
+
+            if conflictWarning {
+                Label("This shortcut may conflict with a system shortcut", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.yellow)
+                    .font(.caption)
+            }
+
+            Picker("Mode", selection: Binding(
+                get: { controller.recordingMode },
+                set: { controller.recordingMode = $0 }
+            )) {
+                ForEach(RecordingMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
 
             if !AXIsProcessTrusted() {
                 Label("Accessibility permission required for global hotkey", systemImage: "exclamationmark.triangle.fill")
