@@ -56,3 +56,28 @@ after each iteration and it's included in prompts for context.
   - Using `self.engine` (instance property) instead of a local `let` for the engine reference allows mid-loop engine replacement without restructuring the loop.
   - Toast animation bridging: controller drives `showToast` (Bool), view uses `.onChange` to animate its own `@State` copy — decouples model updates from animation timing.
 ---
+
+## 2026-05-12 - US-004
+- Structured logging with session ID correlation across all services.
+- `LogService` gained `startSession()` / `endSession()` — generates UUID, prepends `session:XXXXXXXX` prefix (first 8 chars) to all log messages while active.
+- Added `DDFileLogger.maximumFileSize = 5MB` for CocoaLumberjack file rotation config.
+- `RecordingController`: logs recording start/stop with duration, mode, streaming flag; logs transcription result length; logs injection method/duration; logs errors with session end.
+- `AudioCapture`: logs device info (sampleRate, channels, bufferSize) at capture start, conversion path, and stop.
+- `SpeechOrchestrator.makeEngine()`: logs engine selection choice, init failures with error descriptions, model-not-found fallbacks.
+- ASR engines: `SherpaASREngine` logs init duration and per-decode timing/char count; `ParaformerStreamingEngine` logs init duration; `AppleSpeechASREngine` logs init duration, locale, recognition result length, and error descriptions.
+- `TextInjector`: logs target capture (debug), injection method (AX vs clipboard) with text length, AX error codes on fallback.
+- Log categories used: `Recording`, `AudioCapture`, `ASR`, `TextInjection`, `SherpaASREngine`, `ParaformerStreamingEngine`, `AppleSpeechASREngine`.
+- Files changed:
+  - `NemoNoise/Utils/LogService.swift` — session ID support, 5MB max file size, formatted log messages
+  - `NemoNoise/App/RecordingController.swift` — session lifecycle + injection logging
+  - `NemoNoise/Services/Audio/AudioCapture.swift` — device info + buffer size logging
+  - `NemoNoise/Services/ASR/SpeechOrchestrator.swift` — engine selection + error logging
+  - `NemoNoise/Services/ASR/SherpaASREngine.swift` — init duration + decode timing
+  - `NemoNoise/Services/ASR/ParaformerStreamingEngine.swift` — init duration
+  - `NemoNoise/Services/ASR/AppleSpeechASREngine.swift` — init duration + result logging
+  - `NemoNoise/Services/Output/TextInjector.swift` — injection method + AX error codes
+- **Learnings:**
+  - `ContinuousClock.now` and `Duration` (Swift 5.7+) work well for lightweight timing — no import needed, `Duration.description` is human-readable.
+  - Using a static `currentSessionID` on the singleton LogService lets any service's log calls automatically pick up the session context without passing IDs around — minimal coupling.
+  - `DDLog*` string-based macros are deprecated in CocoaLumberjack 3.9.1 in favor of `DDLogMessageFormat` — still compile but produce warnings. Not addressed per CLAUDE.md surgical changes policy.
+---

@@ -10,11 +10,14 @@ final class SherpaASREngine: ASRService, @unchecked Sendable {
     init(modelDir: URL, language: String = LanguagePreference.current.sherpaCode) throws {
         let modelPath  = modelDir.appendingPathComponent("model.int8.onnx").path
         let tokensPath = modelDir.appendingPathComponent("tokens.txt").path
+        let start = ContinuousClock.now
         guard let r = SherpaOfflineRecognizer(modelPath: modelPath, tokensPath: tokensPath, language: language) else {
+            LogService.error("Model init failed, path: \(modelPath)", category: "ASR")
             throw ASRError.engineInitFailed
         }
         recognizer = r
-        LogService.info("Model loaded, language: \(language)", category: "SherpaASREngine")
+        let elapsed = ContinuousClock.now - start
+        LogService.info("Model loaded, language: \(language), init duration: \(elapsed.description)", category: "SherpaASREngine")
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
@@ -26,10 +29,14 @@ final class SherpaASREngine: ASRService, @unchecked Sendable {
 
         lastDecodeCount = accumulated.count
         let snapshot = accumulated
+        let decodeStart = ContinuousClock.now
 
         let result = await Task.detached { [recognizer] in
             recognizer.decode(samples: snapshot, sampleRate: 16000)
         }.value
+
+        let decodeElapsed = ContinuousClock.now - decodeStart
+        LogService.debug("Decode: \(result.text.count) chars, duration: \(decodeElapsed.description), samples: \(snapshot.count)", category: "SherpaASREngine")
 
         return TranscriptionResult(text: result.text, isFinal: false, emotion: emotionEmoji(result.emotion))
     }

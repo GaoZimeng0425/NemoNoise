@@ -92,15 +92,28 @@ final class SpeechOrchestrator {
     
     private func makeEngine() throws -> any ASRService {
         let choice = UserDefaults.standard.string(forKey: "engineType") ?? "apple"
+        LogService.info("Creating engine: \(choice)", category: "ASR")
         switch choice {
         case "sensevoice":
             if let dir = modelManager.modelPath(for: .senseVoice) {
-                return try SherpaASREngine(modelDir: dir)
+                do {
+                    return try SherpaASREngine(modelDir: dir)
+                } catch {
+                    LogService.error("SherpaASREngine init failed: \(error.localizedDescription)", category: "ASR")
+                    throw error
+                }
             }
+            LogService.warn("SenseVoice model not found, falling back to Apple", category: "ASR")
         case "paraformer":
             if let dir = modelManager.modelPath(for: .paraformer) {
-                return try ParaformerStreamingEngine(modelDir: dir)
+                do {
+                    return try ParaformerStreamingEngine(modelDir: dir)
+                } catch {
+                    LogService.error("ParaformerStreamingEngine init failed: \(error.localizedDescription)", category: "ASR")
+                    throw error
+                }
             }
+            LogService.warn("Paraformer model not found, falling back to Apple", category: "ASR")
         default:
             break
         }

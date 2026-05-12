@@ -7,15 +7,18 @@ final class ParaformerStreamingEngine: ASRService, @unchecked Sendable {
         let encoderPath = modelDir.appendingPathComponent("model_quant.onnx").path
         let decoderPath = modelDir.appendingPathComponent("decoder_quant.onnx").path
         let tokensPath  = modelDir.appendingPathComponent("tokens.txt").path
+        let start = ContinuousClock.now
         guard let r = SherpaOnlineRecognizer(
             encoderPath: encoderPath,
             decoderPath: decoderPath,
             tokensPath: tokensPath
         ) else {
+            LogService.error("Model init failed, encoder: \(encoderPath)", category: "ASR")
             throw ASRError.engineInitFailed
         }
         recognizer = r
-        LogService.info("Model loaded", category: "ParaformerStreamingEngine")
+        let elapsed = ContinuousClock.now - start
+        LogService.info("Model loaded, init duration: \(elapsed.description)", category: "ParaformerStreamingEngine")
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {

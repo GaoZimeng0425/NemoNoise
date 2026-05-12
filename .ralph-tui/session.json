@@ -3,10 +3,10 @@
   "sessionId": "6c99ef57-9e15-44e7-b6d6-77d3cffba716",
   "status": "running",
   "startedAt": "2026-05-12T04:58:58.737Z",
-  "updatedAt": "2026-05-12T05:16:16.516Z",
-  "currentIteration": 2,
+  "updatedAt": "2026-05-12T05:26:16.488Z",
+  "currentIteration": 3,
   "maxIterations": 0,
-  "tasksCompleted": 2,
+  "tasksCompleted": 3,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -29,8 +29,8 @@
       {
         "id": "US-003",
         "title": "Engine auto-fallback on crash or failure",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-004",
@@ -120,6 +120,16 @@
       "durationMs": 487018,
       "startedAt": "2026-05-12T05:01:10.847Z",
       "endedAt": "2026-05-12T05:09:17.865Z"
+    },
+    {
+      "iteration": 3,
+      "status": "completed",
+      "taskId": "US-003",
+      "taskTitle": "Engine auto-fallback on crash or failure",
+      "taskCompleted": true,
+      "durationMs": 417547,
+      "startedAt": "2026-05-12T05:09:18.968Z",
+      "endedAt": "2026-05-12T05:16:16.515Z"
     }
   ],
   "skippedTaskIds": [],

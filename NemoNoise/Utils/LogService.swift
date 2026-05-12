@@ -3,6 +3,7 @@ import CocoaLumberjackSwift
 final class LogService {
     nonisolated(unsafe) static let shared = LogService()
     private let fileLogger: DDFileLogger
+    nonisolated(unsafe) static var currentSessionID: String?
 
     private init() {
         let logDir = NSHomeDirectory() + "/.NemoNoise/logs"
@@ -17,6 +18,7 @@ final class LogService {
         let logFileManager = DDLogFileManagerDefault(logsDirectory: logDir)
         logFileManager.maximumNumberOfLogFiles = 7
         fileLogger = DDFileLogger(logFileManager: logFileManager)
+        fileLogger.maximumFileSize = 5 * 1024 * 1024
         fileLogger.rollingFrequency = 60 * 60 * 24
         DDLog.add(fileLogger)
 
@@ -30,26 +32,45 @@ final class LogService {
     var currentLogFile: String? {
         fileLogger.currentLogFileInfo?.filePath
     }
+
+    nonisolated static func startSession() -> String {
+        let id = UUID().uuidString
+        currentSessionID = id
+        info("Session started", category: "Recording")
+        return id
+    }
+
+    nonisolated static func endSession() {
+        info("Session ended", category: "Recording")
+        currentSessionID = nil
+    }
 }
 
 extension LogService {
+    nonisolated private static func formatted(_ message: String, category: String) -> String {
+        if let sid = currentSessionID {
+            return "[\(category)] [session:\(sid.prefix(8))] \(message)"
+        }
+        return "[\(category)] \(message)"
+    }
+
     nonisolated static func debug(_ message: String, category: String = "App") {
         _ = shared
-        DDLogDebug("[\(category)] \(message)")
+        DDLogDebug(formatted(message, category: category))
     }
 
     nonisolated static func info(_ message: String, category: String = "App") {
         _ = shared
-        DDLogInfo("[\(category)] \(message)")
+        DDLogInfo(formatted(message, category: category))
     }
 
     nonisolated static func warn(_ message: String, category: String = "App") {
         _ = shared
-        DDLogWarn("[\(category)] \(message)")
+        DDLogWarn(formatted(message, category: category))
     }
 
     nonisolated static func error(_ message: String, category: String = "App") {
         _ = shared
-        DDLogError("[\(category)] \(message)")
+        DDLogError(formatted(message, category: category))
     }
 }

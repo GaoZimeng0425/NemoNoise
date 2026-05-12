@@ -114,6 +114,9 @@ final class RecordingController {
         guard recordingState == .ready else { return }
 
         textInjector.captureTarget()
+        _ = LogService.startSession()
+        LogService.info("Recording started, mode: \(recordingMode.rawValue), engine streaming: \(orchestrator.isStreaming)", category: "Recording")
+
         recordingState = .recording
         confirmedSegments = []
         partialText = ""
@@ -121,11 +124,11 @@ final class RecordingController {
         showCopyButton = false
         showOverlay()
         startTimer()
-        
+
         transcriptionTask = Task {
             let stream = orchestrator.startTranscription()
             resetSilenceTimer()
-            
+
             do {
                 for try await result in stream {
                     self.micLevel = result.rmsLevel
@@ -143,7 +146,9 @@ final class RecordingController {
 
     private func stopRecording() {
         guard recordingState == .recording else { return }
-        
+
+        LogService.info("Recording stopped, duration: \(String(format: "%.1f", recordingDuration))s", category: "Recording")
+
         recordingState = .processing
         stopTimer()
         invalidateSilenceTimer()
@@ -155,9 +160,13 @@ final class RecordingController {
                 if !finalResult.text.isEmpty {
                     let segment = TranscriptionSegment(text: finalResult.text, emotion: finalResult.emotion)
                     self.confirmedSegments.append(segment)
+                    LogService.info("Transcription complete, length: \(finalResult.text.count) chars", category: "Recording")
                     await injectText(finalResult.text)
+                } else {
+                    LogService.info("Transcription complete, no text produced", category: "Recording")
                 }
                 recordingState = .ready
+                LogService.endSession()
             } catch {
                 handleError(error)
             }
@@ -165,16 +174,25 @@ final class RecordingController {
     }
 
     private func handleError(_ error: Error) {
+        LogService.error("Recording error: \(error.localizedDescription)", category: "Recording")
         errorMessage = error.localizedDescription
         showErrorAlert = true
         recordingState = .ready
         orchestrator.stop()
         hideOverlay()
+        LogService.endSession()
     }
 
     private func injectText(_ text: String) async {
-        let success = await textInjector.inject(text)
-        if !success {
+        let start = ContinuousClock.now
+        let method = await textInjector.inject(text)
+        let elapsed = ContinuousClock.now - start
+        if method {
+            LogService.info("Text injected via AX, duration: \(elapsed.description)", category: "TextInjection")
+        } else {
+            LogService.warn("Text injection fell back to clipboard, duration: \(elapsed.description)", category: "TextInjection")
+        }
+        if !method {
             showCopyButton = true
             if !AXIsProcessTrusted() {
                 showAccessibilityGuide = true

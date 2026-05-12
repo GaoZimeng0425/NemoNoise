@@ -18,6 +18,7 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
 
     init() throws {
         let pref = LanguagePreference.current
+        let start = ContinuousClock.now
         let resolved: SFSpeechRecognizer?
 
         if let localeId = pref.localeIdentifier {
@@ -31,10 +32,12 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
         }
 
         guard let resolved else {
+            LogService.error("SFSpeechRecognizer unavailable for locale: \(pref.localeIdentifier ?? "nil")", category: "ASR")
             throw ASRError.engineUnavailable
         }
         recognizer = resolved
-        LogService.info("locale: \(recognizer.locale.identifier)", category: "AppleSpeechASREngine")
+        let elapsed = ContinuousClock.now - start
+        LogService.info("locale: \(recognizer.locale.identifier), init duration: \(elapsed.description)", category: "AppleSpeechASREngine")
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
@@ -99,10 +102,12 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
             (state.finalResult, state.pendingError)
         }
         if let error = snapshot.1 {
+            LogService.error("Recognition failed: \(error.localizedDescription)", category: "AppleSpeechASREngine")
             throw error
         }
         if let final = snapshot.0 {
             stateLock.withLock { $0.finalResult = nil }
+            LogService.info("Recognition complete, length: \(final.text.count) chars", category: "AppleSpeechASREngine")
             return final
         }
 

@@ -4,33 +4,34 @@ import ApplicationServices
 final class TextInjector {
     private var targetElement: AXUIElement?
 
-    // Call this at hotkey DOWN to snapshot the focused element before recording starts
     func captureTarget() {
         let systemWide = AXUIElementCreateSystemWide()
         var focusedElement: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElement) == .success,
-              let element = focusedElement else {
+        let status = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElement)
+        guard status == .success, let element = focusedElement else {
+            LogService.debug("No focused element captured (AX error: \(status.rawValue))", category: "TextInjection")
             targetElement = nil
             return
         }
         targetElement = (element as! AXUIElement)
+        LogService.debug("Captured target AXUIElement", category: "TextInjection")
     }
 
-    // Returns true if text was injected, false if fallback (paste) was needed
     @discardableResult
     func inject(_ text: String) async -> Bool {
         guard let element = targetElement else {
+            LogService.info("Injection method: clipboard (no target element), length: \(text.count)", category: "TextInjection")
             await pasteViaPasteboard(text)
             return false
         }
 
         let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFString)
         if result == .success {
+            LogService.info("Injection method: AX, length: \(text.count)", category: "TextInjection")
             return true
         }
 
-        // AXUIElement write failed (read-only field, app doesn't support it, etc.)
-        // Fall back to pasteboard + Cmd+V
+        LogService.warn("AX injection failed (error: \(result.rawValue)), falling back to clipboard", category: "TextInjection")
         await pasteViaPasteboard(text)
         return false
     }
@@ -49,7 +50,6 @@ final class TextInjector {
         keyDown?.post(tap: .cgAnnotatedSessionEventTap)
         keyUp?.post(tap: .cgAnnotatedSessionEventTap)
 
-        // Restore previous clipboard contents after a short delay
         if let previous = previousContents {
             try? await Task.sleep(for: .milliseconds(200))
             NSPasteboard.general.clearContents()

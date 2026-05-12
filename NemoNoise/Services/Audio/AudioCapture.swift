@@ -10,6 +10,7 @@ final class AudioCapture: Sendable {
     private let engine = AVAudioEngine()
     private let continuation: ContinuationBox = ContinuationBox()
     private let targetSampleRate: Double = 16000
+    private let bufferSize: AVAudioFrameCount = 4096
 
     func start() async throws -> AsyncStream<AudioChunk> {
         try await requestMicrophoneAccess()
@@ -20,6 +21,8 @@ final class AudioCapture: Sendable {
         guard hardwareFormat.sampleRate > 0 else {
             throw ASRError.audioCaptureFailed("No audio input device available")
         }
+
+        LogService.info("Audio device: sampleRate=\(hardwareFormat.sampleRate), channels=\(hardwareFormat.channelCount), bufferSize=\(bufferSize)", category: "AudioCapture")
 
         guard let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
@@ -39,12 +42,12 @@ final class AudioCapture: Sendable {
             c.onTermination = { [weak self] _ in self?.stopEngine() }
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: hardwareFormat) { [weak self] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: hardwareFormat) { [weak self] buffer, _ in
             self?.processTap(buffer: buffer, converter: converter, targetFormat: targetFormat)
         }
 
         try engine.start()
-        LogService.info("Engine started, sample rate: \(hardwareFormat.sampleRate)", category: "AudioCapture")
+        LogService.info("Capture started, converting \(hardwareFormat.sampleRate)Hz -> \(targetSampleRate)Hz", category: "AudioCapture")
         return stream
     }
 
@@ -56,7 +59,7 @@ final class AudioCapture: Sendable {
     private func stopEngine() {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        LogService.info("Engine stopped", category: "AudioCapture")
+        LogService.info("Capture stopped", category: "AudioCapture")
     }
 
     nonisolated private func processTap(
