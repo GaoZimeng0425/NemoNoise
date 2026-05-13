@@ -77,3 +77,40 @@ final class ASRServiceMockTests: XCTestCase {
         XCTAssertEqual(mock.feedChunkCallCount, 3)
     }
 }
+
+final class ShouldTranslateTests: XCTestCase {
+
+    private let controller = TranslationController()
+
+    func testPureEnglishText() {
+        XCTAssertTrue(controller.shouldTranslate("Hello world this is a test"))
+    }
+
+    func testPureChineseText() {
+        XCTAssertFalse(controller.shouldTranslate("你好世界这是一个测试"))
+    }
+
+    func testMixedMostlyEnglish() {
+        XCTAssertTrue(controller.shouldTranslate("Hello 你好 world"))
+    }
+
+    func testMixedMostlyChinese() {
+        XCTAssertFalse(controller.shouldTranslate("你好世界这是一个测试 hello"))
+    }
+
+    func testEmptyString() {
+        XCTAssertFalse(controller.shouldTranslate(""))
+    }
+
+    func testNumbersOnly() {
+        XCTAssertFalse(controller.shouldTranslate("12345"))
+    }
+
+    func testSingleEnglishWord() {
+        XCTAssertTrue(controller.shouldTranslate("Hello"))
+    }
+
+    func testSingleChineseWord() {
+        XCTAssertFalse(controller.shouldTranslate("你好"))
+    }
+}

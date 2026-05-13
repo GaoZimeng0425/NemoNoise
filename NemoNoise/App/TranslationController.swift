@@ -169,7 +169,7 @@ final class TranslationController {
 
     // MARK: - Translation Helper
 
-    private func shouldTranslate(_ text: String) -> Bool {
+    func shouldTranslate(_ text: String) -> Bool {
         let chars = Array(text)
         let asciiCount = chars.filter { $0.isASCII && $0.isLetter }.count
         let totalLetters = chars.filter { $0.isLetter }.count
