@@ -15,7 +15,7 @@ struct SubtitleOverlayView: View {
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(controller.englishText.isEmpty ? "Listening…" : controller.englishText)
+                Text(displayEnglishText)
                     .font(.system(size: 14, weight: .regular, design: .rounded))
                     .foregroundStyle(.gray)
                     .lineLimit(3)
@@ -98,12 +98,22 @@ struct SubtitleOverlayView: View {
         }
     }
 
+    private var displayEnglishText: String {
+        if !controller.partialText.isEmpty {
+            return controller.partialText
+        }
+        if !controller.englishText.isEmpty {
+            return controller.englishText
+        }
+        return "Listening…"
+    }
+
     private func waveformBarHeight(index: Int) -> CGFloat {
         let level = CGFloat(controller.audioLevel)
         let base: CGFloat = 3
         let maxExtra: CGFloat = 17
-        let threshold = CGFloat(index) * 0.15
-        let active = max(0, level - threshold) / 0.3
-        return base + active * maxExtra
+        let scale = max(0, 1.0 - CGFloat(index) * 0.12)
+        let amplified = min(1.0, level * 20)
+        return base + amplified * scale * maxExtra
     }
 }

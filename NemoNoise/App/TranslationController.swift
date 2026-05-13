@@ -6,6 +6,7 @@ import KeyboardShortcuts
 final class TranslationController {
     var translationState: TranslationState = .idle
     var englishText: String = ""
+    var partialText: String = ""
     var chineseText: String = ""
     var isTranslating: Bool = false
     var audioLevel: Float = 0
@@ -83,6 +84,7 @@ final class TranslationController {
 
         translationState = .capturing
         englishText = ""
+        partialText = ""
         chineseText = ""
         showSubtitle()
 
@@ -99,9 +101,14 @@ final class TranslationController {
                     self.audioLevel = chunk.rmsLevel
                     do {
                         let result = try await engine.feedChunk(chunk.samples, sampleRate: 16000)
-                        if result.isFinal && !result.text.isEmpty {
-                            self.englishText = result.text
-                            LogService.info("ASR final: \(result.text.prefix(50))", category: "Translation")
+                        if !result.text.isEmpty {
+                            if result.isFinal {
+                                self.partialText = ""
+                                self.englishText = result.text
+                                LogService.info("ASR final: \(result.text.prefix(80))", category: "Translation")
+                            } else {
+                                self.partialText = result.text
+                            }
                         }
                     } catch {
                         LogService.warn("ASR feedChunk error: \(error.localizedDescription)", category: "Translation")
