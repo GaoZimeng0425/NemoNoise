@@ -12,6 +12,7 @@ final class RecordingController {
     var micLevel: Float = 0
     var isListeningSilence: Bool = false
     var recordingDuration: TimeInterval = 0
+    var onTranslationActiveCheck: (() -> Bool)?
 
     private var silenceTimer: Timer?
     private var hideTask: Task<Void, Never>?
@@ -99,6 +100,7 @@ final class RecordingController {
 
     private func startRecording() {
         guard recordingState == .ready else { return }
+        guard !(onTranslationActiveCheck?() ?? false) else { return }
 
         textInjector.captureTarget()
         _ = LogService.startSession()

@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct NemoNoiseApp: App {
     @State private var controller = RecordingController()
+    @State private var translationController = TranslationController()
     private let updaterDelegate = UpdaterFeedProvider()
     private let updaterController: SPUStandardUpdaterController
 
@@ -20,6 +21,14 @@ struct NemoNoiseApp: App {
             OnboardingGate {
                 MenuBarPopoverView(updater: updaterController.updater)
                     .environment(controller)
+                    .environment(translationController)
+                    .task {
+                        translationController.setRecordingController(controller)
+                        controller.onTranslationActiveCheck = { [translationController] in
+                            translationController.isActive
+                        }
+                        translationController.startHotkeyMonitoring()
+                    }
             }
         } label: {
             MenuBarLabel()
@@ -31,6 +40,7 @@ struct NemoNoiseApp: App {
             SettingsView()
                 .environment(controller)
                 .environment(controller.modelManager)
+                .environment(translationController)
         }
     }
 }

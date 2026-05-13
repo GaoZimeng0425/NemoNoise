@@ -112,6 +112,10 @@ struct SettingsView: View {
                 NotificationCenter.default.post(name: .recordingShortcutDidChange, object: nil)
             }
 
+            KeyboardShortcuts.Recorder("Translation Key:", name: .translationMode)
+            Text("Toggle real-time translation mode. Captures system audio and displays bilingual subtitles.")
+                .font(.caption).foregroundStyle(.secondary)
+
             Picker("Mode", selection: Binding(
                 get: { controller.recordingMode },
                 set: { controller.recordingMode = $0 }

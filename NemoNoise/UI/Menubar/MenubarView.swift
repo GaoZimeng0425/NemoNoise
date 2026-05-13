@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MenuBarPopoverView: View {
     @Environment(RecordingController.self) private var controller
+    @Environment(TranslationController.self) private var translationController
     let updater: SPUUpdater
 
     var body: some View {
@@ -35,6 +36,19 @@ struct MenuBarPopoverView: View {
             Text(controller.hotkeyDisplayText)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+
+            Divider()
+
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(translationController.isActive ? Color.green : Color.gray)
+                    .frame(width: 8, height: 8)
+                Button(translationController.isActive ? "Stop Translation" : "Start Translation") {
+                    translationController.toggle()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(translationController.isActive ? .red : .primary)
+            }
 
             Divider()
 

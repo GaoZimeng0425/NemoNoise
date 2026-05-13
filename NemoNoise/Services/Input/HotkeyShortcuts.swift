@@ -3,6 +3,7 @@ import KeyboardShortcuts
 
 extension KeyboardShortcuts.Name {
     static let toggleRecording = Self("toggleRecording")
+    static let translationMode = Self("translationMode")
 }
 
 extension Notification.Name {
