@@ -1,5 +1,6 @@
 import SwiftUI
 import KeyboardShortcuts
+import ApplicationServices
 
 struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
@@ -131,6 +132,16 @@ struct SettingsView: View {
                     .font(.caption)
                 Button("Open System Settings") {
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                }
+                .font(.caption)
+            }
+
+            if !CGPreflightScreenCaptureAccess() {
+                Label("Screen recording permission required for translation mode", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.caption)
+                Button("Open System Settings") {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
                 }
                 .font(.caption)
             }

@@ -108,6 +108,7 @@ final class TranslationController {
                 LogService.error("System audio capture error: \(error.localizedDescription)", category: "Translation")
                 self.translationState = .error(error.localizedDescription)
                 self.hideSubtitle()
+                ToastWindowController.show("Audio capture stopped: \(error.localizedDescription)", style: .error)
             }
         }
     }

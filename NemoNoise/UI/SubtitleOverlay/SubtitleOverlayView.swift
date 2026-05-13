@@ -1,9 +1,12 @@
 import SwiftUI
 import Translation
+import Combine
 
 struct SubtitleOverlayView: View {
     @Environment(TranslationController.self) private var controller
     @State private var translationSession: TranslationSession?
+    @State private var dotOffsets: [CGFloat] = [0, 0, 0]
+    private let dotTimer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
 
     var body: some View {
         HStack(spacing: 12) {
@@ -24,9 +27,11 @@ struct SubtitleOverlayView: View {
                             Circle()
                                 .fill(Color.white.opacity(0.6))
                                 .frame(width: 5, height: 5)
+                                .offset(y: dotOffsets[i])
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .onAppear { startDotAnimation() }
                 } else {
                     Text(controller.chineseText.isEmpty ? "—" : controller.chineseText)
                         .font(.system(size: 16, weight: .medium, design: .rounded))
@@ -60,6 +65,24 @@ struct SubtitleOverlayView: View {
                     controller.chineseText = "—"
                 }
                 controller.isTranslating = false
+            }
+        }
+        .onReceive(dotTimer) { _ in
+            guard controller.isTranslating else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                for i in 0..<3 {
+                    dotOffsets[i] = dotOffsets[i] == 0 ? -4 : 0
+                }
+            }
+        }
+    }
+
+    private func startDotAnimation() {
+        for i in 0..<3 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.15) {
+                withAnimation(.easeInOut(duration: 0.3).repeatForever(autoreverses: true)) {
+                    dotOffsets[i] = -4
+                }
             }
         }
     }
