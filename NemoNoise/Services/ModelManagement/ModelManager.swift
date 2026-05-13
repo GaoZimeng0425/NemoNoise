@@ -156,31 +156,47 @@ final class ModelManager {
         to destination: URL,
         onProgress: @escaping (Double) -> Void
     ) async throws {
-        let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
-        let totalBytes = (response as? HTTPURLResponse)?.expectedContentLength ?? -1
+        let observer = ProgressObserver()
+        let config = URLSessionConfiguration.default
+        let session = URLSession(configuration: config, delegate: observer, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
 
-        FileManager.default.createFile(atPath: destination.path, contents: nil)
-        guard let fileHandle = try? FileHandle(forWritingTo: destination) else {
-            throw URLError(.cannotOpenFile)
-        }
-        defer { try? fileHandle.close() }
-
-        var buffer = Data(capacity: 65_536)
-        var received: Int64 = 0
-
-        for try await byte in asyncBytes {
-            try Task.checkCancellation()
-            buffer.append(byte)
-            received += 1
-            if buffer.count >= 65_536 {
-                try fileHandle.write(contentsOf: buffer)
-                buffer.removeAll(keepingCapacity: true)
-                if totalBytes > 0 {
-                    await MainActor.run { onProgress(Double(received) / Double(totalBytes)) }
-                }
+        let tempURL: URL = try await withCheckedThrowingContinuation { continuation in
+            observer.completion = continuation
+            observer.onProgress = { progress in
+                Task { @MainActor in onProgress(progress) }
             }
+            let task = session.downloadTask(with: url)
+            task.resume()
         }
-        if !buffer.isEmpty { try fileHandle.write(contentsOf: buffer) }
+
+        try? FileManager.default.removeItem(at: destination)
+        try FileManager.default.moveItem(at: tempURL, to: destination)
         await MainActor.run { onProgress(1.0) }
+    }
+}
+
+private final class ProgressObserver: NSObject, URLSessionDownloadDelegate {
+    var completion: CheckedContinuation<URL, Error>?
+    var onProgress: ((Double) -> Void)?
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let moved = tempDir.appendingPathComponent(downloadTask.originalRequest?.url?.lastPathComponent ?? "download")
+        try? FileManager.default.moveItem(at: location, to: moved)
+        completion?.resume(returning: moved)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        if totalBytesExpectedToWrite > 0 {
+            onProgress?(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error {
+            completion?.resume(throwing: error)
+        }
     }
 }
