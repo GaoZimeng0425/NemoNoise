@@ -4,7 +4,6 @@ struct OverlayView: View {
     @Environment(RecordingController.self) private var controller
 
     @State private var isPulsing = false
-    @State private var showFallbackToast = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,28 +18,6 @@ struct OverlayView: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThickMaterial)
                 .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
-        }
-        .overlay(alignment: .bottom) {
-            if showFallbackToast {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle")
-                        .font(.caption)
-                    Text(controller.toastMessage)
-                        .font(.caption)
-                        .fontWeight(.medium)
-                }
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.regularMaterial, in: Capsule())
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .padding(.bottom, 8)
-            }
-        }
-        .onChange(of: controller.showToast) { _, newValue in
-            withAnimation(.easeOut(duration: 0.3)) {
-                showFallbackToast = newValue
-            }
         }
     }
 
@@ -114,23 +91,26 @@ struct OverlayView: View {
             if !controller.confirmedSegments.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(controller.confirmedSegments) { segment in
-                        HStack(alignment: .lastTextBaseline, spacing: 8) {
-                            Text(segment.text)
-                                .font(.system(size: 19, weight: .medium, design: .rounded))
-                                .foregroundStyle(.primary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .transition(.asymmetric(insertion: .push(from: .bottom).combined(with: .opacity), removal: .opacity))
+                        Text(segment.text.replacingOccurrences(of: "\n", with: " "))
+                            .font(.system(size: 19, weight: .medium, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .transition(.asymmetric(insertion: .push(from: .bottom).combined(with: .opacity), removal: .opacity))
                     }
                 }
             }
 
             // Partial Text
             if !controller.partialText.isEmpty {
-                Text(controller.partialText)
+                Text(controller.partialText.replacingOccurrences(of: "\n", with: " "))
                     .font(.system(size: 18, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary)
                     .italic()
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .transition(.opacity)
             }
 
@@ -149,7 +129,6 @@ struct OverlayView: View {
 
         }
         .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: controller.confirmedSegments.count)
     }
 

@@ -12,8 +12,8 @@
 		45AED76E2FB33B6B00AF49D7 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = CC0000022F9363C40037E18E /* Sparkle */; };
 		AABB0002AABB0002AABB0002 /* NemoNoise/Resources/sherpa-onnx.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = AABB0001AABB0001AABB0001 /* NemoNoise/Resources/sherpa-onnx.xcframework */; };
 		AABB0004AABB0004AABB0004 /* libonnxruntime.a in Frameworks */ = {isa = PBXBuildFile; fileRef = AABB0003AABB0003AABB0003 /* libonnxruntime.a */; };
-		FF000002FF000002FF000002 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = FF000001FF000001FF000001 /* KeyboardShortcuts */; };
 		EE000002EE000002EE000002 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = EE000001EE000001EE000001 /* KeyboardShortcuts */; };
+		FF000002FF000002FF000002 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = FF000001FF000001FF000001 /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -580,12 +580,12 @@
 			package = 45AED7C32FB33B9700AF49D7 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
 		};
-			FF000001FF000001FF000001 /* KeyboardShortcuts */ = {
-				isa = XCSwiftPackageProductDependency;
-				package = 45AED7C32FB33B9700AF49D7 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
-				productName = KeyboardShortcuts;
-			};
-	/* End XCSwiftPackageProductDependency section */
+		FF000001FF000001FF000001 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 45AED7C32FB33B9700AF49D7 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 45ED16A82FA99BA5005FFD16 /* Project object */;
 }

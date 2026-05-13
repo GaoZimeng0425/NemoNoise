@@ -4,8 +4,8 @@ final class ParaformerStreamingEngine: ASRService, @unchecked Sendable {
     private let recognizer: SherpaOnlineRecognizer
 
     init(modelDir: URL) throws {
-        let encoderPath = modelDir.appendingPathComponent("model_quant.onnx").path
-        let decoderPath = modelDir.appendingPathComponent("decoder_quant.onnx").path
+        let encoderPath = modelDir.appendingPathComponent("encoder.int8.onnx").path
+        let decoderPath = modelDir.appendingPathComponent("decoder.int8.onnx").path
         let tokensPath  = modelDir.appendingPathComponent("tokens.txt").path
         let start = ContinuousClock.now
         guard let r = SherpaOnlineRecognizer(

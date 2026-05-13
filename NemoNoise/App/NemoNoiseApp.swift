@@ -11,6 +11,7 @@ struct NemoNoiseApp: App {
         let updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: updaterDelegate, userDriverDelegate: nil)
         self.updaterController = updater
         _ = LogService.shared
+        _ = CrashGuard.shared
         SentryService.initialize()
     }
 

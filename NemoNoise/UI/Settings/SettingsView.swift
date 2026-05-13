@@ -20,6 +20,10 @@ struct SettingsView: View {
         .frame(width: 460, height: 420)
         .onAppear {
             cloudAPIKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey) ?? ""
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.keyWindow?.level = .floating
+            }
         }
     }
 

@@ -12,11 +12,9 @@ final class RecordingController {
     var micLevel: Float = 0
     var isListeningSilence: Bool = false
     var recordingDuration: TimeInterval = 0
-    var showToast: Bool = false
-    var toastMessage: String = ""
 
     private var silenceTimer: Timer?
-    private var toastTask: Task<Void, Never>?
+    private var hideTask: Task<Void, Never>?
     private let maxRecordingDuration: TimeInterval = 120
     private var timerTask: Task<Void, Never>?
     private var transcriptionTask: Task<Void, Never>?
@@ -52,17 +50,10 @@ final class RecordingController {
         self.recordingMode = RecordingMode(rawValue: raw) ?? .pushToTalk
         self.orchestrator = SpeechOrchestrator(modelManager: modelManager)
 
-        orchestrator.onEngineFallback = { [weak self] failedEngine in
+        orchestrator.onEngineFallback = { [weak self] _ in
             guard let self else { return }
             self.isStreaming = true
-            self.toastMessage = "Switched to local engine"
-            self.showToast = true
-            self.toastTask?.cancel()
-            self.toastTask = Task {
-                try? await Task.sleep(for: .seconds(3))
-                guard !Task.isCancelled else { return }
-                self.showToast = false
-            }
+            ToastWindowController.show("Switched to local engine", style: .info)
         }
 
         hotkeyMonitor.onKeyDown = { [weak self] in
@@ -161,8 +152,8 @@ final class RecordingController {
                     await injectText(finalResult.text)
                 } else {
                     LogService.info("Transcription complete, no text produced", category: "Recording")
-                    toastTask?.cancel()
-                    toastTask = Task {
+                    hideTask?.cancel()
+                    hideTask = Task {
                         try? await Task.sleep(for: .seconds(2))
                         guard !Task.isCancelled else { return }
                         hideOverlay()
@@ -180,17 +171,14 @@ final class RecordingController {
         LogService.error("Recording error: \(error.localizedDescription)", category: "Recording")
         SentryService.capture(error: error)
 
-        if let cloudError = error as? CloudASRError, case .authenticationFailed = cloudError {
-            toastMessage = "API key invalid. Please update in Settings."
-            showToast = true
-            toastTask?.cancel()
-            toastTask = Task {
-                try? await Task.sleep(for: .seconds(5))
-                guard !Task.isCancelled else { return }
-                showToast = false
-            }
+        let message = error.localizedDescription
+
+        if message.contains("Siri and Dictation are disabled") {
+            ToastWindowController.show("请启用 Siri：系统设置 → Siri 与听写", style: .warning, duration: 5)
+        } else if let cloudError = error as? CloudASRError, case .authenticationFailed = cloudError {
+            ToastWindowController.show("API key invalid. Please update in Settings.", style: .error, duration: 5)
         } else {
-            presentAlert(title: "Error", message: error.localizedDescription)
+            presentAlert(title: "Error", message: message)
         }
 
         recordingState = .ready
@@ -206,27 +194,25 @@ final class RecordingController {
         let elapsed = ContinuousClock.now - start
 
         if success {
-            LogService.info("Text injected via AX, duration: \(elapsed.description)", category: "TextInjection")
-            toastTask?.cancel()
-            toastTask = Task {
+            LogService.info("Text injected, duration: \(elapsed.description)", category: "TextInjection")
+            hideTask?.cancel()
+            hideTask = Task {
                 try? await Task.sleep(for: .seconds(2))
                 guard !Task.isCancelled else { return }
                 hideOverlay()
             }
         } else {
-            LogService.warn("AX injection failed, copying to clipboard, duration: \(elapsed.description)", category: "TextInjection")
+            LogService.warn("All injection methods failed, duration: \(elapsed.description)", category: "TextInjection")
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
-            toastMessage = "Copied to clipboard"
-            showToast = true
+            ToastWindowController.show("Copied to clipboard", style: .success)
             if !AXIsProcessTrusted() {
                 presentAccessibilityAlert()
             }
-            toastTask?.cancel()
-            toastTask = Task {
+            hideTask?.cancel()
+            hideTask = Task {
                 try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled else { return }
-                showToast = false
                 hideOverlay()
             }
         }

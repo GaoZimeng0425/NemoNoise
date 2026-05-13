@@ -34,14 +34,14 @@ extension ModelDescriptor {
 
     static let paraformer = ModelDescriptor(
         id: "paraformer",
-        displayName: "Paraformer Streaming (zh)",
-        detail: "Chinese streaming · real-time partial results · no emotion",
-        downloadSize: "~50 MB",
+        displayName: "Paraformer Streaming (zh+en)",
+        detail: "Chinese + English streaming · real-time partial results",
+        downloadSize: "~240 MB",
         subdir: "paraformer",
         files: [
-            (name: "model_quant.onnx",   url: URL(string: "https://huggingface.co/csukuangfj/streaming-paraformer-zh/resolve/main/model_quant.onnx")!),
-            (name: "decoder_quant.onnx", url: URL(string: "https://huggingface.co/csukuangfj/streaming-paraformer-zh/resolve/main/decoder_quant.onnx")!),
-            (name: "tokens.txt",         url: URL(string: "https://huggingface.co/csukuangfj/streaming-paraformer-zh/resolve/main/tokens.txt")!),
+            (name: "encoder.int8.onnx",  url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/encoder.int8.onnx")!),
+            (name: "decoder.int8.onnx",  url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/decoder.int8.onnx")!),
+            (name: "tokens.txt",         url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/tokens.txt")!),
         ]
     )
 }

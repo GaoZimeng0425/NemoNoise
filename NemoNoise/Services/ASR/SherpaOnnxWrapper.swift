@@ -28,21 +28,25 @@ final class SherpaOfflineRecognizer: @unchecked Sendable {
                         "greedy_search".withCString { cDecoding in
 
                             var senseVoice = SherpaOnnxOfflineSenseVoiceModelConfig()
+                            memset(&senseVoice, 0, MemoryLayout.size(ofValue: senseVoice))
                             senseVoice.model = cModel
                             senseVoice.language = cLang
                             senseVoice.use_itn = 1
 
                             var modelConfig = SherpaOnnxOfflineModelConfig()
+                            memset(&modelConfig, 0, MemoryLayout.size(ofValue: modelConfig))
                             modelConfig.tokens = cTokens
                             modelConfig.sense_voice = senseVoice
                             modelConfig.num_threads = 2
                             modelConfig.provider = cProvider
 
                             var featConfig = SherpaOnnxFeatureConfig()
+                            memset(&featConfig, 0, MemoryLayout.size(ofValue: featConfig))
                             featConfig.sample_rate = 16000
                             featConfig.feature_dim = 80
 
                             var config = SherpaOnnxOfflineRecognizerConfig()
+                            memset(&config, 0, MemoryLayout.size(ofValue: config))
                             config.feat_config = featConfig
                             config.model_config = modelConfig
                             config.decoding_method = cDecoding
@@ -99,6 +103,20 @@ final class SherpaOnlineRecognizer {
     ///   - decoderPath: Path to `decoder_quant.onnx`
     ///   - tokensPath:  Path to `tokens.txt`
     init?(encoderPath: String, decoderPath: String, tokensPath: String) {
+        let fm = FileManager.default
+        for path in [encoderPath, decoderPath, tokensPath] {
+            guard fm.fileExists(atPath: path) else {
+                LogService.error("Model file missing: \(path)", category: "SherpaOnlineRecognizer")
+                return nil
+            }
+            if let attrs = try? fm.attributesOfItem(atPath: path),
+               let size = attrs[.size] as? Int64 {
+                LogService.info("Model file: \(path) (\(size) bytes)", category: "SherpaOnlineRecognizer")
+            }
+        }
+
+        LogService.info("Calling SherpaOnnxCreateOnlineRecognizer…", category: "SherpaOnlineRecognizer")
+
         var ptr: UnsafePointer<SherpaOnnxOnlineRecognizer>?
 
         encoderPath.withCString { cEncoder in
@@ -108,20 +126,24 @@ final class SherpaOnlineRecognizer {
                         "greedy_search".withCString { cDecoding in
 
                             var paraformer = SherpaOnnxOnlineParaformerModelConfig()
+                            memset(&paraformer, 0, MemoryLayout.size(ofValue: paraformer))
                             paraformer.encoder = cEncoder
                             paraformer.decoder = cDecoder
 
                             var modelConfig = SherpaOnnxOnlineModelConfig()
+                            memset(&modelConfig, 0, MemoryLayout.size(ofValue: modelConfig))
                             modelConfig.paraformer = paraformer
                             modelConfig.tokens = cTokens
                             modelConfig.num_threads = 2
                             modelConfig.provider = cProvider
 
                             var featConfig = SherpaOnnxFeatureConfig()
+                            memset(&featConfig, 0, MemoryLayout.size(ofValue: featConfig))
                             featConfig.sample_rate = 16000
                             featConfig.feature_dim = 80
 
                             var config = SherpaOnnxOnlineRecognizerConfig()
+                            memset(&config, 0, MemoryLayout.size(ofValue: config))
                             config.feat_config = featConfig
                             config.model_config = modelConfig
                             config.decoding_method = cDecoding
@@ -137,6 +159,7 @@ final class SherpaOnlineRecognizer {
             }
         }
 
+        LogService.info("SherpaOnnxCreateOnlineRecognizer returned: \(ptr != nil ? "OK" : "NULL")", category: "SherpaOnlineRecognizer")
         guard let p = ptr else { return nil }
         recognizer = p
     }

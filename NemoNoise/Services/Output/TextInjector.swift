@@ -3,6 +3,7 @@ import ApplicationServices
 
 final class TextInjector {
     private var targetElement: AXUIElement?
+    private var targetApp: pid_t?
 
     func captureTarget() {
         let systemWide = AXUIElementCreateSystemWide()
@@ -11,24 +12,63 @@ final class TextInjector {
         guard status == .success, let element = focusedElement else {
             LogService.debug("No focused element captured (AX error: \(status.rawValue))", category: "TextInjection")
             targetElement = nil
+            targetApp = nil
             return
         }
-        targetElement = (element as! AXUIElement)
-        LogService.debug("Captured target AXUIElement", category: "TextInjection")
+        let axElement = unsafeBitCast(element, to: AXUIElement.self)
+        targetElement = axElement
+
+        var pid: pid_t = 0
+        AXUIElementGetPid(axElement, &pid)
+        targetApp = pid
+        LogService.debug("Captured target AXUIElement, pid: \(pid)", category: "TextInjection")
     }
 
     @discardableResult
     func injectAX(_ text: String) -> Bool {
-        guard let element = targetElement else {
-            LogService.info("No target element for AX injection, length: \(text.count)", category: "TextInjection")
-            return false
+        // Strategy 1: Insert via kAXSelectedTextAttribute (inserts at cursor)
+        if let element = targetElement {
+            let result = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
+            if result == .success {
+                LogService.info("Injection method: AX selectedText, length: \(text.count)", category: "TextInjection")
+                return true
+            }
+            LogService.debug("AX selectedText failed (\(result.rawValue)), trying paste", category: "TextInjection")
         }
-        let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFString)
-        if result == .success {
-            LogService.info("Injection method: AX, length: \(text.count)", category: "TextInjection")
+
+        // Strategy 2: Clipboard + Cmd+V paste
+        if pasteViaClipboard(text) {
+            LogService.info("Injection method: clipboard paste, length: \(text.count)", category: "TextInjection")
             return true
         }
-        LogService.warn("AX injection failed (error: \(result.rawValue))", category: "TextInjection")
+
+        LogService.warn("All injection methods failed", category: "TextInjection")
         return false
+    }
+
+    private func pasteViaClipboard(_ text: String) -> Bool {
+        guard let pid = targetApp,
+              let app = NSRunningApplication(processIdentifier: pid) else {
+            return false
+        }
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+
+        // Brief delay to ensure clipboard is ready, then activate and paste
+        Thread.sleep(forTimeInterval: 0.05)
+        app.activate(options: [])
+        Thread.sleep(forTimeInterval: 0.05)
+
+        let src = CGEventSource(stateID: .hidSystemState)
+        let keyDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true) // V key
+        keyDown?.flags = .maskCommand
+        let keyUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
+        keyUp?.flags = .maskCommand
+        keyDown?.post(tap: .cghidEventTap)
+        keyUp?.post(tap: .cghidEventTap)
+
+        return true
     }
 }
