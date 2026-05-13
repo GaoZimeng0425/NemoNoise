@@ -15,13 +15,15 @@ struct SubtitleOverlayView: View {
                 Text(displayEnglishText)
                     .font(.system(size: 14, weight: .regular, design: .rounded))
                     .foregroundStyle(.gray)
-                    .lineLimit(3)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(controller.chineseText.isEmpty ? displayEnglishText : controller.chineseText)
                     .font(.system(size: 16, weight: .medium, design: .rounded))
                     .foregroundStyle(.white)
-                    .lineLimit(3)
+                    .lineLimit(1)
+                    .truncationMode(.head)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
