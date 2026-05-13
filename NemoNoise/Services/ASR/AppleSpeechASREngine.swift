@@ -52,6 +52,7 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
 
             let req = SFSpeechAudioBufferRecognitionRequest()
             req.shouldReportPartialResults = true
+            req.requiresOnDeviceRecognition = true
             request = req
 
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in
