@@ -13,11 +13,9 @@ final class TranslationController {
 
     let translationService: AppleTranslationService = AppleTranslationService()
     private var audioCapture: SystemAudioCapture?
-    private var asrEngine: AppleSpeechASREngine?
+    private var asrEngine: (any ASRService)?
     private var captureTask: Task<Void, Never>?
     private var subtitleController: SubtitleOverlayController?
-    private var translationDebounceTask: Task<Void, Never>?
-    private var lastTranslatedLength: Int = 0
 
     private weak var recordingController: RecordingController?
 
@@ -72,15 +70,23 @@ final class TranslationController {
             return
         }
 
-        // Create ASR engine with English locale
-        let engine: AppleSpeechASREngine
-        do {
-            engine = try AppleSpeechASREngine(locale: "en-US")
-            engine.reset()
-        } catch {
-            LogService.error("Failed to create English ASR engine: \(error.localizedDescription)", category: "Translation")
-            translationState = .error(error.localizedDescription)
-            return
+        // Create ASR engine: Paraformer (bilingual) with Apple Speech fallback
+        let engine: any ASRService
+        if let modelManager = recordingController?.modelManager,
+           let dir = modelManager.modelPath(for: .paraformer),
+           let paraformer = try? ParaformerStreamingEngine(modelDir: dir) {
+            paraformer.reset()
+            engine = paraformer
+            LogService.info("Using Paraformer for translation ASR", category: "Translation")
+        } else {
+            LogService.info("Paraformer unavailable, falling back to Apple Speech", category: "Translation")
+            guard let apple = try? AppleSpeechASREngine(locale: "en-US") else {
+                LogService.error("Failed to create any ASR engine", category: "Translation")
+                translationState = .error("ASR engine unavailable")
+                return
+            }
+            apple.reset()
+            engine = apple
         }
         self.asrEngine = engine
 
@@ -108,11 +114,8 @@ final class TranslationController {
                                 self.partialText = ""
                                 self.englishText = result.text
                                 LogService.info("ASR final: \(result.text.prefix(80))", category: "Translation")
-                                self.scheduleTranslation(text: result.text, immediate: true)
                             } else {
                                 self.partialText = result.text
-                                let growth = result.text.count - self.lastTranslatedLength
-                                self.scheduleTranslation(text: result.text, immediate: growth > 10)
                             }
                         }
                     } catch {
@@ -133,8 +136,6 @@ final class TranslationController {
     func stopTranslation() {
         LogService.info("Translation mode stopping", category: "Translation")
 
-        translationDebounceTask?.cancel()
-        translationDebounceTask = nil
         captureTask?.cancel()
         captureTask = nil
         audioCapture?.stop()
@@ -166,33 +167,14 @@ final class TranslationController {
         }
     }
 
-    // MARK: - Debounced Translation
+    // MARK: - Translation Helper
 
-    private func scheduleTranslation(text: String, immediate: Bool = false) {
-        translationDebounceTask?.cancel()
-        let delay: Duration = immediate ? .zero : .milliseconds(1500)
-        translationDebounceTask = Task { [weak self] in
-            try? await Task.sleep(for: delay)
-            guard !Task.isCancelled else { return }
-            self?.performTranslation(text: text)
-        }
-    }
-
-    private func performTranslation(text: String) {
-        guard !text.isEmpty else { return }
-        lastTranslatedLength = text.count
-        isTranslating = true
-        Task {
-            do {
-                let result = try await translationService.translate(text)
-                guard self.isActive else { return }
-                self.chineseText = result
-            } catch {
-                LogService.warn("Translation failed: \(error.localizedDescription)", category: "Translation")
-                self.chineseText = "—"
-            }
-            self.isTranslating = false
-        }
+    private func shouldTranslate(_ text: String) -> Bool {
+        let chars = Array(text)
+        let asciiCount = chars.filter { $0.isASCII && $0.isLetter }.count
+        let totalLetters = chars.filter { $0.isLetter }.count
+        guard totalLetters > 0 else { return false }
+        return Double(asciiCount) / Double(totalLetters) > 0.5
     }
 
     // MARK: - Subtitle Overlay
