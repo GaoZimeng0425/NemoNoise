@@ -179,16 +179,6 @@ final class SherpaOnlineRecognizer {
         return currentText()
     }
 
-    var isEndpoint: Bool {
-        guard let s = stream else { return false }
-        return SherpaOnnxOnlineStreamIsEndpoint(recognizer, s) != 0
-    }
-
-    func resetStream() {
-        guard let s = stream else { return }
-        SherpaOnnxOnlineStreamReset(recognizer, s)
-    }
-
     /// Signal end of audio, drain remaining frames, return final text.
     func finalize() -> String {
         guard let s = stream else { return "" }
@@ -198,6 +188,16 @@ final class SherpaOnlineRecognizer {
         SherpaOnnxDestroyOnlineStream(s)
         stream = nil
         return text
+    }
+
+    var isEndpoint: Bool {
+        guard let s = stream else { return false }
+        return SherpaOnnxOnlineStreamIsEndpoint(recognizer, s) != 0
+    }
+
+    func resetStream() {
+        guard let s = stream else { return }
+        SherpaOnnxOnlineStreamReset(recognizer, s)
     }
 
     private func decodeReady() {
