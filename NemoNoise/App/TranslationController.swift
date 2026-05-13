@@ -92,6 +92,7 @@ final class TranslationController {
                 let capture = SystemAudioCapture()
                 self.audioCapture = capture
                 let audioStream = try await capture.start()
+                LogService.info("Audio stream established, feeding chunks to ASR engine", category: "Translation")
 
                 for await chunk in audioStream {
                     guard self.isActive else { break }

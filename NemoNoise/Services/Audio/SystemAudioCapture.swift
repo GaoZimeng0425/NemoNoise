@@ -6,6 +6,8 @@ final class SystemAudioCapture: NSObject, SCStreamOutput, @unchecked Sendable {
     private let continuationBox = ContinuationBox()
     private var stream: SCStream?
     private let targetSampleRate: Double = 16000
+    private var chunkCount: Int = 0
+    private var lastLogTime: Date = .distantPast
 
     func start() async throws -> AsyncStream<AudioChunk> {
         guard CGPreflightScreenCaptureAccess() else {
@@ -56,11 +58,24 @@ final class SystemAudioCapture: NSObject, SCStreamOutput, @unchecked Sendable {
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio else { return }
-        guard let samples = extractFloatSamples(from: sampleBuffer) else { return }
-        guard let resampled = resample(samples, sourceRate: 48000) else { return }
+        guard let samples = extractFloatSamples(from: sampleBuffer) else {
+            LogService.warn("Failed to extract audio samples from CMSampleBuffer", category: "SystemAudioCapture")
+            return
+        }
+        guard let resampled = resample(samples, sourceRate: 48000) else {
+            LogService.warn("Failed to resample audio: \(samples.count) samples", category: "SystemAudioCapture")
+            return
+        }
 
         let rms = sqrt(resampled.reduce(0) { $0 + $1 * $1 } / Float(max(resampled.count, 1)))
         continuationBox.value?.yield(AudioChunk(samples: resampled, rmsLevel: rms))
+
+        chunkCount += 1
+        let now = Date()
+        if now.timeIntervalSince(lastLogTime) >= 2.0 {
+            LogService.info("Audio capture active: \(chunkCount) chunks, rms=\(String(format: "%.4f", rms))", category: "SystemAudioCapture")
+            lastLogTime = now
+        }
     }
 
     // MARK: - Audio Processing
