@@ -1,5 +1,11 @@
 # NemoNoise
 
+[English](#english) | [中文](#中文)
+
+---
+
+<a id="english"></a>
+
 ![CI](https://github.com/GaoZimeng0425/NemoNoise/actions/workflows/ci.yml/badge.svg)
 
 macOS voice dictation app with real-time ASR. Press a hotkey, speak, and text is injected into the active app.
@@ -59,5 +65,71 @@ xcodebuild test -project NemoNoise.xcodeproj -scheme NemoNoise -destination 'pla
 ```
 
 ## License
+
+MIT
+
+---
+
+<a id="中文"></a>
+
+![CI](https://github.com/GaoZimeng0425/NemoNoise/actions/workflows/ci.yml/badge.svg)
+
+macOS 语音听写应用，支持实时语音识别。按下快捷键，开口说话，文字自动输入到当前使用的应用中。
+
+## 功能特性
+
+- **多引擎语音识别**：本地 SenseVoice（Sherpa-ONNX）、Paraformer 流式识别、Apple Speech、阿里云 Paraformer 云端识别
+- **即按即说**：右 Command 或右 Option 键开始/停止录音
+- **悬浮窗**：录音时显示波形动画，识别完成后展示转写文本
+- **自动文本注入**：通过 Accessibility API 将识别文字直接输入到焦点应用
+- **引擎自动降级**：所选引擎不可用时，静默切换至 Apple Speech 并弹出通知
+- **自动更新**：集成 Sparkle 2，自动检查新版本
+- **崩溃上报**：Sentry 集成（默认关闭，需手动开启）
+- **结构化日志**：按会话隔离的日志系统，支持导出与隐私脱敏
+- **首次启动引导**：三步完成麦克风授权、引擎选择和快捷键设置
+
+## 安装
+
+### 下载
+
+从 [GitHub Releases](https://github.com/GaoZimeng0425/NemoNoise/releases/latest) 下载最新 DMG。
+
+### 安装步骤
+
+1. 打开下载的 `NemoNoise.dmg`
+2. 将 **NemoNoise** 拖入 **Applications** 文件夹快捷方式
+3. 从启动台或 Applications 中打开 NemoNoise
+4. 首次启动时，右键点击应用并选择 **打开**（非 App Store 应用需要此步骤）
+
+### 首次使用
+
+首次启动后，NemoNoise 会引导你完成以下设置：
+1. **麦克风权限** — 语音输入必需
+2. **引擎选择** — 选择本地（Paraformer）或内置（Apple Speech）引擎
+3. **快捷键设置** — 右 Command 或右 Option 键即按即说
+
+## 系统要求
+
+- **macOS 15.0**（Sequoia）或更高版本
+- **Xcode 16**（从源码构建时需要）
+
+## 从源码构建
+
+```bash
+# 克隆仓库
+git clone https://github.com/GaoZimeng0425/NemoNoise.git
+cd NemoNoise
+
+# 构建
+xcodebuild build -project NemoNoise.xcodeproj -scheme NemoNoise -destination 'platform=macOS'
+
+# 测试
+xcodebuild test -project NemoNoise.xcodeproj -scheme NemoNoise -destination 'platform=macOS'
+
+# 打包 DMG
+./build.sh
+```
+
+## 许可证
 
 MIT
