@@ -50,20 +50,6 @@ struct SubtitleOverlayView: View {
             translationSession = session
             controller.translationService.setSession(session)
         }
-        .onChange(of: controller.englishText) { _, newText in
-            guard !newText.isEmpty else { return }
-            Task {
-                controller.isTranslating = true
-                do {
-                    let result = try await controller.translationService.translate(newText)
-                    controller.chineseText = result
-                } catch {
-                    LogService.warn("Translation failed: \(error.localizedDescription)", category: "Translation")
-                    controller.chineseText = "—"
-                }
-                controller.isTranslating = false
-            }
-        }
     }
 
     private var displayEnglishText: String {

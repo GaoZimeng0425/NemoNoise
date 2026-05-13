@@ -16,6 +16,8 @@ final class TranslationController {
     private var asrEngine: AppleSpeechASREngine?
     private var captureTask: Task<Void, Never>?
     private var subtitleController: SubtitleOverlayController?
+    private var translationDebounceTask: Task<Void, Never>?
+    private var lastTranslatedLength: Int = 0
 
     private weak var recordingController: RecordingController?
 
@@ -106,8 +108,11 @@ final class TranslationController {
                                 self.partialText = ""
                                 self.englishText = result.text
                                 LogService.info("ASR final: \(result.text.prefix(80))", category: "Translation")
+                                self.scheduleTranslation(text: result.text, immediate: true)
                             } else {
                                 self.partialText = result.text
+                                let growth = result.text.count - self.lastTranslatedLength
+                                self.scheduleTranslation(text: result.text, immediate: growth > 10)
                             }
                         }
                     } catch {
@@ -128,6 +133,8 @@ final class TranslationController {
     func stopTranslation() {
         LogService.info("Translation mode stopping", category: "Translation")
 
+        translationDebounceTask?.cancel()
+        translationDebounceTask = nil
         captureTask?.cancel()
         captureTask = nil
         audioCapture?.stop()
@@ -156,6 +163,35 @@ final class TranslationController {
                 guard let self, event == .keyDown else { return }
                 self.toggle()
             }
+        }
+    }
+
+    // MARK: - Debounced Translation
+
+    private func scheduleTranslation(text: String, immediate: Bool = false) {
+        translationDebounceTask?.cancel()
+        let delay: Duration = immediate ? .zero : .milliseconds(1500)
+        translationDebounceTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.performTranslation(text: text)
+        }
+    }
+
+    private func performTranslation(text: String) {
+        guard !text.isEmpty else { return }
+        lastTranslatedLength = text.count
+        isTranslating = true
+        Task {
+            do {
+                let result = try await translationService.translate(text)
+                guard self.isActive else { return }
+                self.chineseText = result
+            } catch {
+                LogService.warn("Translation failed: \(error.localizedDescription)", category: "Translation")
+                self.chineseText = "—"
+            }
+            self.isTranslating = false
         }
     }
 
