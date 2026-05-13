@@ -21,3 +21,6 @@ xcuserdata/
 
 # CLAUDE.md local overrides
 .claude/settings.local.json
+
+# ralph-tui
+.ralph-tui/
