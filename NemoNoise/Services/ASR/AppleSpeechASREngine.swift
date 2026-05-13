@@ -16,12 +16,12 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
     }
     private let stateLock = OSAllocatedUnfairLock(initialState: State())
 
-    init() throws {
+    init(locale: String? = nil) throws {
         let pref = LanguagePreference.current
         let start = ContinuousClock.now
         let resolved: SFSpeechRecognizer?
 
-        if let localeId = pref.localeIdentifier {
+        if let localeId = locale ?? pref.localeIdentifier {
             resolved = SFSpeechRecognizer(locale: Locale(identifier: localeId))
                 ?? SFSpeechRecognizer(locale: .current)
                 ?? SFSpeechRecognizer()
