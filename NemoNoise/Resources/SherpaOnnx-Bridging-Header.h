@@ -9,3 +9,4 @@ struct SherpaOnnxOfflineRecognizer { char _opaque; };
 struct SherpaOnnxOfflineStream { char _opaque; };
 struct SherpaOnnxOnlineRecognizer { char _opaque; };
 struct SherpaOnnxOnlineStream { char _opaque; };
+struct SherpaOnnxOfflinePunctuation { char _opaque; };

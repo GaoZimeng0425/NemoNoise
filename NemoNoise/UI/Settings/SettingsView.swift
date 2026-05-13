@@ -37,6 +37,7 @@ struct SettingsView: View {
             if engineType == "paraformer" {
                 modelSection(for: .paraformer)
             }
+            modelSection(for: .punctuation)
             privacySection
             aboutSection
         }

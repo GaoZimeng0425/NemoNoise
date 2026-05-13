@@ -124,7 +124,9 @@ final class SpeechOrchestrator {
         case "paraformer":
             if let dir = modelManager.modelPath(for: .paraformer) {
                 do {
-                    return try ParaformerStreamingEngine(modelDir: dir)
+                    let punctPath = modelManager.modelPath(for: .punctuation)?
+                        .appendingPathComponent("model.onnx").path
+                    return try ParaformerStreamingEngine(modelDir: dir, punctuationModelPath: punctPath)
                 } catch {
                     LogService.error("ParaformerStreamingEngine init failed: \(error.localizedDescription)", category: "ASR")
                     throw error

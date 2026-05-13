@@ -44,6 +44,17 @@ extension ModelDescriptor {
             (name: "tokens.txt",         url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/tokens.txt")!),
         ]
     )
+
+    static let punctuation = ModelDescriptor(
+        id: "punctuation",
+        displayName: "Punctuation (zh+en)",
+        detail: "Chinese + English punctuation restoration",
+        downloadSize: "~300 MB",
+        subdir: "punctuation",
+        files: [
+            (name: "model.onnx", url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12/resolve/main/model.onnx")!),
+        ]
+    )
 }
 
 // MARK: - Manager
@@ -52,6 +63,7 @@ extension ModelDescriptor {
 final class ModelManager {
     var senseVoiceState: ModelDownloadState = .notDownloaded
     var paraformerState: ModelDownloadState = .notDownloaded
+    var punctuationState: ModelDownloadState = .notDownloaded
 
     private let baseDir: URL
     private var downloadTasks: [String: Task<Void, Never>] = [:]
@@ -75,6 +87,7 @@ final class ModelManager {
         switch descriptor.id {
         case "sensevoice": return senseVoiceState
         case "paraformer": return paraformerState
+        case "punctuation": return punctuationState
         default: return .notDownloaded
         }
     }
@@ -103,7 +116,7 @@ final class ModelManager {
     // MARK: Private
 
     private func refreshAll() {
-        for d in [ModelDescriptor.senseVoice, .paraformer] {
+        for d in [ModelDescriptor.senseVoice, .paraformer, .punctuation] {
             let dir = modelDir(for: d)
             let allPresent = d.files.allSatisfy {
                 FileManager.default.fileExists(atPath: dir.appendingPathComponent($0.name).path)
@@ -116,6 +129,7 @@ final class ModelManager {
         switch descriptor.id {
         case "sensevoice": senseVoiceState = state
         case "paraformer": paraformerState = state
+        case "punctuation": punctuationState = state
         default: break
         }
     }
