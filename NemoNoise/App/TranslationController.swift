@@ -8,6 +8,7 @@ final class TranslationController {
     var englishText: String = ""
     var chineseText: String = ""
     var isTranslating: Bool = false
+    var audioLevel: Float = 0
 
     let translationService: AppleTranslationService = AppleTranslationService()
     private var audioCapture: SystemAudioCapture?
@@ -94,6 +95,7 @@ final class TranslationController {
 
                 for await chunk in audioStream {
                     guard self.isActive else { break }
+                    self.audioLevel = chunk.rmsLevel
                     do {
                         let result = try await engine.feedChunk(chunk.samples, sampleRate: 16000)
                         if result.isFinal && !result.text.isEmpty {

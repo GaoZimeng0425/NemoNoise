@@ -42,6 +42,17 @@ struct SubtitleOverlayView: View {
             }
 
             Spacer()
+
+            // Waveform (5 bars)
+            HStack(alignment: .center, spacing: 2.5) {
+                ForEach(0..<5, id: \.self) { index in
+                    Capsule()
+                        .fill(controller.translationState == .capturing ? Color.green : Color.secondary.opacity(0.3))
+                        .frame(width: 3, height: waveformBarHeight(index: index))
+                }
+            }
+            .frame(height: 20)
+            .animation(.easeOut(duration: 0.1), value: controller.audioLevel)
         }
         .padding(12)
         .frame(minWidth: 400, maxWidth: 900)
@@ -85,5 +96,14 @@ struct SubtitleOverlayView: View {
                 }
             }
         }
+    }
+
+    private func waveformBarHeight(index: Int) -> CGFloat {
+        let level = CGFloat(controller.audioLevel)
+        let base: CGFloat = 3
+        let maxExtra: CGFloat = 17
+        let threshold = CGFloat(index) * 0.15
+        let active = max(0, level - threshold) / 0.3
+        return base + active * maxExtra
     }
 }
