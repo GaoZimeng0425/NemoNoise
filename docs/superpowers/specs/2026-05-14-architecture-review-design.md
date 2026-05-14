@@ -92,13 +92,18 @@ enum PipelineEvent: Sendable {
     case final(TranscriptionResult)
     case engineFallback(from: String)
     case rms(Float)
-    case injectionFailed                       // emitted by TextInjectorSink on AX failure; controller may show accessibility alert
 }
 ```
 
 **`@MainActor` placement rationale:** the pipeline coordinates and dispatches to sinks, both of which need main-thread access for SwiftUI `@Observable` and AppKit UI. The expensive work (`feedChunk`) is `async` and runs off-main; backpressure is natural via `await`.
 
 **Reusability:** a pipeline instance can `start`/`stop` repeatedly. The engine is `reset()` on each start. This avoids rebuilding the audio source / engine / sink graph per recording.
+
+**Implementation notes (post-implementation):**
+
+- The planned `.injectionFailed` event was replaced with a direct sink callback (`onInjectionFailed` closure on `TextInjectorSink`). Keeps the pipeline event enum focused on transcription progress; behavior (controller shows accessibility alert + clipboard toast) is identical.
+- The `TranslateProcessor` was implemented with tests but is NOT wired into the translation pipeline. Translation continues to be triggered from `SubtitleOverlayView.onChange(of: englishText)` so the bilingual display (English line + Chinese line) keeps working without forcing `TranscriptionResult` to grow a `translatedText` field. Wiring it in is a follow-up.
+- During implementation, the pipeline's engine swap on fallback required lifting a private `EngineBox` reference to a class property (the spec's plain mutation of `self.primaryEngine` was incompatible with Swift 6 strict concurrency in a detached Task).
 
 ### 2.4 Lifecycle
 

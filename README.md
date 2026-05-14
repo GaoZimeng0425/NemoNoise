@@ -21,6 +21,7 @@ macOS voice dictation app with real-time ASR. Press a hotkey, speak, and text is
 - **Crash reporting**: Sentry integration (opt-in, off by default)
 - **Structured logging**: Per-session logging with log export and PII sanitization
 - **First-launch onboarding**: 3-step setup for microphone, engine, and hotkey
+- **Composable architecture**: ASR engines, audio sources, and post-processors are pluggable via the `TranscriptionPipeline` abstraction.
 
 ## Installation
 
@@ -87,6 +88,7 @@ macOS 语音听写应用，支持实时语音识别。按下快捷键，开口�
 - **崩溃上报**：Sentry 集成（默认关闭，需手动开启）
 - **结构化日志**：按会话隔离的日志系统，支持导出与隐私脱敏
 - **首次启动引导**：三步完成麦克风授权、引擎选择和快捷键设置
+- **可组合架构**：ASR 引擎、音频源、后处理通过 `TranscriptionPipeline` 抽象插拔
 
 ## 安装
 
