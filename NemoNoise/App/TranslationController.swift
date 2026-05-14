@@ -56,17 +56,7 @@ final class TranslationController {
 
         // Check screen recording permission
         guard CGPreflightScreenCaptureAccess() else {
-            let alert = NSAlert()
-            alert.messageText = "Screen Recording Permission Required"
-            alert.informativeText = "NemoNoise needs screen recording permission to capture system audio.\n\nGo to System Settings → Privacy & Security → Screen Recording, then enable NemoNoise."
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "Cancel")
-            alert.window.level = .floating
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
-            }
+            ScreenRecordingAlert.present()
             return
         }
 
