@@ -4,12 +4,12 @@ import XCTest
 final class AudioCaptureTests: XCTestCase {
 
     func testStopWithoutStartDoesNotCrash() {
-        let capture = AudioCapture()
+        let capture = MicAudioSource()
         capture.stop()
     }
 
     func testMultipleStopsAreSafe() {
-        let capture = AudioCapture()
+        let capture = MicAudioSource()
         capture.stop()
         capture.stop()
         capture.stop()

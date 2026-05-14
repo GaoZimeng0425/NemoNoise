@@ -12,7 +12,7 @@ struct OrchestratorResult: Sendable {
 @MainActor
 final class SpeechOrchestrator {
     private let modelManager: ModelManager
-    private let audioCapture = AudioCapture()
+    private let audioCapture = MicAudioSource()
     private var engine: (any ASRService)?
     var onEngineFallback: ((String) -> Void)?
 

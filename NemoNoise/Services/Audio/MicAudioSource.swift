@@ -6,7 +6,7 @@ struct AudioChunk: Sendable {
     let rmsLevel: Float
 }
 
-final class AudioCapture: Sendable {
+final class MicAudioSource: Sendable {
     private let engine = AVAudioEngine()
     private let continuation: ContinuationBox = ContinuationBox()
     private let targetSampleRate: Double = 16000
