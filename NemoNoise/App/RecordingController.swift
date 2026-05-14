@@ -114,7 +114,7 @@ final class RecordingController {
             }
             return
         case .denied, .restricted:
-            presentMicPermissionAlert()
+            _ = MicPermissionAlert.present()
             return
         @unknown default:
             return
@@ -227,7 +227,7 @@ final class RecordingController {
             NSPasteboard.general.setString(text, forType: .string)
             ToastWindowController.show("Copied to clipboard", style: .success)
             if !AXIsProcessTrusted() {
-                presentAccessibilityAlert()
+                _ = AccessibilityAlert.present()
             }
             hideTask?.cancel()
             hideTask = Task {
@@ -316,36 +316,6 @@ final class RecordingController {
         alert.window.level = .floating
         alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         alert.runModal()
-    }
-
-    private func presentMicPermissionAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Microphone Permission Required"
-        alert.informativeText = "NemoNoise needs microphone access to record your voice.\n\nGo to System Settings → Privacy & Security → Microphone, then enable NemoNoise."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Cancel")
-        alert.window.level = .floating
-        alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
-        }
-    }
-
-    private func presentAccessibilityAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Accessibility Permission Required"
-        alert.informativeText = "NemoNoise needs Accessibility permission to inject text into other apps.\n\nGo to System Settings → Privacy & Security → Accessibility, then enable NemoNoise."
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Cancel")
-        alert.window.level = .floating
-        alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-        }
     }
 
 }
