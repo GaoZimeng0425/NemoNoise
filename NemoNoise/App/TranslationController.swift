@@ -12,7 +12,7 @@ final class TranslationController {
     var audioLevel: Float = 0
 
     let translationService: AppleTranslationService = AppleTranslationService()
-    private var audioCapture: SystemAudioCapture?
+    private var audioCapture: SystemAudioSource?
     private var asrEngine: (any ASRService)?
     private var captureTask: Task<Void, Never>?
     private var subtitleController: SubtitleOverlayController?
@@ -99,7 +99,7 @@ final class TranslationController {
         captureTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let capture = SystemAudioCapture()
+                let capture = SystemAudioSource()
                 self.audioCapture = capture
                 let audioStream = try await capture.start()
                 LogService.info("Audio stream established, feeding chunks to ASR engine", category: "Translation")
