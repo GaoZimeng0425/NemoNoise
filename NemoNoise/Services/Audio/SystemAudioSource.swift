@@ -2,7 +2,7 @@ import AVFoundation
 import CoreMedia
 import ScreenCaptureKit
 
-final class SystemAudioSource: NSObject, SCStreamOutput, @unchecked Sendable {
+final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked Sendable {
     private let continuationBox = ContinuationBox()
     private var stream: SCStream?
     private let sourceSampleRate: Double = 48000
