@@ -1,7 +1,11 @@
 import AppKit
 import ApplicationServices
 
-final class TextInjector {
+protocol TextInjecting: Sendable {
+    func injectAX(_ text: String) async -> Bool
+}
+
+final class TextInjector: TextInjecting, @unchecked Sendable {
     private var targetElement: AXUIElement?
     private var targetApp: pid_t?
 
