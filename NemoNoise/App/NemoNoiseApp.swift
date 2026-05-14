@@ -24,6 +24,18 @@ struct NemoNoiseApp: App {
                     .environment(translationController)
                     .task {
                         translationController.setRecordingController(controller)
+                        // Assemble translation pipeline now that both controllers exist.
+                        let factory = ASREngineFactory(modelManager: controller.modelManager)
+                        if let engine = try? factory.makeForTranslation() {
+                            let pipeline = TranscriptionPipeline(
+                                source: SystemAudioSource(),
+                                engine: engine,
+                                postProcessors: [],
+                                sink: SubtitleOverlaySink(target: translationController),
+                                fallback: nil
+                            )
+                            translationController.bind(pipeline: pipeline)
+                        }
                         controller.onTranslationActiveCheck = { [translationController] in
                             translationController.isActive
                         }

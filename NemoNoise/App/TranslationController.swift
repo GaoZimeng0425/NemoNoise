@@ -1,23 +1,20 @@
 import SwiftUI
-import ApplicationServices
 import KeyboardShortcuts
 
 @MainActor @Observable
-final class TranslationController {
+final class TranslationController: SubtitleWriter {
     var translationState: TranslationState = .idle
     var englishText: String = ""
     var partialText: String = ""
-    var chineseText: String = ""
+    var chineseText: String = ""        // populated by SubtitleOverlayView post-translation
     var isTranslating: Bool = false
     var audioLevel: Float = 0
 
     let translationService: AppleTranslationService = AppleTranslationService()
-    private var audioCapture: SystemAudioSource?
-    private var asrEngine: (any ASREngine)?
-    private var captureTask: Task<Void, Never>?
     private var subtitleController: SubtitleOverlayController?
-
+    private var pipelineTask: Task<Void, Never>?
     private weak var recordingController: RecordingController?
+    private var pipeline: TranscriptionPipeline?
 
     private static let translationShortcut = KeyboardShortcuts.Name("translationMode")
 
@@ -25,93 +22,52 @@ final class TranslationController {
         self.recordingController = controller
     }
 
-    var onTranslationActiveCheck: (() -> Bool)?
-
-    var isActive: Bool {
-        translationState != .idle
+    /// Called by NemoNoiseApp after both controllers and their pipelines are constructed.
+    func bind(pipeline: TranscriptionPipeline) {
+        self.pipeline = pipeline
     }
+
+    var isActive: Bool { translationState != .idle }
 
     // MARK: - Toggle
 
     func toggle() {
-        if isActive {
-            stopTranslation()
-        } else {
-            startTranslation()
-        }
+        if isActive { stopTranslation() } else { startTranslation() }
     }
 
-    // MARK: - Start
-
     private func startTranslation() {
-        guard translationState == .idle else { return }
+        guard translationState == .idle, let pipeline else { return }
+        if let rc = recordingController, rc.recordingState != .ready { return }
 
-        // Mutual exclusion: don't start if dictation is active
-        if let rc = recordingController, rc.recordingState != .ready {
-            return
-        }
-
-        _ = LogService.startSession()
-        LogService.info("Translation mode starting", category: "Translation")
-
-        // Check screen recording permission
         guard CGPreflightScreenCaptureAccess() else {
             ScreenRecordingAlert.present()
             return
         }
 
-        // Create ASR engine: Paraformer (bilingual) with Apple Speech fallback
-        let engine: any ASREngine
-        do {
-            guard let modelManager = recordingController?.modelManager else {
-                LogService.error("ModelManager unavailable for translation", category: "Translation")
-                translationState = .error("ASR engine unavailable")
-                return
-            }
-            let factory = ASREngineFactory(modelManager: modelManager)
-            engine = try factory.makeForTranslation()
-            engine.reset()
-        } catch {
-            LogService.error("Failed to create translation engine: \(error.localizedDescription)", category: "Translation")
-            translationState = .error("ASR engine unavailable")
-            return
-        }
-        self.asrEngine = engine
-
+        _ = LogService.startSession()
+        LogService.info("Translation mode starting", category: "Translation")
         translationState = .capturing
         englishText = ""
         partialText = ""
         chineseText = ""
         showSubtitle()
 
-        captureTask = Task { [weak self] in
+        pipelineTask = Task { [weak self, pipeline] in
             guard let self else { return }
             do {
-                let capture = SystemAudioSource()
-                self.audioCapture = capture
-                let audioStream = try await capture.start()
-                LogService.info("Audio stream established, feeding chunks to ASR engine", category: "Translation")
-
-                for await chunk in audioStream {
-                    guard self.isActive else { break }
-                    self.audioLevel = chunk.rmsLevel
-                    do {
-                        let result = try await engine.feedChunk(chunk.samples, sampleRate: 16000)
-                        if !result.text.isEmpty {
-                            if result.isFinal {
-                                self.partialText = ""
-                                self.englishText = result.text
-                                LogService.info("ASR final: \(result.text.prefix(80))", category: "Translation")
-                            } else {
-                                self.partialText = result.text
-                            }
-                        }
-                    } catch {
-                        LogService.warn("ASR feedChunk error: \(error.localizedDescription)", category: "Translation")
+                for try await event in pipeline.start() {
+                    switch event {
+                    case .partial(_, let rms):
+                        self.audioLevel = rms
+                    case .rms(let level):
+                        self.audioLevel = level
+                    case .final, .engineFallback:
+                        break
                     }
+                    // partial/final text written by SubtitleOverlaySink
                 }
             } catch {
-                LogService.error("System audio capture error: \(error.localizedDescription)", category: "Translation")
+                LogService.error("Translation pipeline error: \(error.localizedDescription)", category: "Translation")
                 self.translationState = .error(error.localizedDescription)
                 self.hideSubtitle()
                 ToastWindowController.show("Audio capture stopped: \(error.localizedDescription)", style: .error)
@@ -119,30 +75,19 @@ final class TranslationController {
         }
     }
 
-    // MARK: - Stop
-
     func stopTranslation() {
         LogService.info("Translation mode stopping", category: "Translation")
-
-        captureTask?.cancel()
-        captureTask = nil
-        audioCapture?.stop()
-        audioCapture = nil
-
-        if let engine = asrEngine {
-            Task {
-                _ = try? await engine.finish()
-                engine.reset()
-            }
+        pipelineTask?.cancel()
+        pipelineTask = nil
+        Task { [pipeline] in
+            _ = try? await pipeline?.finalize()
         }
-        asrEngine = nil
-
         hideSubtitle()
         translationState = .idle
         LogService.endSession()
     }
 
-    // MARK: - Hotkey Monitoring
+    // MARK: - Hotkey
 
     private var hotkeyTask: Task<Void, Never>?
 
@@ -155,7 +100,7 @@ final class TranslationController {
         }
     }
 
-    // MARK: - Translation Helper
+    // MARK: - Helper (kept for ShouldTranslateTests)
 
     func shouldTranslate(_ text: String) -> Bool {
         let chars = Array(text)
