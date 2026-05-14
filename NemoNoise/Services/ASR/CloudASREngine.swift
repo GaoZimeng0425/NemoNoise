@@ -1,6 +1,6 @@
 import Foundation
 
-final class CloudASREngine: ASRService, @unchecked Sendable {
+final class CloudASREngine: ASREngine, @unchecked Sendable {
     let isStreaming = true
 
     private let apiKey: String

@@ -1,6 +1,6 @@
 import Foundation
 
-final class SherpaASREngine: ASRService, @unchecked Sendable {
+final class SherpaASREngine: ASREngine, @unchecked Sendable {
     private let recognizer: SherpaOfflineRecognizer
     private var accumulated: [Float] = []
     private var lastDecodeCount: Int = 0

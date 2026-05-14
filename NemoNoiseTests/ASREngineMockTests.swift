@@ -1,7 +1,7 @@
 import XCTest
 @testable import NemoNoise
 
-final class MockASRService: ASRService {
+final class MockASRService: ASREngine {
     var isStreaming: Bool = true
     private(set) var feedChunkCallCount = 0
     private(set) var finishCallCount = 0
@@ -26,10 +26,10 @@ final class MockASRService: ASRService {
     }
 }
 
-final class ASRServiceMockTests: XCTestCase {
+final class ASREngineMockTests: XCTestCase {
 
     func testMockConformsToProtocol() {
-        let mock: any ASRService = MockASRService()
+        let mock: any ASREngine = MockASRService()
         XCTAssertTrue(mock.isStreaming)
     }
 

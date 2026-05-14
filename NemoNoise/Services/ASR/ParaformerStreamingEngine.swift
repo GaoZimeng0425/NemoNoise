@@ -1,6 +1,6 @@
 import Foundation
 
-final class ParaformerStreamingEngine: ASRService, @unchecked Sendable {
+final class ParaformerStreamingEngine: ASREngine, @unchecked Sendable {
     private let recognizer: SherpaOnlineRecognizer
 
     init(modelDir: URL) throws {

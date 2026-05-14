@@ -2,7 +2,7 @@ import Speech
 import AVFoundation
 import os
 
-final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
+final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
     private let recognizer: SFSpeechRecognizer
 
     private var request: SFSpeechAudioBufferRecognitionRequest?

@@ -1,6 +1,6 @@
 import Foundation
 
-protocol ASRService: AnyObject, Sendable {
+protocol ASREngine: AnyObject, Sendable {
     /// Whether this engine streams results in real time.
     var isStreaming: Bool { get }
 
@@ -14,6 +14,6 @@ protocol ASRService: AnyObject, Sendable {
     func reset()
 }
 
-extension ASRService {
+extension ASREngine {
     var isStreaming: Bool { true }
 }

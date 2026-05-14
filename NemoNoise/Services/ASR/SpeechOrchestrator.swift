@@ -13,7 +13,7 @@ struct OrchestratorResult: Sendable {
 final class SpeechOrchestrator {
     private let modelManager: ModelManager
     private let audioCapture = MicAudioSource()
-    private var engine: (any ASRService)?
+    private var engine: (any ASREngine)?
     var onEngineFallback: ((String) -> Void)?
 
     var isStreaming: Bool {
@@ -107,7 +107,7 @@ final class SpeechOrchestrator {
         engine = nil
     }
     
-    private func makeEngine() throws -> any ASRService {
+    private func makeEngine() throws -> any ASREngine {
         let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType) ?? AppDefaults.Defaults.engineType
         LogService.info("Creating engine: \(choice)", category: "ASR")
         switch choice {

@@ -13,7 +13,7 @@ final class TranslationController {
 
     let translationService: AppleTranslationService = AppleTranslationService()
     private var audioCapture: SystemAudioSource?
-    private var asrEngine: (any ASRService)?
+    private var asrEngine: (any ASREngine)?
     private var captureTask: Task<Void, Never>?
     private var subtitleController: SubtitleOverlayController?
 
@@ -71,7 +71,7 @@ final class TranslationController {
         }
 
         // Create ASR engine: Paraformer (bilingual) with Apple Speech fallback
-        let engine: any ASRService
+        let engine: any ASREngine
         if let modelManager = recordingController?.modelManager,
            let dir = modelManager.modelPath(for: .paraformer),
            let paraformer = try? ParaformerStreamingEngine(modelDir: dir) {
