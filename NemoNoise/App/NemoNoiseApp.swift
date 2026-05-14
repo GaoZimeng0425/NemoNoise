@@ -45,16 +45,12 @@ struct NemoNoiseApp: App {
     }
 }
 
-private struct OnboardingGate: View {
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    let content: AnyView
-
-    init(@ViewBuilder content: () -> some View) {
-        self.content = AnyView(content())
-    }
+private struct OnboardingGate<Content: View>: View {
+    @AppStorage(AppDefaults.Keys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
+    @ViewBuilder let content: () -> Content
 
     var body: some View {
-        content
+        content()
             .onAppear {
                 if !hasCompletedOnboarding {
                     OnboardingWindowController.show {

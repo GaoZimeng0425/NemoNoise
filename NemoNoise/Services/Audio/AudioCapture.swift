@@ -24,16 +24,7 @@ final class AudioCapture: Sendable {
 
         LogService.info("Audio device: sampleRate=\(hardwareFormat.sampleRate), channels=\(hardwareFormat.channelCount), bufferSize=\(bufferSize)", category: "AudioCapture")
 
-        guard let targetFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: targetSampleRate,
-            channels: 1,
-            interleaved: false
-        ) else {
-            throw ASRError.audioCaptureFailed("Failed to create target audio format")
-        }
-
-        guard let converter = AVAudioConverter(from: hardwareFormat, to: targetFormat) else {
+        guard let resampler = AudioResampler(sourceRate: hardwareFormat.sampleRate, targetRate: targetSampleRate) else {
             throw ASRError.audioCaptureFailed("Failed to create sample rate converter")
         }
 
@@ -43,7 +34,7 @@ final class AudioCapture: Sendable {
         }
 
         inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: hardwareFormat) { [weak self] buffer, _ in
-            self?.processTap(buffer: buffer, converter: converter, targetFormat: targetFormat)
+            self?.processTap(buffer: buffer, resampler: resampler)
         }
 
         try engine.start()
@@ -62,35 +53,9 @@ final class AudioCapture: Sendable {
         LogService.info("Capture stopped", category: "AudioCapture")
     }
 
-    nonisolated private func processTap(
-        buffer: AVAudioPCMBuffer,
-        converter: AVAudioConverter,
-        targetFormat: AVAudioFormat
-    ) {
-        let inputFrameCount = buffer.frameLength
-        let ratio = targetFormat.sampleRate / buffer.format.sampleRate
-        let outputFrameCount = AVAudioFrameCount(Double(inputFrameCount) * ratio) + 1
-
-        guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outputFrameCount) else { return }
-
-        var inputConsumed = false
-        let status = converter.convert(to: outputBuffer, error: nil) { _, outStatus in
-            if inputConsumed {
-                outStatus.pointee = .noDataNow
-                return nil
-            }
-            inputConsumed = true
-            outStatus.pointee = .haveData
-            return buffer
-        }
-
-        guard status != .error, let channelData = outputBuffer.floatChannelData else { return }
-        let frameLength = Int(outputBuffer.frameLength)
-        guard frameLength > 0 else { return }
-
-        let samples = Array(UnsafeBufferPointer(start: channelData[0], count: frameLength))
-        let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(frameLength))
-
+    nonisolated private func processTap(buffer: AVAudioPCMBuffer, resampler: AudioResampler) {
+        guard let samples = resampler.resample(buffer: buffer) else { return }
+        let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count))
         continuation.value?.yield(AudioChunk(samples: samples, rmsLevel: rms))
     }
 

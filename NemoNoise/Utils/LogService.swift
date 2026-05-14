@@ -1,9 +1,14 @@
 import CocoaLumberjackSwift
+import os
 
 final class LogService {
     nonisolated(unsafe) static let shared = LogService()
     private let fileLogger: DDFileLogger
-    nonisolated(unsafe) static var currentSessionID: String?
+    private static let sessionLock = OSAllocatedUnfairLock<String?>(initialState: nil)
+
+    nonisolated static var currentSessionID: String? {
+        sessionLock.withLock { $0 }
+    }
 
     private init() {
         let logDir = NSHomeDirectory() + "/.NemoNoise/logs"
@@ -35,14 +40,14 @@ final class LogService {
 
     nonisolated static func startSession() -> String {
         let id = UUID().uuidString
-        currentSessionID = id
+        sessionLock.withLock { $0 = id }
         info("Session started", category: "Recording")
         return id
     }
 
     nonisolated static func endSession() {
         info("Session ended", category: "Recording")
-        currentSessionID = nil
+        sessionLock.withLock { $0 = nil }
     }
 }
 

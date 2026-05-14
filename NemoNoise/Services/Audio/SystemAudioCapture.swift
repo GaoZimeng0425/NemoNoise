@@ -5,7 +5,9 @@ import ScreenCaptureKit
 final class SystemAudioCapture: NSObject, SCStreamOutput, @unchecked Sendable {
     private let continuationBox = ContinuationBox()
     private var stream: SCStream?
+    private let sourceSampleRate: Double = 48000
     private let targetSampleRate: Double = 16000
+    private lazy var resampler: AudioResampler? = AudioResampler(sourceRate: sourceSampleRate, targetRate: targetSampleRate)
     private var chunkCount: Int = 0
     private var lastLogTime: Date = .distantPast
 
@@ -23,7 +25,7 @@ final class SystemAudioCapture: NSObject, SCStreamOutput, @unchecked Sendable {
 
         let config = SCStreamConfiguration()
         config.capturesAudio = true
-        config.sampleRate = 48000
+        config.sampleRate = Int(sourceSampleRate)
         config.channelCount = 1
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
@@ -62,7 +64,7 @@ final class SystemAudioCapture: NSObject, SCStreamOutput, @unchecked Sendable {
             LogService.warn("Failed to extract audio samples from CMSampleBuffer", category: "SystemAudioCapture")
             return
         }
-        guard let resampled = resample(samples, sourceRate: 48000) else {
+        guard let resampled = resampler?.resample(samples) else {
             LogService.warn("Failed to resample audio: \(samples.count) samples", category: "SystemAudioCapture")
             return
         }
@@ -94,39 +96,4 @@ final class SystemAudioCapture: NSObject, SCStreamOutput, @unchecked Sendable {
         return samples
     }
 
-    private func resample(_ samples: [Float], sourceRate: Double) -> [Float]? {
-        guard let sf = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sourceRate, channels: 1, interleaved: false),
-              let df = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: targetSampleRate, channels: 1, interleaved: false),
-              let converter = AVAudioConverter(from: sf, to: df) else {
-            return nil
-        }
-
-        let srcFrameCount = AVAudioFrameCount(samples.count)
-        guard let srcBuffer = AVAudioPCMBuffer(pcmFormat: sf, frameCapacity: srcFrameCount) else { return nil }
-        srcBuffer.frameLength = srcFrameCount
-        samples.withUnsafeBufferPointer { ptr in
-            guard let base = ptr.baseAddress, let channelData = srcBuffer.floatChannelData else { return }
-            channelData[0].initialize(from: base, count: samples.count)
-        }
-
-        let ratio = targetSampleRate / sourceRate
-        let dstFrameCount = AVAudioFrameCount(Double(samples.count) * ratio) + 1
-        guard let dstBuffer = AVAudioPCMBuffer(pcmFormat: df, frameCapacity: dstFrameCount) else { return nil }
-
-        var inputConsumed = false
-        let status = converter.convert(to: dstBuffer, error: nil) { _, outStatus in
-            if inputConsumed {
-                outStatus.pointee = .noDataNow
-                return nil
-            }
-            inputConsumed = true
-            outStatus.pointee = .haveData
-            return srcBuffer
-        }
-
-        guard status != .error, let channelData = dstBuffer.floatChannelData else { return nil }
-        let frameLength = Int(dstBuffer.frameLength)
-        guard frameLength > 0 else { return nil }
-        return Array(UnsafeBufferPointer(start: channelData[0], count: frameLength))
-    }
 }

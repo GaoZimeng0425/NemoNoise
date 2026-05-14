@@ -33,7 +33,7 @@ enum LanguagePreference: String, CaseIterable, Codable, Identifiable {
     }
 
     static var current: LanguagePreference {
-        let raw = UserDefaults.standard.string(forKey: "languagePreference") ?? "auto"
+        let raw = UserDefaults.standard.string(forKey: AppDefaults.Keys.languagePreference) ?? AppDefaults.Defaults.languagePreference
         return LanguagePreference(rawValue: raw) ?? .auto
     }
 }

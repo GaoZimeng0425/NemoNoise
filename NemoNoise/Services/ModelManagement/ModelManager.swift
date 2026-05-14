@@ -44,29 +44,21 @@ extension ModelDescriptor {
             (name: "tokens.txt",         url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/tokens.txt")!),
         ]
     )
-
-    static let punctuation = ModelDescriptor(
-        id: "punctuation",
-        displayName: "Punctuation (zh+en)",
-        detail: "Chinese + English punctuation restoration",
-        downloadSize: "~300 MB",
-        subdir: "punctuation",
-        files: [
-            (name: "model.onnx", url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12/resolve/main/model.onnx")!),
-        ]
-    )
 }
 
 // MARK: - Manager
 
 @Observable
 final class ModelManager {
-    var senseVoiceState: ModelDownloadState = .notDownloaded
-    var paraformerState: ModelDownloadState = .notDownloaded
-    var punctuationState: ModelDownloadState = .notDownloaded
+    /// State per model, keyed by `ModelDescriptor.id`. Adding a new model only
+    /// requires extending the descriptor list — no extra stored property.
+    var states: [String: ModelDownloadState] = [:]
 
     private let baseDir: URL
     private var downloadTasks: [String: Task<Void, Never>] = [:]
+
+    /// All models tracked by this manager.
+    static let allDescriptors: [ModelDescriptor] = [.senseVoice, .paraformer]
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -84,12 +76,7 @@ final class ModelManager {
     }
 
     func state(for descriptor: ModelDescriptor) -> ModelDownloadState {
-        switch descriptor.id {
-        case "sensevoice": return senseVoiceState
-        case "paraformer": return paraformerState
-        case "punctuation": return punctuationState
-        default: return .notDownloaded
-        }
+        states[descriptor.id] ?? .notDownloaded
     }
 
     func startDownload(_ descriptor: ModelDescriptor) {
@@ -116,7 +103,7 @@ final class ModelManager {
     // MARK: Private
 
     private func refreshAll() {
-        for d in [ModelDescriptor.senseVoice, .paraformer, .punctuation] {
+        for d in Self.allDescriptors {
             let dir = modelDir(for: d)
             let allPresent = d.files.allSatisfy {
                 FileManager.default.fileExists(atPath: dir.appendingPathComponent($0.name).path)
@@ -126,12 +113,7 @@ final class ModelManager {
     }
 
     private func setState(_ state: ModelDownloadState, for descriptor: ModelDescriptor) {
-        switch descriptor.id {
-        case "sensevoice": senseVoiceState = state
-        case "paraformer": paraformerState = state
-        case "punctuation": punctuationState = state
-        default: break
-        }
+        states[descriptor.id] = state
     }
 
     private func download(_ descriptor: ModelDescriptor) async {

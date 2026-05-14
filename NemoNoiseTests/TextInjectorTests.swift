@@ -3,22 +3,22 @@ import XCTest
 
 final class TextInjectorTests: XCTestCase {
 
-    func testInjectAXReturnsFalseWhenNoTarget() {
+    func testInjectAXReturnsFalseWhenNoTarget() async {
         let injector = TextInjector()
-        let result = injector.injectAX("hello world")
+        let result = await injector.injectAX("hello world")
         XCTAssertFalse(result)
     }
 
-    func testCaptureTargetWithNoFocusedElement() {
+    func testCaptureTargetWithNoFocusedElement() async {
         let injector = TextInjector()
         injector.captureTarget()
-        let result = injector.injectAX("test")
+        let result = await injector.injectAX("test")
         XCTAssertFalse(result)
     }
 
-    func testInjectEmptyStringWithNoTarget() {
+    func testInjectEmptyStringWithNoTarget() async {
         let injector = TextInjector()
-        let result = injector.injectAX("")
+        let result = await injector.injectAX("")
         XCTAssertFalse(result)
     }
 }

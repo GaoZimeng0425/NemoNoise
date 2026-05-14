@@ -1,12 +1,10 @@
 import Sentry
 
 enum SentryService {
-    private static let enabledKey = "sentryEnabled"
-
     static var isEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: enabledKey) }
+        get { UserDefaults.standard.bool(forKey: AppDefaults.Keys.sentryEnabled) }
         set {
-            UserDefaults.standard.set(newValue, forKey: enabledKey)
+            UserDefaults.standard.set(newValue, forKey: AppDefaults.Keys.sentryEnabled)
             if newValue {
                 initialize()
             } else {

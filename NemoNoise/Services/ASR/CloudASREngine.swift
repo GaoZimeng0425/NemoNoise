@@ -120,24 +120,13 @@ final class CloudASREngine: ASRService, @unchecked Sendable {
             throw CloudASRError.invalidResponse
         }
 
-        // OpenAI-compatible format: { "text": "..." }
-        if let text = json["text"] as? String {
-            LogService.info("Transcribed \(text.count) chars", category: "CloudASREngine")
-            return text
+        // The /compatible-mode/v1/audio/transcriptions endpoint follows the OpenAI shape: { "text": "..." }.
+        guard let text = json["text"] as? String else {
+            LogService.error("Unexpected response format: \(String(data: data, encoding: .utf8) ?? "nil")", category: "CloudASREngine")
+            throw CloudASRError.invalidResponse
         }
-
-        // DashScope native format: { "output": { "results": [{ "transcription": { "text": "..." } }] } }
-        if let output = json["output"] as? [String: Any],
-           let results = output["results"] as? [[String: Any]],
-           let first = results.first,
-           let transcription = first["transcription_url"] as? String
-        {
-            LogService.info("Transcription URL: \(transcription)", category: "CloudASREngine")
-            return transcription
-        }
-
-        LogService.error("Unexpected response format: \(String(data: data, encoding: .utf8) ?? "nil")", category: "CloudASREngine")
-        throw CloudASRError.invalidResponse
+        LogService.info("Transcribed \(text.count) chars", category: "CloudASREngine")
+        return text
     }
 
     // MARK: - WAV conversion

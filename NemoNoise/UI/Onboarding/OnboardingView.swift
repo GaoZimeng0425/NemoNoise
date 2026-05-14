@@ -2,8 +2,8 @@ import SwiftUI
 import AVFoundation
 
 struct OnboardingView: View {
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @AppStorage("engineType") private var engineType = "paraformer"
+    @AppStorage(AppDefaults.Keys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
+    @AppStorage(AppDefaults.Keys.engineType) private var engineType = AppDefaults.Defaults.engineType
     @State private var currentStep = 0
     @State private var micPermissionGranted = false
 

@@ -53,9 +53,7 @@ final class AppleSpeechASREngine: ASRService, @unchecked Sendable {
             let req = SFSpeechAudioBufferRecognitionRequest()
             req.shouldReportPartialResults = true
             req.requiresOnDeviceRecognition = false
-            if #available(macOS 14, *) {
-                req.addsPunctuation = true
-            }
+            req.addsPunctuation = true
             request = req
 
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in

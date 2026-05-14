@@ -108,7 +108,7 @@ final class SpeechOrchestrator {
     }
     
     private func makeEngine() throws -> any ASRService {
-        let choice = UserDefaults.standard.string(forKey: "engineType") ?? "paraformer"
+        let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType) ?? AppDefaults.Defaults.engineType
         LogService.info("Creating engine: \(choice)", category: "ASR")
         switch choice {
         case "sensevoice":
@@ -124,9 +124,7 @@ final class SpeechOrchestrator {
         case "paraformer":
             if let dir = modelManager.modelPath(for: .paraformer) {
                 do {
-                    let punctPath = modelManager.modelPath(for: .punctuation)?
-                        .appendingPathComponent("model.onnx").path
-                    return try ParaformerStreamingEngine(modelDir: dir, punctuationModelPath: punctPath)
+                    return try ParaformerStreamingEngine(modelDir: dir)
                 } catch {
                     LogService.error("ParaformerStreamingEngine init failed: \(error.localizedDescription)", category: "ASR")
                     throw error

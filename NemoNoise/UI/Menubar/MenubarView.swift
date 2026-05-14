@@ -93,7 +93,7 @@ struct MenuBarPopoverView: View {
     }
 
     private var engineFallbackWarning: String? {
-        let choice = UserDefaults.standard.string(forKey: "engineType") ?? "paraformer"
+        let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType) ?? AppDefaults.Defaults.engineType
         switch choice {
         case "paraformer" where controller.modelManager.state(for: .paraformer) != .downloaded:
             return "Paraformer model not downloaded — using Apple Speech"

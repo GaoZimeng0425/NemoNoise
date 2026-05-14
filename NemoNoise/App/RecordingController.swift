@@ -28,7 +28,7 @@ final class RecordingController {
     private var overlayController: OverlayWindowController?
 
     var recordingMode: RecordingMode {
-        didSet { UserDefaults.standard.set(recordingMode.rawValue, forKey: "recordingMode") }
+        didSet { UserDefaults.standard.set(recordingMode.rawValue, forKey: AppDefaults.Keys.recordingMode) }
     }
 
     var hotkeyDisplayText: String {
@@ -47,7 +47,7 @@ final class RecordingController {
     }
 
     init() {
-        let raw = UserDefaults.standard.string(forKey: "recordingMode") ?? "pushToTalk"
+        let raw = UserDefaults.standard.string(forKey: AppDefaults.Keys.recordingMode) ?? AppDefaults.Defaults.recordingMode
         self.recordingMode = RecordingMode(rawValue: raw) ?? .pushToTalk
         self.orchestrator = SpeechOrchestrator(modelManager: modelManager)
 
@@ -101,6 +101,24 @@ final class RecordingController {
     private func startRecording() {
         guard recordingState == .ready else { return }
         guard !(onTranslationActiveCheck?() ?? false) else { return }
+
+        // Check microphone permission
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        switch micStatus {
+        case .authorized:
+            break
+        case .notDetermined:
+            Task {
+                let granted = await AVCaptureDevice.requestAccess(for: .audio)
+                if granted { self.startRecording() }
+            }
+            return
+        case .denied, .restricted:
+            presentMicPermissionAlert()
+            return
+        @unknown default:
+            return
+        }
 
         textInjector.captureTarget()
         _ = LogService.startSession()
@@ -192,7 +210,7 @@ final class RecordingController {
 
     private func injectText(_ text: String) async {
         let start = ContinuousClock.now
-        let success = textInjector.injectAX(text)
+        let success = await textInjector.injectAX(text)
         let elapsed = ContinuousClock.now - start
 
         if success {
@@ -250,10 +268,17 @@ final class RecordingController {
     private func startTimer() {
         recordingDuration = 0
         let startTime = Date()
-        timerTask = Task {
+        timerTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
+                guard let self else { return }
                 self.recordingDuration = Date().timeIntervalSince(startTime)
+                if self.recordingDuration >= self.maxRecordingDuration {
+                    LogService.info("Max recording duration reached, auto-stopping", category: "Recording")
+                    ToastWindowController.show("Recording stopped at \(Int(self.maxRecordingDuration))s limit", style: .warning)
+                    self.stopRecording()
+                    return
+                }
             }
         }
     }
@@ -291,6 +316,21 @@ final class RecordingController {
         alert.window.level = .floating
         alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         alert.runModal()
+    }
+
+    private func presentMicPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Microphone Permission Required"
+        alert.informativeText = "NemoNoise needs microphone access to record your voice.\n\nGo to System Settings → Privacy & Security → Microphone, then enable NemoNoise."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.level = .floating
+        alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+        }
     }
 
     private func presentAccessibilityAlert() {

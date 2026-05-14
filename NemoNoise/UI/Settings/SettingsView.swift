@@ -4,7 +4,7 @@ import ApplicationServices
 
 struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
-    @AppStorage("engineType") private var engineType = "paraformer"
+    @AppStorage(AppDefaults.Keys.engineType) private var engineType = AppDefaults.Defaults.engineType
     @State private var cloudAPIKey: String = ""
     @State private var showExportAlert = false
     @State private var exportedLogPath = ""
@@ -37,7 +37,6 @@ struct SettingsView: View {
             if engineType == "paraformer" {
                 modelSection(for: .paraformer)
             }
-            modelSection(for: .punctuation)
             privacySection
             aboutSection
         }
@@ -91,14 +90,15 @@ struct SettingsView: View {
         Section("Cloud Engine") {
             SecureField("DashScope API Key", text: $cloudAPIKey)
                 .textFieldStyle(.roundedBorder)
-                .onChange(of: cloudAPIKey) { _, newValue in
-                    if newValue.isEmpty {
+                .task(id: cloudAPIKey) {
+                    // Debounce so we only touch Keychain after the user pauses typing.
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard !Task.isCancelled else { return }
+                    if cloudAPIKey.isEmpty {
                         KeychainService.delete(key: KeychainService.Keys.cloudAPIKey)
-                        if engineType == "cloud" {
-                            engineType = "paraformer"
-                        }
+                        if engineType == "cloud" { engineType = "paraformer" }
                     } else {
-                        try? KeychainService.save(key: KeychainService.Keys.cloudAPIKey, value: newValue)
+                        try? KeychainService.save(key: KeychainService.Keys.cloudAPIKey, value: cloudAPIKey)
                     }
                 }
             Text("Enter a DashScope API key to enable cloud-based Paraformer transcription.")

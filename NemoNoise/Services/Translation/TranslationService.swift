@@ -5,7 +5,6 @@ protocol TranslationService {
     func translate(_ text: String) async throws -> String
 }
 
-@available(macOS 15.0, *)
 final class AppleTranslationService: TranslationService {
     private var session: TranslationSession?
 

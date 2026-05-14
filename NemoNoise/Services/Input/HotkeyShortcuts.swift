@@ -12,10 +12,10 @@ extension Notification.Name {
 
 enum HotkeyMigration {
     static func run() {
-        guard let old = UserDefaults.standard.string(forKey: "hotkeyOption") else { return }
+        guard let old = UserDefaults.standard.string(forKey: AppDefaults.Keys.legacyHotkeyOption) else { return }
 
         if KeyboardShortcuts.getShortcut(for: .toggleRecording) != nil {
-            UserDefaults.standard.removeObject(forKey: "hotkeyOption")
+            UserDefaults.standard.removeObject(forKey: AppDefaults.Keys.legacyHotkeyOption)
             return
         }
 
@@ -34,7 +34,7 @@ enum HotkeyMigration {
             break
         }
 
-        UserDefaults.standard.removeObject(forKey: "hotkeyOption")
+        UserDefaults.standard.removeObject(forKey: AppDefaults.Keys.legacyHotkeyOption)
     }
 
     private static let optionCarbonModifiers: Int = 0x0800

@@ -25,7 +25,7 @@ final class TextInjector {
     }
 
     @discardableResult
-    func injectAX(_ text: String) -> Bool {
+    func injectAX(_ text: String) async -> Bool {
         // Strategy 1: Insert via kAXSelectedTextAttribute (inserts at cursor)
         if let element = targetElement {
             let result = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
@@ -37,7 +37,7 @@ final class TextInjector {
         }
 
         // Strategy 2: Clipboard + Cmd+V paste
-        if pasteViaClipboard(text) {
+        if await pasteViaClipboard(text) {
             LogService.info("Injection method: clipboard paste, length: \(text.count)", category: "TextInjection")
             return true
         }
@@ -46,7 +46,7 @@ final class TextInjector {
         return false
     }
 
-    private func pasteViaClipboard(_ text: String) -> Bool {
+    private func pasteViaClipboard(_ text: String) async -> Bool {
         guard let pid = targetApp,
               let app = NSRunningApplication(processIdentifier: pid) else {
             return false
@@ -56,10 +56,11 @@ final class TextInjector {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
 
-        // Brief delay to ensure clipboard is ready, then activate and paste
-        Thread.sleep(forTimeInterval: 0.05)
+        // Yield to let the pasteboard settle, then activate the target app and yield again
+        // before synthesising Cmd+V so the keystroke lands in the right process.
+        try? await Task.sleep(for: .milliseconds(50))
         app.activate(options: [])
-        Thread.sleep(forTimeInterval: 0.05)
+        try? await Task.sleep(for: .milliseconds(50))
 
         let src = CGEventSource(stateID: .hidSystemState)
         let keyDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true) // V key

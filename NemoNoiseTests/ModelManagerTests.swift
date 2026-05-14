@@ -16,7 +16,7 @@ final class ModelManagerTests: XCTestCase {
     // MARK: - State property mapping
 
     func testStateForSenseVoice() {
-        manager.senseVoiceState = .downloading(progress: 0.5)
+        manager.states[ModelDescriptor.senseVoice.id] = .downloading(progress: 0.5)
         if case .downloading(let progress) = manager.state(for: .senseVoice) {
             XCTAssertEqual(progress, 0.5, accuracy: 0.01)
         } else {
@@ -25,7 +25,7 @@ final class ModelManagerTests: XCTestCase {
     }
 
     func testStateForParaformer() {
-        manager.paraformerState = .downloaded
+        manager.states[ModelDescriptor.paraformer.id] = .downloaded
         XCTAssertEqual(manager.state(for: .paraformer), .downloaded)
     }
 
@@ -40,57 +40,57 @@ final class ModelManagerTests: XCTestCase {
     // MARK: - modelPath
 
     func testModelPathReturnsNilWhenNotDownloaded() {
-        manager.senseVoiceState = .notDownloaded
+        manager.states[ModelDescriptor.senseVoice.id] = .notDownloaded
         XCTAssertNil(manager.modelPath(for: .senseVoice))
     }
 
     func testModelPathReturnsNilWhenDownloading() {
-        manager.paraformerState = .downloading(progress: 0.7)
+        manager.states[ModelDescriptor.paraformer.id] = .downloading(progress: 0.7)
         XCTAssertNil(manager.modelPath(for: .paraformer))
     }
 
     func testModelPathReturnsDirWhenDownloaded() {
-        manager.senseVoiceState = .downloaded
+        manager.states[ModelDescriptor.senseVoice.id] = .downloaded
         let path = manager.modelPath(for: .senseVoice)
         XCTAssertNotNil(path)
         XCTAssertTrue(path!.path.hasSuffix("sensevoice"))
     }
 
     func testModelPathReturnsNilWhenError() {
-        manager.senseVoiceState = .error("test error")
+        manager.states[ModelDescriptor.senseVoice.id] = .error("test error")
         XCTAssertNil(manager.modelPath(for: .senseVoice))
     }
 
     // MARK: - State machine transitions
 
     func testCancelDownloadResetsToNotDownloaded() {
-        manager.senseVoiceState = .downloading(progress: 0.5)
+        manager.states[ModelDescriptor.senseVoice.id] = .downloading(progress: 0.5)
         manager.cancelDownload(.senseVoice)
-        XCTAssertEqual(manager.senseVoiceState, .notDownloaded)
+        XCTAssertEqual(manager.state(for: .senseVoice), .notDownloaded)
     }
 
     func testCancelDownloadFromNotDownloadedIsNoOp() {
-        manager.senseVoiceState = .notDownloaded
+        manager.states[ModelDescriptor.senseVoice.id] = .notDownloaded
         manager.cancelDownload(.senseVoice)
-        XCTAssertEqual(manager.senseVoiceState, .notDownloaded)
+        XCTAssertEqual(manager.state(for: .senseVoice), .notDownloaded)
     }
 
     func testDeleteModelResetsToNotDownloaded() {
-        manager.paraformerState = .downloaded
+        manager.states[ModelDescriptor.paraformer.id] = .downloaded
         manager.deleteModel(.paraformer)
-        XCTAssertEqual(manager.paraformerState, .notDownloaded)
+        XCTAssertEqual(manager.state(for: .paraformer), .notDownloaded)
     }
 
     func testStartDownloadDoesNotStartIfNotNotDownloaded() {
-        manager.senseVoiceState = .downloaded
+        manager.states[ModelDescriptor.senseVoice.id] = .downloaded
         manager.startDownload(.senseVoice)
-        XCTAssertEqual(manager.senseVoiceState, .downloaded)
+        XCTAssertEqual(manager.state(for: .senseVoice), .downloaded)
     }
 
     func testStartDownloadDoesNotStartIfDownloading() {
-        manager.paraformerState = .downloading(progress: 0.3)
+        manager.states[ModelDescriptor.paraformer.id] = .downloading(progress: 0.3)
         manager.startDownload(.paraformer)
-        if case .downloading = manager.paraformerState {
+        if case .downloading = manager.state(for: .paraformer) {
             // Still downloading, not restarted
         } else {
             XCTFail("Expected still downloading")
