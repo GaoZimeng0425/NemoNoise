@@ -17,3 +17,8 @@ enum CloudASRError: Error {
     case serverError(Int)
     case invalidResponse
 }
+
+enum AppleSpeechError: Error, Equatable {
+    case siriDisabled
+    case recognizerUnavailable
+}

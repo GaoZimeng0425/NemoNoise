@@ -59,13 +59,20 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in
                 guard let self else { return }
                 if let error {
+                    let mapped: Error
+                    let ns = error as NSError
+                    if ns.localizedDescription.contains("Siri and Dictation are disabled") {
+                        mapped = AppleSpeechError.siriDisabled
+                    } else {
+                        mapped = error
+                    }
                     let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
-                        state.pendingError = error
+                        state.pendingError = mapped
                         let cont = state.finishContinuation
                         state.finishContinuation = nil
                         return cont
                     }
-                    cont?.resume(throwing: error)
+                    cont?.resume(throwing: mapped)
                     return
                 }
                 if let result {
