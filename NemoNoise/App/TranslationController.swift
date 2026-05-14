@@ -72,21 +72,19 @@ final class TranslationController {
 
         // Create ASR engine: Paraformer (bilingual) with Apple Speech fallback
         let engine: any ASREngine
-        if let modelManager = recordingController?.modelManager,
-           let dir = modelManager.modelPath(for: .paraformer),
-           let paraformer = try? ParaformerStreamingEngine(modelDir: dir) {
-            paraformer.reset()
-            engine = paraformer
-            LogService.info("Using Paraformer for translation ASR", category: "Translation")
-        } else {
-            LogService.info("Paraformer unavailable, falling back to Apple Speech", category: "Translation")
-            guard let apple = try? AppleSpeechASREngine(locale: "en-US") else {
-                LogService.error("Failed to create any ASR engine", category: "Translation")
+        do {
+            guard let modelManager = recordingController?.modelManager else {
+                LogService.error("ModelManager unavailable for translation", category: "Translation")
                 translationState = .error("ASR engine unavailable")
                 return
             }
-            apple.reset()
-            engine = apple
+            let factory = ASREngineFactory(modelManager: modelManager)
+            engine = try factory.makeForTranslation()
+            engine.reset()
+        } catch {
+            LogService.error("Failed to create translation engine: \(error.localizedDescription)", category: "Translation")
+            translationState = .error("ASR engine unavailable")
+            return
         }
         self.asrEngine = engine
 

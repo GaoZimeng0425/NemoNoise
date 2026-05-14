@@ -12,6 +12,7 @@ struct OrchestratorResult: Sendable {
 @MainActor
 final class SpeechOrchestrator {
     private let modelManager: ModelManager
+    private let factory: ASREngineFactory
     private let audioCapture = MicAudioSource()
     private var engine: (any ASREngine)?
     var onEngineFallback: ((String) -> Void)?
@@ -22,6 +23,7 @@ final class SpeechOrchestrator {
 
     init(modelManager: ModelManager) {
         self.modelManager = modelManager
+        self.factory = ASREngineFactory(modelManager: modelManager)
     }
 
     func startTranscription() -> AsyncThrowingStream<OrchestratorResult, Error> {
@@ -108,37 +110,6 @@ final class SpeechOrchestrator {
     }
     
     private func makeEngine() throws -> any ASREngine {
-        let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType) ?? AppDefaults.Defaults.engineType
-        LogService.info("Creating engine: \(choice)", category: "ASR")
-        switch choice {
-        case "sensevoice":
-            if let dir = modelManager.modelPath(for: .senseVoice) {
-                do {
-                    return try SherpaASREngine(modelDir: dir)
-                } catch {
-                    LogService.error("SherpaASREngine init failed: \(error.localizedDescription)", category: "ASR")
-                    throw error
-                }
-            }
-            LogService.warn("SenseVoice model not found, falling back to Apple", category: "ASR")
-        case "paraformer":
-            if let dir = modelManager.modelPath(for: .paraformer) {
-                do {
-                    return try ParaformerStreamingEngine(modelDir: dir)
-                } catch {
-                    LogService.error("ParaformerStreamingEngine init failed: \(error.localizedDescription)", category: "ASR")
-                    throw error
-                }
-            }
-            LogService.warn("Paraformer model not found, falling back to Apple", category: "ASR")
-        case "cloud":
-            if let apiKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey), !apiKey.isEmpty {
-                return CloudASREngine(apiKey: apiKey)
-            }
-            LogService.warn("Cloud API key not set, falling back to Apple", category: "ASR")
-        default:
-            break
-        }
-        return try AppleSpeechASREngine()
+        try factory.makeUserPreferred()
     }
 }
