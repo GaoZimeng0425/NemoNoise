@@ -57,3 +57,163 @@ final class TranscriptionPipelineTests: XCTestCase {
         XCTAssertEqual(engine.finishCallCount, 1)
     }
 }
+
+extension TranscriptionPipelineTests {
+
+    // MARK: - Engine fallback
+
+    func testFallbackEngineTakesOverWhenPrimaryThrows() async throws {
+        let source = MockAudioSource()
+        let primary = MockASREngine()
+        primary.feedChunkShouldThrow = NSError(domain: "primary", code: 1)
+
+        let fallback = MockASREngine()
+        fallback.feedChunkResultText = "from-fallback"
+        fallback.finishResultText = "final-from-fallback"
+
+        let sink = RecordingSink()
+        let pipeline = TranscriptionPipeline(
+            source: source,
+            engine: primary,
+            sink: sink,
+            fallback: fallback
+        )
+
+        let events = pipeline.start()
+        var sawFallback = false
+        var sawFallbackPartial = false
+
+        let consumer = Task {
+            for try await event in events {
+                switch event {
+                case .engineFallback: sawFallback = true
+                case .partial(let r, _) where r.text == "from-fallback": sawFallbackPartial = true
+                default: break
+                }
+                if sawFallbackPartial { break }
+            }
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+        // Primary throws on this chunk; pipeline switches to fallback.
+        source.emit(samples: [0.1])
+        // After switch, give the loop time, then emit another chunk that the fallback handles.
+        try await Task.sleep(for: .milliseconds(50))
+        source.emit(samples: [0.2])
+        try await Task.sleep(for: .milliseconds(50))
+
+        let finalResult = try await pipeline.finalize()
+        _ = try? await consumer.value
+
+        XCTAssertTrue(sawFallback, "expected engineFallback event")
+        XCTAssertTrue(sawFallbackPartial, "expected partial from fallback engine")
+        XCTAssertEqual(fallback.resetCallCount, 1)
+        XCTAssertEqual(finalResult.text, "final-from-fallback", "finalize must call finish() on the fallback engine, not the failed primary")
+    }
+
+    // MARK: - No fallback → fatal
+
+    func testEngineFailureWithoutFallbackThrowsFatal() async throws {
+        let source = MockAudioSource()
+        let engine = MockASREngine()
+        engine.feedChunkShouldThrow = NSError(domain: "engine", code: 42)
+
+        let pipeline = TranscriptionPipeline(
+            source: source,
+            engine: engine,
+            sink: RecordingSink(),
+            fallback: nil
+        )
+
+        let events = pipeline.start()
+        var caughtError: Error?
+        let consumer = Task {
+            do {
+                for try await _ in events { /* drain */ }
+            } catch {
+                caughtError = error
+            }
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+        source.emit(samples: [0.1])
+        try await Task.sleep(for: .milliseconds(80))
+        source.finishStream()
+        _ = await consumer.value
+
+        guard let pipelineErr = caughtError as? PipelineError else {
+            return XCTFail("expected PipelineError, got \(String(describing: caughtError))")
+        }
+        if case .engineFailedFatally = pipelineErr {
+            // OK
+        } else {
+            XCTFail("expected engineFailedFatally, got \(pipelineErr)")
+        }
+    }
+
+    // MARK: - Reuse
+
+    func testPipelineCanBeStartedAgainAfterFinalize() async throws {
+        let source = MockAudioSource()
+        let engine = MockASREngine()
+        let pipeline = TranscriptionPipeline(
+            source: source, engine: engine, sink: RecordingSink()
+        )
+
+        _ = pipeline.start()
+        try await Task.sleep(for: .milliseconds(20))
+        _ = try await pipeline.finalize()
+
+        _ = pipeline.start()
+        try await Task.sleep(for: .milliseconds(20))
+        _ = try await pipeline.finalize()
+
+        XCTAssertEqual(engine.resetCallCount, 2, "engine should reset on every start")
+        XCTAssertEqual(source.startCalls, 2)
+    }
+
+    // MARK: - Stop without finalize
+
+    func testStopDoesNotCallFinish() async throws {
+        let source = MockAudioSource()
+        let engine = MockASREngine()
+        let pipeline = TranscriptionPipeline(
+            source: source, engine: engine, sink: RecordingSink()
+        )
+
+        _ = pipeline.start()
+        try await Task.sleep(for: .milliseconds(20))
+        pipeline.stop()
+
+        XCTAssertEqual(engine.finishCallCount, 0)
+        XCTAssertGreaterThanOrEqual(source.stopCalls, 1)
+    }
+
+    // MARK: - Source failure
+
+    func testSourceStartFailureSurfacesAsSourceUnavailable() async throws {
+        let source = MockAudioSource()
+        source.throwOnStart = NSError(domain: "mic-denied", code: 1)
+        let engine = MockASREngine()
+        let pipeline = TranscriptionPipeline(
+            source: source, engine: engine, sink: RecordingSink()
+        )
+
+        let events = pipeline.start()
+        var caughtError: Error?
+        do {
+            for try await _ in events { }
+        } catch {
+            caughtError = error
+        }
+
+        guard let pipelineErr = caughtError as? PipelineError else {
+            return XCTFail("expected PipelineError, got \(String(describing: caughtError))")
+        }
+        if case .sourceUnavailable = pipelineErr {
+            // OK
+        } else {
+            XCTFail("expected sourceUnavailable, got \(pipelineErr)")
+        }
+    }
+}

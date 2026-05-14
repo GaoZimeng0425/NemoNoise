@@ -6,10 +6,11 @@ import Foundation
 @MainActor
 final class TranscriptionPipeline {
     private let source: any AudioSource
-    private var primaryEngine: any ASREngine
+    private let primaryEngine: any ASREngine
     private let postProcessors: [any PostProcessor]
     private let sink: any Sink
     private let fallback: (any ASREngine)?
+    private let engineBox: EngineBox
 
     private enum State {
         case idle
@@ -30,19 +31,21 @@ final class TranscriptionPipeline {
         self.postProcessors = postProcessors
         self.sink = sink
         self.fallback = fallback
+        self.engineBox = EngineBox(engine: engine)
     }
 
     var isStreaming: Bool { primaryEngine.isStreaming }
 
     /// Begin a new session.
     func start() -> AsyncThrowingStream<PipelineEvent, Error> {
-        AsyncThrowingStream<PipelineEvent, Error> { continuation in
+        engineBox.engine = primaryEngine
+        return AsyncThrowingStream<PipelineEvent, Error> { continuation in
             // Capture everything needed for the inner loop as nonisolated copies.
             let source = self.source
             let sink = self.sink
             let postProcessors = self.postProcessors
             let fallbackEngine = self.fallback
-            let engineBox = EngineBox(engine: self.primaryEngine)
+            let engineBox = self.engineBox
             let originalEngineName = String(describing: type(of: self.primaryEngine))
 
             self.primaryEngine.reset()
@@ -144,7 +147,7 @@ final class TranscriptionPipeline {
         state = .idle
     }
 
-    private func currentEngine() -> any ASREngine { primaryEngine }
+    private func currentEngine() -> any ASREngine { engineBox.engine }
 }
 
 /// Sendable box to allow engine swapping inside a detached Task.
