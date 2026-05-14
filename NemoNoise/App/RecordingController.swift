@@ -4,7 +4,9 @@ import ApplicationServices
 import KeyboardShortcuts
 
 @MainActor @Observable
-final class RecordingController {
+final class RecordingController: OverlayWriter {
+    // MARK: - UI state (observed by SwiftUI)
+
     var recordingState: RecordingState = .ready
     var confirmedSegments: [TranscriptionSegment] = []
     var partialText: String = ""
@@ -12,20 +14,6 @@ final class RecordingController {
     var micLevel: Float = 0
     var isListeningSilence: Bool = false
     var recordingDuration: TimeInterval = 0
-    var onTranslationActiveCheck: (() -> Bool)?
-
-    private var silenceTimer: Timer?
-    private var hideTask: Task<Void, Never>?
-    private let maxRecordingDuration: TimeInterval = 120
-    private var timerTask: Task<Void, Never>?
-    private var transcriptionTask: Task<Void, Never>?
-    private var escMonitor: Any?
-    
-    let modelManager = ModelManager()
-    private let orchestrator: SpeechOrchestrator
-    private let textInjector = TextInjector()
-    let hotkeyMonitor = HotkeyMonitor()
-    private var overlayController: OverlayWindowController?
 
     var recordingMode: RecordingMode {
         didSet { UserDefaults.standard.set(recordingMode.rawValue, forKey: AppDefaults.Keys.recordingMode) }
@@ -39,23 +27,44 @@ final class RecordingController {
             keyName = "Not set"
         }
         switch recordingMode {
-        case .pushToTalk:
-            return "Hold \(keyName) to record"
-        case .toggle:
-            return "Press \(keyName) to start/stop"
+        case .pushToTalk: return "Hold \(keyName) to record"
+        case .toggle:     return "Press \(keyName) to start/stop"
         }
     }
+
+    // MARK: - Dependencies
+
+    let modelManager = ModelManager()
+    let hotkeyMonitor = HotkeyMonitor()
+    private let textInjector = TextInjector()
+
+    private var pipeline: TranscriptionPipeline?
+    private var mutex: RecordingMutex?
+    private var overlayController: OverlayWindowController?
+
+    /// Exposes the text injector so `NemoNoiseApp` can wire it into the
+    /// dictation pipeline's `TextInjectorSink`.
+    var injector: any TextInjecting { textInjector }
+
+    /// Capture the AX target at hotkey DOWN before the pipeline starts.
+    func captureInjectionTarget() {
+        textInjector.captureTarget()
+    }
+
+    // MARK: - Internal state
+
+    private var silenceTimer: Timer?
+    private var hideTask: Task<Void, Never>?
+    private let maxRecordingDuration: TimeInterval = 120
+    private var timerTask: Task<Void, Never>?
+    private var pipelineTask: Task<Void, Never>?
+    private var escMonitor: Any?
+
+    // MARK: - Init
 
     init() {
         let raw = UserDefaults.standard.string(forKey: AppDefaults.Keys.recordingMode) ?? AppDefaults.Defaults.recordingMode
         self.recordingMode = RecordingMode(rawValue: raw) ?? .pushToTalk
-        self.orchestrator = SpeechOrchestrator(modelManager: modelManager)
-
-        orchestrator.onEngineFallback = { [weak self] _ in
-            guard let self else { return }
-            self.isStreaming = true
-            ToastWindowController.show("Switched to local engine", style: .info)
-        }
 
         hotkeyMonitor.onKeyDown = { [weak self] in
             Task { @MainActor [weak self] in self?.handleHotkeyDown() }
@@ -66,6 +75,14 @@ final class RecordingController {
         HotkeyMigration.run()
         hotkeyMonitor.start()
     }
+
+    func bind(pipeline: TranscriptionPipeline, mutex: RecordingMutex) {
+        self.pipeline = pipeline
+        self.mutex = mutex
+        self.isStreaming = pipeline.isStreaming
+    }
+
+    // MARK: - Hotkey handlers
 
     func handleHotkeyDown() {
         switch recordingMode {
@@ -93,20 +110,19 @@ final class RecordingController {
             stopRecording()
         }
     }
-    
+
     private func performHaptic() {
         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
     }
 
-    private func startRecording() {
-        guard recordingState == .ready else { return }
-        guard !(onTranslationActiveCheck?() ?? false) else { return }
+    // MARK: - Recording lifecycle
 
-        // Check microphone permission
+    private func startRecording() {
+        guard recordingState == .ready, let pipeline, let mutex else { return }
+
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         switch micStatus {
-        case .authorized:
-            break
+        case .authorized: break
         case .notDetermined:
             Task {
                 let granted = await AVCaptureDevice.requestAccess(for: .audio)
@@ -114,45 +130,55 @@ final class RecordingController {
             }
             return
         case .denied, .restricted:
-            _ = MicPermissionAlert.present()
+            MicPermissionAlert.present()
             return
         @unknown default:
             return
         }
 
+        guard mutex.tryAcquire(.dictation) else { return }
+
+        // Lock the AX target at hotkey DOWN to avoid cursor-move races.
         textInjector.captureTarget()
         _ = LogService.startSession()
-        LogService.info("Recording started, mode: \(recordingMode.rawValue), engine streaming: \(orchestrator.isStreaming)", category: "Recording")
+        LogService.info("Recording started, mode: \(recordingMode.rawValue), engine streaming: \(pipeline.isStreaming)", category: "Recording")
 
         recordingState = .recording
         confirmedSegments = []
         partialText = ""
-        isStreaming = orchestrator.isStreaming
+        isStreaming = pipeline.isStreaming
         showOverlay()
         startTimer()
         startEscMonitor()
 
-        transcriptionTask = Task {
-            let stream = orchestrator.startTranscription()
-            resetSilenceTimer()
-
+        pipelineTask = Task { [weak self, pipeline] in
+            guard let self else { return }
             do {
-                for try await result in stream {
-                    self.micLevel = result.rmsLevel
-                    if !result.text.isEmpty {
-                        self.partialText = result.text
+                self.resetSilenceTimer()
+                for try await event in pipeline.start() {
+                    switch event {
+                    case .partial(_, let rms):
+                        self.micLevel = rms
                         self.isListeningSilence = false
-                        resetSilenceTimer()
+                        self.resetSilenceTimer()
+                    case .rms(let level):
+                        self.micLevel = level
+                    case .engineFallback(let from):
+                        self.isStreaming = pipeline.isStreaming
+                        LogService.info("Engine fallback from \(from)", category: "Recording")
+                        ToastWindowController.show("Switched to local engine", style: .info)
+                    case .final:
+                        break // handled in stopRecording via finalize()
                     }
                 }
             } catch {
-                handleError(error)
+                self.handlePipelineError(error)
             }
         }
     }
 
     private func stopRecording() {
-        guard recordingState == .recording else { return }
+        guard recordingState == .recording, let pipeline, let mutex else { return }
 
         LogService.info("Recording stopped, duration: \(String(format: "%.1f", recordingDuration))s", category: "Recording")
 
@@ -161,82 +187,59 @@ final class RecordingController {
         invalidateSilenceTimer()
         stopEscMonitor()
 
-        Task {
+        Task { [weak self, pipeline, mutex] in
+            defer { mutex.release(.dictation) }
+            guard let self else { return }
             do {
-                let finalResult = try await orchestrator.finalize()
+                let final = try await pipeline.finalize()
                 self.partialText = ""
-                if !finalResult.text.isEmpty {
-                    let segment = TranscriptionSegment(text: finalResult.text, emotion: finalResult.emotion)
+                if !final.text.isEmpty {
+                    let segment = TranscriptionSegment(text: final.text, emotion: final.emotion)
                     self.confirmedSegments.append(segment)
-                    LogService.info("Transcription complete, length: \(finalResult.text.count) chars", category: "Recording")
-                    await injectText(finalResult.text)
+                    LogService.info("Transcription complete, length: \(final.text.count) chars", category: "Recording")
                 } else {
                     LogService.info("Transcription complete, no text produced", category: "Recording")
-                    hideTask?.cancel()
-                    hideTask = Task {
-                        try? await Task.sleep(for: .seconds(2))
-                        guard !Task.isCancelled else { return }
-                        hideOverlay()
-                    }
                 }
-                recordingState = .ready
+                self.scheduleOverlayHide(after: 2)
+                self.recordingState = .ready
                 LogService.endSession()
             } catch {
-                handleError(error)
+                self.handlePipelineError(error)
             }
         }
     }
 
-    private func handleError(_ error: Error) {
+    private func handlePipelineError(_ error: Error) {
         LogService.error("Recording error: \(error.localizedDescription)", category: "Recording")
         SentryService.capture(error: error)
 
-        let message = error.localizedDescription
+        mutex?.release(.dictation)
 
-        if message.contains("Siri and Dictation are disabled") {
-            ToastWindowController.show("请启用 Siri：系统设置 → Siri 与听写", style: .warning, duration: 5)
-        } else if let cloudError = error as? CloudASRError, case .authenticationFailed = cloudError {
-            ToastWindowController.show("API key invalid. Please update in Settings.", style: .error, duration: 5)
+        if let pipelineErr = error as? PipelineError {
+            switch pipelineErr {
+            case .sourceUnavailable:
+                MicPermissionAlert.present()
+            case .engineFailedFatally(let underlying):
+                if let cloud = underlying as? CloudASRError, case .authenticationFailed = cloud {
+                    ToastWindowController.show("API key invalid. Please update in Settings.", style: .error, duration: 5)
+                } else {
+                    presentAlert(title: "Engine Error", message: pipelineErr.localizedDescription)
+                }
+            case .finalizeFailed(let underlying):
+                presentAlert(title: "Recognition Error", message: underlying.localizedDescription)
+            }
         } else {
-            presentAlert(title: "Error", message: message)
+            presentAlert(title: "Error", message: error.localizedDescription)
         }
 
         recordingState = .ready
-        orchestrator.stop()
+        pipeline?.stop()
         stopEscMonitor()
         hideOverlay()
         LogService.endSession()
     }
 
-    private func injectText(_ text: String) async {
-        let start = ContinuousClock.now
-        let success = await textInjector.injectAX(text)
-        let elapsed = ContinuousClock.now - start
-
-        if success {
-            LogService.info("Text injected, duration: \(elapsed.description)", category: "TextInjection")
-            hideTask?.cancel()
-            hideTask = Task {
-                try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled else { return }
-                hideOverlay()
-            }
-        } else {
-            LogService.warn("All injection methods failed, duration: \(elapsed.description)", category: "TextInjection")
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-            ToastWindowController.show("Copied to clipboard", style: .success)
-            if !AXIsProcessTrusted() {
-                _ = AccessibilityAlert.present()
-            }
-            hideTask?.cancel()
-            hideTask = Task {
-                try? await Task.sleep(for: .seconds(3))
-                guard !Task.isCancelled else { return }
-                hideOverlay()
-            }
-        }
-    }
+    // MARK: - Overlay + timer + ESC
 
     private func showOverlay() {
         if overlayController == nil {
@@ -245,8 +248,15 @@ final class RecordingController {
         overlayController?.show()
     }
 
-    private func hideOverlay() {
-        overlayController?.hide()
+    private func hideOverlay() { overlayController?.hide() }
+
+    private func scheduleOverlayHide(after seconds: Double) {
+        hideTask?.cancel()
+        hideTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.hideOverlay()
+        }
     }
 
     private func resetSilenceTimer() {
@@ -317,5 +327,4 @@ final class RecordingController {
         alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         alert.runModal()
     }
-
 }

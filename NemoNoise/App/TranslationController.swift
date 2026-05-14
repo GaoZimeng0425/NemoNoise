@@ -13,18 +13,15 @@ final class TranslationController: SubtitleWriter {
     let translationService: AppleTranslationService = AppleTranslationService()
     private var subtitleController: SubtitleOverlayController?
     private var pipelineTask: Task<Void, Never>?
-    private weak var recordingController: RecordingController?
     private var pipeline: TranscriptionPipeline?
+    private var mutex: RecordingMutex?
 
     private static let translationShortcut = KeyboardShortcuts.Name("translationMode")
 
-    func setRecordingController(_ controller: RecordingController) {
-        self.recordingController = controller
-    }
-
     /// Called by NemoNoiseApp after both controllers and their pipelines are constructed.
-    func bind(pipeline: TranscriptionPipeline) {
+    func bind(pipeline: TranscriptionPipeline, mutex: RecordingMutex) {
         self.pipeline = pipeline
+        self.mutex = mutex
     }
 
     var isActive: Bool { translationState != .idle }
@@ -36,13 +33,14 @@ final class TranslationController: SubtitleWriter {
     }
 
     private func startTranslation() {
-        guard translationState == .idle, let pipeline else { return }
-        if let rc = recordingController, rc.recordingState != .ready { return }
+        guard translationState == .idle, let pipeline, let mutex else { return }
 
         guard CGPreflightScreenCaptureAccess() else {
             ScreenRecordingAlert.present()
             return
         }
+
+        guard mutex.tryAcquire(.translation) else { return }
 
         _ = LogService.startSession()
         LogService.info("Translation mode starting", category: "Translation")
@@ -82,6 +80,7 @@ final class TranslationController: SubtitleWriter {
         Task { [pipeline] in
             _ = try? await pipeline?.finalize()
         }
+        mutex?.release(.translation)
         hideSubtitle()
         translationState = .idle
         LogService.endSession()

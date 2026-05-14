@@ -1,3 +1,4 @@
+import ApplicationServices
 import Sparkle
 import SwiftUI
 
@@ -23,22 +24,49 @@ struct NemoNoiseApp: App {
                     .environment(controller)
                     .environment(translationController)
                     .task {
-                        translationController.setRecordingController(controller)
-                        // Assemble translation pipeline now that both controllers exist.
+                        let mutex = RecordingMutex()
                         let factory = ASREngineFactory(modelManager: controller.modelManager)
+
+                        // Dictation pipeline
+                        if let primary = try? factory.makeUserPreferred() {
+                            let fallback = try? factory.makeFallback()
+                            let dictationSink = BroadcastSink([
+                                OverlayProgressSink(target: controller),
+                                TextInjectorSink(
+                                    injector: controller.injector,
+                                    clipboardFallback: ClipboardSink(),
+                                    onInjectionFailed: {
+                                        Task { @MainActor in
+                                            if !AXIsProcessTrusted() {
+                                                AccessibilityAlert.present()
+                                            }
+                                            ToastWindowController.show("Copied to clipboard", style: .success)
+                                        }
+                                    }
+                                )
+                            ])
+                            let dictationPipeline = TranscriptionPipeline(
+                                source: MicAudioSource(),
+                                engine: primary,
+                                postProcessors: [],
+                                sink: dictationSink,
+                                fallback: fallback
+                            )
+                            controller.bind(pipeline: dictationPipeline, mutex: mutex)
+                        }
+
+                        // Translation pipeline
                         if let engine = try? factory.makeForTranslation() {
-                            let pipeline = TranscriptionPipeline(
+                            let translationPipeline = TranscriptionPipeline(
                                 source: SystemAudioSource(),
                                 engine: engine,
                                 postProcessors: [],
                                 sink: SubtitleOverlaySink(target: translationController),
                                 fallback: nil
                             )
-                            translationController.bind(pipeline: pipeline)
+                            translationController.bind(pipeline: translationPipeline, mutex: mutex)
                         }
-                        controller.onTranslationActiveCheck = { [translationController] in
-                            translationController.isActive
-                        }
+
                         translationController.startHotkeyMonitoring()
                     }
             }
