@@ -114,7 +114,6 @@ private struct ToastCapsule: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.quaternary, lineWidth: 0.5))
+        .glassEffect(.regular, in: .capsule)
     }
 }
