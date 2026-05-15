@@ -5,48 +5,33 @@ struct SubtitleOverlayView: View {
     @Environment(TranslationController.self) private var controller
     @State private var translationSession: TranslationSession?
     @State private var translationTask: Task<Void, Never>?
+    @Namespace private var glassNS
+
+    private var subtitleStatusGlass: Glass {
+        GlassTint.forSubtitle(controller.translationState).map { Glass.regular.tint($0) } ?? Glass.regular
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .fill(controller.translationState == .capturing ? Color.green : Color.gray)
-                .frame(width: 8, height: 8)
+        GlassEffectContainer(spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
+                statusGroup
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .glassEffect(subtitleStatusGlass, in: .capsule)
+                    .glassEffectID("subtitle-status", in: glassNS)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(displayEnglishText)
-                    .font(.system(size: 14, weight: .regular, design: .rounded))
-                    .foregroundStyle(.gray)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(controller.chineseText.isEmpty ? displayEnglishText : controller.chineseText)
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            Spacer()
-
-            // Waveform (5 bars)
-            HStack(alignment: .center, spacing: 2.5) {
-                ForEach(0..<5, id: \.self) { index in
-                    Capsule()
-                        .fill(controller.translationState == .capturing ? Color.green : Color.secondary.opacity(0.3))
-                        .frame(width: 3, height: waveformBarHeight(index: index))
+                if hasTranscript {
+                    textGroup
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .glassEffect(.regular, in: .capsule)
+                        .glassEffectID("subtitle-text", in: glassNS)
+                        .transition(.opacity)
                 }
             }
-            .frame(height: 20)
-            .animation(.easeOut(duration: 0.1), value: controller.audioLevel)
         }
-        .padding(12)
-        .frame(minWidth: 400, maxWidth: 900)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThickMaterial)
-        }
+        .frame(minWidth: 220, maxWidth: 900)
+        .animation(.smooth(duration: 0.4), value: controller.translationState)
         .translationTask(.init(source: .init(identifier: "en"), target: .init(identifier: "zh-Hans"))) { session in
             translationSession = session
             controller.translationService.setSession(session)
@@ -55,7 +40,6 @@ struct SubtitleOverlayView: View {
             translationTask?.cancel()
             guard !newText.isEmpty else { return }
             translationTask = Task {
-                // Debounce: collapse rapid partial-result updates into one request.
                 try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
 
@@ -76,14 +60,51 @@ struct SubtitleOverlayView: View {
         .onDisappear { translationTask?.cancel() }
     }
 
+    private var hasTranscript: Bool {
+        !controller.englishText.isEmpty || !controller.partialText.isEmpty
+    }
+
+    private var statusGroup: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(controller.translationState == .capturing ? Color.green : Color.gray)
+                .frame(width: 8, height: 8)
+
+            HStack(alignment: .center, spacing: 2.5) {
+                ForEach(0..<5, id: \.self) { index in
+                    Capsule()
+                        .fill(controller.translationState == .capturing ? Color.green : Color.secondary.opacity(0.3))
+                        .frame(width: 3, height: waveformBarHeight(index: index))
+                }
+            }
+            .frame(height: 20)
+            .animation(.easeOut(duration: 0.1), value: controller.audioLevel)
+        }
+    }
+
+    private var textGroup: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(displayEnglishText)
+                .font(.system(size: 14, weight: .regular, design: .rounded))
+                .foregroundStyle(.gray)
+                .lineLimit(1)
+                .truncationMode(.head)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(controller.chineseText.isEmpty ? displayEnglishText : controller.chineseText)
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .truncationMode(.head)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var displayEnglishText: String {
         if !controller.partialText.isEmpty {
             return controller.partialText
         }
-        if !controller.englishText.isEmpty {
-            return controller.englishText
-        }
-        return "Listening…"
+        return controller.englishText
     }
 
     private func waveformBarHeight(index: Int) -> CGFloat {
