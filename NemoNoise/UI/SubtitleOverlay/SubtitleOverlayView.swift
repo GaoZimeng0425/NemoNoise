@@ -72,15 +72,16 @@ struct SubtitleOverlayView: View {
                 .fill(controller.translationState == .capturing ? Color.green : Color.gray)
                 .frame(width: 8, height: 8)
 
-            HStack(alignment: .center, spacing: 2.5) {
-                ForEach(0..<5, id: \.self) { index in
-                    Capsule()
-                        .fill(controller.translationState == .capturing ? Color.green : Color.secondary.opacity(0.3))
-                        .frame(width: 3, height: waveformBarHeight(index: index))
-                }
-            }
-            .frame(height: 20)
-            .animation(.easeOut(duration: 0.1), value: controller.audioLevel)
+            SpectrumBarsView(
+                spectrum: controller.spectrum,
+                isActive: controller.translationState == .capturing,
+                barCount: 5,
+                barColor: .green,
+                barSpacing: 2.5,
+                barWidth: 3,
+                maxHeight: 20,
+                minHeight: 3
+            )
         }
     }
 
@@ -112,12 +113,4 @@ struct SubtitleOverlayView: View {
         return "Listening…"
     }
 
-    private func waveformBarHeight(index: Int) -> CGFloat {
-        let level = CGFloat(controller.audioLevel)
-        let base: CGFloat = 3
-        let maxExtra: CGFloat = 17
-        let scale = max(0, 1.0 - CGFloat(index) * 0.12)
-        let amplified = min(1.0, level * 8)
-        return base + amplified * scale * maxExtra
-    }
 }

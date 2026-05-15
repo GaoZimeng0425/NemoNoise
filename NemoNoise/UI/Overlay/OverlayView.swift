@@ -47,11 +47,11 @@ struct OverlayView: View {
             
             Spacer()
             
-            LiveWaveformView(
-                micLevel: controller.micLevel,
-                isRecording: controller.recordingState == .recording
+            SpectrumBarsView(
+                spectrum: controller.spectrum,
+                isActive: controller.recordingState == .recording,
+                barCount: 16
             )
-            .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.7), value: controller.micLevel)
         }
     }
 
