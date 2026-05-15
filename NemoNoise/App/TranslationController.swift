@@ -9,6 +9,7 @@ final class TranslationController: SubtitleWriter {
     var chineseText: String = ""        // populated by SubtitleOverlayView post-translation
     var isTranslating: Bool = false
     var audioLevel: Float = 0
+    var spectrum: [Float] = Array(repeating: 0, count: 16)
 
     let translationService: AppleTranslationService = AppleTranslationService()
     private var subtitleController: SubtitleOverlayController?
@@ -55,10 +56,12 @@ final class TranslationController: SubtitleWriter {
             do {
                 for try await event in pipeline.start() {
                     switch event {
-                    case .partial(_, let rms):
+                    case .partial(_, let rms, let spectrum):
                         self.audioLevel = rms
-                    case .rms(let level):
-                        self.audioLevel = level
+                        self.applyEnvelope(spectrum)
+                    case .level(let rms, let spectrum):
+                        self.audioLevel = rms
+                        self.applyEnvelope(spectrum)
                     case .final, .engineFallback:
                         break
                     }
@@ -80,6 +83,8 @@ final class TranslationController: SubtitleWriter {
         pipelineTask?.cancel()
         pipelineTask = nil
         hideSubtitle()
+        audioLevel = 0
+        spectrum = Array(repeating: 0, count: 16)
         translationState = .idle
         LogService.endSession()
         // Finalize then release mutex in the same task so dictation cannot start
@@ -125,5 +130,19 @@ final class TranslationController: SubtitleWriter {
 
     private func hideSubtitle() {
         subtitleController?.hide()
+    }
+
+    private func applyEnvelope(_ target: [Float]) {
+        let dt: Float = 0.085
+        let attackTau: Float = 0.06
+        let releaseTau: Float = 0.20
+        if spectrum.count != target.count {
+            spectrum = Array(repeating: 0, count: target.count)
+        }
+        for i in 0..<spectrum.count {
+            let tau = target[i] > spectrum[i] ? attackTau : releaseTau
+            let alpha = 1 - exp(-dt / tau)
+            spectrum[i] += (target[i] - spectrum[i]) * alpha
+        }
     }
 }

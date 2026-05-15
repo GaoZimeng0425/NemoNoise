@@ -12,6 +12,7 @@ final class RecordingController: OverlayWriter {
     var partialText: String = ""
     var isStreaming: Bool = true
     var micLevel: Float = 0
+    var spectrum: [Float] = Array(repeating: 0, count: 16)
     var isListeningSilence: Bool = false
     var recordingDuration: TimeInterval = 0
 
@@ -162,18 +163,20 @@ final class RecordingController: OverlayWriter {
                 self.resetSilenceTimer()
                 for try await event in pipeline.start() {
                     switch event {
-                    case .partial(_, let rms):
+                    case .partial(_, let rms, let spectrum):
                         self.micLevel = rms
+                        self.applyEnvelope(spectrum)
                         self.isListeningSilence = false
                         self.resetSilenceTimer()
-                    case .rms(let level):
-                        self.micLevel = level
+                    case .level(let rms, let spectrum):
+                        self.micLevel = rms
+                        self.applyEnvelope(spectrum)
                     case .engineFallback(let from):
                         self.isStreaming = pipeline.isStreaming
                         LogService.info("Engine fallback from \(from)", category: "Recording")
                         ToastWindowController.show("Switched to local engine", style: .info)
                     case .final:
-                        break // handled in stopRecording via finalize()
+                        break
                     }
                 }
             } catch {
@@ -206,6 +209,8 @@ final class RecordingController: OverlayWriter {
                     LogService.info("Transcription complete, no text produced", category: "Recording")
                 }
                 self.scheduleOverlayHide(after: 2)
+                self.micLevel = 0
+                self.spectrum = Array(repeating: 0, count: 16)
                 self.recordingState = .ready
                 LogService.endSession()
             } catch {
@@ -321,6 +326,20 @@ final class RecordingController: OverlayWriter {
         if let monitor = escMonitor {
             NSEvent.removeMonitor(monitor)
             escMonitor = nil
+        }
+    }
+
+    private func applyEnvelope(_ target: [Float]) {
+        let dt: Float = 0.085
+        let attackTau: Float = 0.06
+        let releaseTau: Float = 0.20
+        if spectrum.count != target.count {
+            spectrum = Array(repeating: 0, count: target.count)
+        }
+        for i in 0..<spectrum.count {
+            let tau = target[i] > spectrum[i] ? attackTau : releaseTau
+            let alpha = 1 - exp(-dt / tau)
+            spectrum[i] += (target[i] - spectrum[i]) * alpha
         }
     }
 
