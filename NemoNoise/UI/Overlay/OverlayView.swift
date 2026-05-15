@@ -4,21 +4,31 @@ struct OverlayView: View {
     @Environment(RecordingController.self) private var controller
 
     @State private var isPulsing = false
+    @Namespace private var glassNS
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            headerBar
-            if shouldShowTranscript {
-                Divider().opacity(0.3)
-                transcriptArea
+        GlassEffectContainer(spacing: 8) {
+            VStack(spacing: 8) {
+                headerBar
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .glassEffect(
+                        GlassTint.forHUD(controller.recordingState).map { Glass.regular.tint($0) } ?? Glass.regular,
+                        in: .capsule
+                    )
+                    .glassEffectID("status", in: glassNS)
+
+                if shouldShowTranscript {
+                    transcriptArea
+                        .padding(16)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                        .glassEffectID("transcript", in: glassNS)
+                        .transition(.opacity)
+                }
             }
         }
         .frame(minWidth: 360, maxWidth: 520)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThickMaterial)
-                .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
-        }
+        .animation(.smooth(duration: 0.4), value: controller.recordingState)
     }
 
     private var shouldShowTranscript: Bool {
@@ -42,7 +52,6 @@ struct OverlayView: View {
             )
             .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.7), value: controller.micLevel)
         }
-        .padding(16)
     }
 
     private var statusIndicator: some View {
@@ -128,7 +137,6 @@ struct OverlayView: View {
             }
 
         }
-        .padding(16)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: controller.confirmedSegments.count)
     }
 
