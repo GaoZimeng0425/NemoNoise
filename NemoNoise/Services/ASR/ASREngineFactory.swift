@@ -29,6 +29,11 @@ final class ASREngineFactory {
                 return try ParaformerStreamingEngine(modelDir: dir)
             }
             LogService.warn("Paraformer model not found, falling back to Apple", category: "ASREngineFactory")
+        case "qwen3":
+            if let dir = modelManager.modelPath(for: .qwen3) {
+                return try Qwen3ASREngine(modelDir: dir)
+            }
+            LogService.warn("Qwen3 model not installed, falling back to Apple", category: "ASREngineFactory")
         case "cloud":
             if let apiKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey), !apiKey.isEmpty {
                 return CloudASREngine(apiKey: apiKey)

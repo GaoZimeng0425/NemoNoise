@@ -16,7 +16,34 @@ struct ModelDescriptor {
     let detail: String
     let downloadSize: String
     let subdir: String
+    /// Files to fetch when this model is auto-downloaded. Empty for manual-install.
     let files: [(name: String, url: URL)]
+    /// If set, the model is installed manually — the UI directs the user to this
+    /// URL (typically a GitHub release page). The in-app downloader is skipped.
+    let manualDownloadURL: URL?
+    /// Relative paths (file OR directory) that must exist under the model's
+    /// subdir for it to be considered downloaded. Defaults to `files.map(\.name)`.
+    let requiredItems: [String]
+
+    init(
+        id: String,
+        displayName: String,
+        detail: String,
+        downloadSize: String,
+        subdir: String,
+        files: [(name: String, url: URL)] = [],
+        manualDownloadURL: URL? = nil,
+        requiredItems: [String]? = nil
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.detail = detail
+        self.downloadSize = downloadSize
+        self.subdir = subdir
+        self.files = files
+        self.manualDownloadURL = manualDownloadURL
+        self.requiredItems = requiredItems ?? files.map(\.name)
+    }
 }
 
 extension ModelDescriptor {
@@ -44,6 +71,32 @@ extension ModelDescriptor {
             (name: "tokens.txt",         url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-bilingual-zh-en/resolve/main/tokens.txt")!),
         ]
     )
+
+    static let punctuation = ModelDescriptor(
+        id: "punctuation",
+        displayName: "Punctuation (zh+en)",
+        detail: "CT-Transformer · adds commas and periods to final transcripts",
+        downloadSize: "~70 MB",
+        subdir: "punctuation",
+        files: [
+            (name: "model.onnx", url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12/resolve/main/model.onnx")!),
+        ]
+    )
+
+    static let qwen3 = ModelDescriptor(
+        id: "qwen3",
+        displayName: "Qwen3-ASR 0.6B (int8)",
+        detail: "Offline · multilingual · LLM-style decoding · manual install",
+        downloadSize: "~1.5 GB",
+        subdir: "qwen3",
+        manualDownloadURL: URL(string: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2")!,
+        requiredItems: [
+            "conv_frontend.onnx",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+            "tokenizer",
+        ]
+    )
 }
 
 // MARK: - Manager
@@ -58,7 +111,7 @@ final class ModelManager {
     private var downloadTasks: [String: Task<Void, Never>] = [:]
 
     /// All models tracked by this manager.
-    static let allDescriptors: [ModelDescriptor] = [.senseVoice, .paraformer]
+    static let allDescriptors: [ModelDescriptor] = [.senseVoice, .paraformer, .punctuation, .qwen3]
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -81,6 +134,7 @@ final class ModelManager {
 
     func startDownload(_ descriptor: ModelDescriptor) {
         guard case .notDownloaded = state(for: descriptor) else { return }
+        guard descriptor.manualDownloadURL == nil else { return }  // manual-install: caller opens the URL in browser
         let id = descriptor.id
         let task = Task {
             await download(descriptor)
@@ -100,17 +154,25 @@ final class ModelManager {
         setState(.notDownloaded, for: descriptor)
     }
 
-    // MARK: Private
-
-    private func refreshAll() {
+    /// Re-scan the models directory for each descriptor. Call after the user has
+    /// manually placed files (e.g. via `Show in Finder` for manual-install models).
+    func refreshAll() {
         for d in Self.allDescriptors {
             let dir = modelDir(for: d)
-            let allPresent = d.files.allSatisfy {
-                FileManager.default.fileExists(atPath: dir.appendingPathComponent($0.name).path)
+            let allPresent = !d.requiredItems.isEmpty && d.requiredItems.allSatisfy {
+                FileManager.default.fileExists(atPath: dir.appendingPathComponent($0).path)
             }
             setState(allPresent ? .downloaded : .notDownloaded, for: d)
         }
     }
+
+    /// Ensure the model's subdir exists so the user can drop files into it via Finder.
+    func ensureModelDirExists(for descriptor: ModelDescriptor) {
+        let dir = modelDir(for: descriptor)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+
+    // MARK: Private
 
     private func setState(_ state: ModelDownloadState, for descriptor: ModelDescriptor) {
         states[descriptor.id] = state

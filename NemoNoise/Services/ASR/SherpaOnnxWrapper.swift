@@ -219,3 +219,137 @@ final class SherpaOnlineRecognizer {
         SherpaOnnxDestroyOnlineRecognizer(recognizer)
     }
 }
+
+// MARK: - Offline Qwen3-ASR (LLM-style decoding)
+
+final class SherpaQwen3Recognizer: @unchecked Sendable {
+    private let recognizer: UnsafePointer<SherpaOnnxOfflineRecognizer>
+
+    /// - Parameters:
+    ///   - convFrontendPath: Path to `conv_frontend.onnx`.
+    ///   - encoderPath:      Path to `encoder.int8.onnx`.
+    ///   - decoderPath:      Path to `decoder.int8.onnx`.
+    ///   - tokenizerDir:     Path to the `tokenizer` directory.
+    init?(
+        convFrontendPath: String,
+        encoderPath: String,
+        decoderPath: String,
+        tokenizerDir: String
+    ) {
+        var ptr: UnsafePointer<SherpaOnnxOfflineRecognizer>?
+
+        convFrontendPath.withCString { cConv in
+            encoderPath.withCString { cEnc in
+                decoderPath.withCString { cDec in
+                    tokenizerDir.withCString { cTok in
+                        "".withCString { cTokens in
+                            "".withCString { cHotwords in
+                                "cpu".withCString { cProvider in
+                                    "greedy_search".withCString { cDecoding in
+
+                                        var qwen3 = SherpaOnnxOfflineQwen3ASRModelConfig()
+                                        memset(&qwen3, 0, MemoryLayout.size(ofValue: qwen3))
+                                        qwen3.conv_frontend = cConv
+                                        qwen3.encoder = cEnc
+                                        qwen3.decoder = cDec
+                                        qwen3.tokenizer = cTok
+                                        qwen3.max_total_len = 512
+                                        qwen3.max_new_tokens = 128
+                                        qwen3.temperature = 1e-6
+                                        qwen3.top_p = 0.8
+                                        qwen3.seed = 42
+                                        qwen3.hotwords = cHotwords
+
+                                        var modelConfig = SherpaOnnxOfflineModelConfig()
+                                        memset(&modelConfig, 0, MemoryLayout.size(ofValue: modelConfig))
+                                        modelConfig.tokens = cTokens
+                                        modelConfig.qwen3_asr = qwen3
+                                        modelConfig.num_threads = 2
+                                        modelConfig.provider = cProvider
+
+                                        var featConfig = SherpaOnnxFeatureConfig()
+                                        memset(&featConfig, 0, MemoryLayout.size(ofValue: featConfig))
+                                        featConfig.sample_rate = 16000
+                                        featConfig.feature_dim = 80
+
+                                        var config = SherpaOnnxOfflineRecognizerConfig()
+                                        memset(&config, 0, MemoryLayout.size(ofValue: config))
+                                        config.feat_config = featConfig
+                                        config.model_config = modelConfig
+                                        config.decoding_method = cDecoding
+
+                                        ptr = SherpaOnnxCreateOfflineRecognizer(&config)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        guard let p = ptr else { return nil }
+        recognizer = p
+    }
+
+    func decode(samples: [Float], sampleRate: Int32 = 16000) -> String {
+        guard let stream = SherpaOnnxCreateOfflineStream(recognizer) else { return "" }
+        defer { SherpaOnnxDestroyOfflineStream(stream) }
+
+        samples.withUnsafeBufferPointer { buf in
+            SherpaOnnxAcceptWaveformOffline(stream, sampleRate, buf.baseAddress, Int32(samples.count))
+        }
+        SherpaOnnxDecodeOfflineStream(recognizer, stream)
+
+        guard let r = SherpaOnnxGetOfflineStreamResult(stream) else { return "" }
+        defer { SherpaOnnxDestroyOfflineRecognizerResult(r) }
+        return r.pointee.text.map { String(cString: $0) } ?? ""
+    }
+
+    deinit {
+        SherpaOnnxDestroyOfflineRecognizer(recognizer)
+    }
+}
+
+// MARK: - Offline punctuation (CT-Transformer, zh+en bilingual)
+
+final class SherpaOfflinePunctuator: @unchecked Sendable {
+    private let ptr: OpaquePointer
+
+    /// - Parameter modelPath: Path to `model.onnx` from
+    ///   `sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12`.
+    init?(modelPath: String) {
+        var created: OpaquePointer?
+
+        modelPath.withCString { cModel in
+            "cpu".withCString { cProvider in
+                var modelConfig = SherpaOnnxOfflinePunctuationModelConfig()
+                memset(&modelConfig, 0, MemoryLayout.size(ofValue: modelConfig))
+                modelConfig.ct_transformer = cModel
+                modelConfig.num_threads = 1
+                modelConfig.provider = cProvider
+
+                var config = SherpaOnnxOfflinePunctuationConfig()
+                memset(&config, 0, MemoryLayout.size(ofValue: config))
+                config.model = modelConfig
+
+                created = SherpaOnnxCreateOfflinePunctuation(&config)
+            }
+        }
+
+        guard let created else { return nil }
+        ptr = created
+    }
+
+    func addPunctuation(to text: String) -> String {
+        guard let cText = text.withCString({ SherpaOfflinePunctuationAddPunct(ptr, $0) }) else {
+            return text
+        }
+        defer { SherpaOfflinePunctuationFreeText(cText) }
+        return String(cString: cText)
+    }
+
+    deinit {
+        SherpaOnnxDestroyOfflinePunctuation(ptr)
+    }
+}

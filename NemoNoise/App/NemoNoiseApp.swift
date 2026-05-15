@@ -4,6 +4,19 @@ import SwiftUI
 
 @main
 struct NemoNoiseApp: App {
+    @MainActor
+    private static func makePunctuator(modelManager: ModelManager) -> SherpaOfflinePunctuator? {
+        guard let dir = modelManager.modelPath(for: .punctuation) else { return nil }
+        let path = dir.appendingPathComponent("model.onnx").path
+        guard let punctuator = SherpaOfflinePunctuator(modelPath: path) else {
+            LogService.warn("Failed to load punctuation model at \(path)", category: "NemoNoiseApp")
+            return nil
+        }
+        LogService.info("Punctuation processor enabled", category: "NemoNoiseApp")
+        return punctuator
+    }
+
+
     @State private var controller = RecordingController()
     @State private var translationController = TranslationController()
     private let updaterDelegate = UpdaterFeedProvider()
@@ -26,6 +39,8 @@ struct NemoNoiseApp: App {
                     .task {
                         let mutex = RecordingMutex()
                         let factory = ASREngineFactory(modelManager: controller.modelManager)
+                        let punctuator = Self.makePunctuator(modelManager: controller.modelManager)
+                        let postProcessors: [any PostProcessor] = punctuator.map { [PunctuationProcessor(punctuator: $0)] } ?? []
 
                         // Dictation pipeline
                         if let primary = try? factory.makeUserPreferred() {
@@ -48,7 +63,7 @@ struct NemoNoiseApp: App {
                             let dictationPipeline = TranscriptionPipeline(
                                 source: MicAudioSource(),
                                 engine: primary,
-                                postProcessors: [],
+                                postProcessors: postProcessors,
                                 sink: dictationSink,
                                 fallback: fallback
                             )
@@ -60,7 +75,7 @@ struct NemoNoiseApp: App {
                             let translationPipeline = TranscriptionPipeline(
                                 source: SystemAudioSource(),
                                 engine: engine,
-                                postProcessors: [],
+                                postProcessors: postProcessors,
                                 sink: SubtitleOverlaySink(target: translationController),
                                 fallback: nil
                             )

@@ -37,6 +37,10 @@ struct SettingsView: View {
             if engineType == "paraformer" {
                 modelSection(for: .paraformer)
             }
+            if engineType == "qwen3" {
+                modelSection(for: .qwen3)
+            }
+            modelSection(for: .punctuation)
             privacySection
             aboutSection
         }
@@ -64,6 +68,7 @@ struct SettingsView: View {
         Section("Speech Engine") {
             Picker("Engine", selection: $engineType) {
                 Label("Paraformer (streaming)", systemImage: "waveform").tag("paraformer")
+                Label("Qwen3-ASR 0.6B (offline)", systemImage: "brain").tag("qwen3")
                 if !cloudAPIKey.isEmpty {
                     Label("Cloud Paraformer", systemImage: "cloud").tag("cloud")
                 }
@@ -74,6 +79,9 @@ struct SettingsView: View {
             switch engineType {
             case "paraformer":
                 Text("Streaming Chinese ASR with real-time partial results. Requires ~50 MB download.")
+                    .font(.caption).foregroundStyle(.secondary)
+            case "qwen3":
+                Text("Offline multilingual ASR. High quality but non-streaming and slower. Manual install (~1.5 GB).")
                     .font(.caption).foregroundStyle(.secondary)
             case "cloud":
                 Text("Cloud-based Paraformer for higher accuracy. Requires internet connection and API key.")
@@ -170,15 +178,36 @@ struct SettingsView: View {
 
             switch mm.state(for: descriptor) {
             case .notDownloaded:
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(descriptor.displayName).font(.subheadline)
-                        Text("\(descriptor.downloadSize) · \(descriptor.detail)")
-                            .font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(descriptor.displayName).font(.subheadline)
+                            Text("\(descriptor.downloadSize) · \(descriptor.detail)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if let manualURL = descriptor.manualDownloadURL {
+                            Button("Open Download Page") { NSWorkspace.shared.open(manualURL) }
+                                .buttonStyle(.borderedProminent)
+                        } else {
+                            Button("Download") { mm.startDownload(descriptor) }
+                                .buttonStyle(.borderedProminent)
+                        }
                     }
-                    Spacer()
-                    Button("Download") { mm.startDownload(descriptor) }
-                        .buttonStyle(.borderedProminent)
+                    if descriptor.manualDownloadURL != nil {
+                        HStack {
+                            Text("After extracting, place \(descriptor.requiredItems.joined(separator: ", ")) into the model folder, then click Recheck.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Show in Finder") {
+                                mm.ensureModelDirExists(for: descriptor)
+                                NSWorkspace.shared.open(mm.modelDir(for: descriptor))
+                            }
+                            .buttonStyle(.bordered).controlSize(.small)
+                            Button("Recheck") { mm.refreshAll() }
+                                .buttonStyle(.bordered).controlSize(.small)
+                        }
+                    }
                 }
             case .downloading(let progress):
                 VStack(alignment: .leading, spacing: 6) {
@@ -195,6 +224,10 @@ struct SettingsView: View {
                 HStack {
                     Label("Model ready", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     Spacer()
+                    Button("Show in Finder") {
+                        NSWorkspace.shared.open(mm.modelDir(for: descriptor))
+                    }
+                    .buttonStyle(.bordered).controlSize(.small)
                     Button("Delete", role: .destructive) { mm.deleteModel(descriptor) }
                         .buttonStyle(.bordered).controlSize(.small)
                 }
