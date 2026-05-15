@@ -66,9 +66,9 @@ final class TranscriptionPipeline {
                             }
                             await sink.deliver(result, isFinal: false)
                             if result.text.isEmpty {
-                                continuation.yield(.rms(chunk.rmsLevel))
+                                continuation.yield(.level(rms: chunk.rmsLevel, spectrum: chunk.spectrum))
                             } else {
-                                continuation.yield(.partial(result, rmsLevel: chunk.rmsLevel))
+                                continuation.yield(.partial(result, rms: chunk.rmsLevel, spectrum: chunk.spectrum))
                             }
                         } catch where !usingFallback && fallbackEngine != nil {
                             // The failing chunk is dropped; subsequent chunks go through the fallback.

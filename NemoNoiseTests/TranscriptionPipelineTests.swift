@@ -45,7 +45,7 @@ final class TranscriptionPipelineTests: XCTestCase {
 
         // Assert we saw a partial event and then the final.
         XCTAssertTrue(collected.contains { event in
-            if case .partial(let r, _) = event { return r.text == "partial-text" }
+            if case .partial(let r, _, _) = event { return r.text == "partial-text" }
             return false
         })
         XCTAssertTrue(collected.contains { event in
@@ -87,7 +87,7 @@ extension TranscriptionPipelineTests {
             for try await event in events {
                 switch event {
                 case .engineFallback: sawFallback = true
-                case .partial(let r, _) where r.text == "from-fallback": sawFallbackPartial = true
+                case .partial(let r, _, _) where r.text == "from-fallback": sawFallbackPartial = true
                 default: break
                 }
                 if sawFallbackPartial { break }
