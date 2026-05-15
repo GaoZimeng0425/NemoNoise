@@ -21,10 +21,14 @@ struct SettingsView: View {
         .frame(width: 460, height: 420)
         .onAppear {
             cloudAPIKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey) ?? ""
-            DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.keyWindow?.level = .floating
-            }
+            // LSUIElement apps default to .accessory policy which suppresses
+            // activation. Briefly switch to .regular so the Settings window
+            // can come to the front; .onDisappear flips it back.
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        .onDisappear {
+            NSApp.setActivationPolicy(.accessory)
         }
     }
 
