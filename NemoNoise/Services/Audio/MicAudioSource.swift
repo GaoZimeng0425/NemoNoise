@@ -4,6 +4,7 @@ import os
 struct AudioChunk: Sendable {
     let samples: [Float]
     let rmsLevel: Float
+    let spectrum: [Float]
 }
 
 final class MicAudioSource: AudioSource, Sendable {
@@ -11,6 +12,7 @@ final class MicAudioSource: AudioSource, Sendable {
     private let continuation: ContinuationBox = ContinuationBox()
     private let targetSampleRate: Double = 16000
     private let bufferSize: AVAudioFrameCount = 4096
+    private let analyzer = SpectrumAnalyzer(binCount: 16, sampleRate: 16000)
 
     func start() async throws -> AsyncStream<AudioChunk> {
         try await requestMicrophoneAccess()
@@ -56,7 +58,8 @@ final class MicAudioSource: AudioSource, Sendable {
     nonisolated private func processTap(buffer: AVAudioPCMBuffer, resampler: AudioResampler) {
         guard let samples = resampler.resample(buffer: buffer) else { return }
         let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count))
-        continuation.value?.yield(AudioChunk(samples: samples, rmsLevel: rms))
+        let spectrum = analyzer.analyze(samples)
+        continuation.value?.yield(AudioChunk(samples: samples, rmsLevel: rms, spectrum: spectrum))
     }
 
     private func requestMicrophoneAccess() async throws {

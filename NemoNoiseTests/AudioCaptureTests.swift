@@ -16,13 +16,13 @@ final class AudioCaptureTests: XCTestCase {
     }
 
     func testAudioChunkCreation() {
-        let chunk = AudioChunk(samples: [0.1, 0.2, 0.3], rmsLevel: 0.5)
+        let chunk = AudioChunk(samples: [0.1, 0.2, 0.3], rmsLevel: 0.5, spectrum: [])
         XCTAssertEqual(chunk.samples, [0.1, 0.2, 0.3])
         XCTAssertEqual(chunk.rmsLevel, 0.5)
     }
 
     func testAudioChunkWithEmptySamples() {
-        let chunk = AudioChunk(samples: [], rmsLevel: 0.0)
+        let chunk = AudioChunk(samples: [], rmsLevel: 0.0, spectrum: [])
         XCTAssertTrue(chunk.samples.isEmpty)
         XCTAssertEqual(chunk.rmsLevel, 0.0)
     }

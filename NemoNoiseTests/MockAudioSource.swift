@@ -24,7 +24,7 @@ final class MockAudioSource: AudioSource, @unchecked Sendable {
 
     /// Push a chunk to whoever's iterating.
     func emit(samples: [Float], rmsLevel: Float = 0.1) {
-        continuation?.yield(AudioChunk(samples: samples, rmsLevel: rmsLevel))
+        continuation?.yield(AudioChunk(samples: samples, rmsLevel: rmsLevel, spectrum: []))
     }
 
     /// End the stream without an error.

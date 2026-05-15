@@ -10,6 +10,7 @@ final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked
     private lazy var resampler: AudioResampler? = AudioResampler(sourceRate: sourceSampleRate, targetRate: targetSampleRate)
     private var chunkCount: Int = 0
     private var lastLogTime: Date = .distantPast
+    private let analyzer = SpectrumAnalyzer(binCount: 16, sampleRate: 16000)
 
     func start() async throws -> AsyncStream<AudioChunk> {
         guard CGPreflightScreenCaptureAccess() else {
@@ -70,7 +71,8 @@ final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked
         }
 
         let rms = sqrt(resampled.reduce(0) { $0 + $1 * $1 } / Float(max(resampled.count, 1)))
-        continuationBox.value?.yield(AudioChunk(samples: resampled, rmsLevel: rms))
+        let spectrum = analyzer.analyze(resampled)
+        continuationBox.value?.yield(AudioChunk(samples: resampled, rmsLevel: rms, spectrum: spectrum))
 
         chunkCount += 1
         let now = Date()
