@@ -129,7 +129,11 @@ final class TranscriptionPipeline {
                 throw cloud
             }
         } catch {
-            runningInfo?.0.finish(throwing: PipelineError.finalizeFailed(underlying: error))
+            // Close the event stream normally so the pipelineTask's for-await
+            // exits cleanly. The caller of finalize() is the single place that
+            // surfaces this failure to the user — finishing the stream with a
+            // throw here would fire handlePipelineError twice.
+            runningInfo?.0.finish()
             state = .idle
             throw PipelineError.finalizeFailed(underlying: error)
         }

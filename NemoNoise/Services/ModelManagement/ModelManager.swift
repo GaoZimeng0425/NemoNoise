@@ -16,11 +16,14 @@ struct ModelDescriptor {
     let detail: String
     let downloadSize: String
     let subdir: String
-    /// Files to fetch when this model is auto-downloaded. Empty for manual-install.
+    /// Files to fetch individually. Empty when this descriptor uses `archiveURL`.
     let files: [(name: String, url: URL)]
-    /// If set, the model is installed manually — the UI directs the user to this
-    /// URL (typically a GitHub release page). The in-app downloader is skipped.
-    let manualDownloadURL: URL?
+    /// If set, download this archive (tar.bz2 / tar.gz) and extract into `subdir`.
+    let archiveURL: URL?
+    /// If true, pass `--strip-components=1` to tar (archive has a single top-level dir to drop).
+    let archiveStripsTopLevel: Bool
+    /// tar `--exclude` patterns to skip (e.g. "test_wavs", "README.md").
+    let archiveExcludes: [String]
     /// Relative paths (file OR directory) that must exist under the model's
     /// subdir for it to be considered downloaded. Defaults to `files.map(\.name)`.
     let requiredItems: [String]
@@ -32,7 +35,9 @@ struct ModelDescriptor {
         downloadSize: String,
         subdir: String,
         files: [(name: String, url: URL)] = [],
-        manualDownloadURL: URL? = nil,
+        archiveURL: URL? = nil,
+        archiveStripsTopLevel: Bool = false,
+        archiveExcludes: [String] = [],
         requiredItems: [String]? = nil
     ) {
         self.id = id
@@ -41,7 +46,9 @@ struct ModelDescriptor {
         self.downloadSize = downloadSize
         self.subdir = subdir
         self.files = files
-        self.manualDownloadURL = manualDownloadURL
+        self.archiveURL = archiveURL
+        self.archiveStripsTopLevel = archiveStripsTopLevel
+        self.archiveExcludes = archiveExcludes
         self.requiredItems = requiredItems ?? files.map(\.name)
     }
 }
@@ -86,10 +93,12 @@ extension ModelDescriptor {
     static let qwen3 = ModelDescriptor(
         id: "qwen3",
         displayName: "Qwen3-ASR 0.6B (int8)",
-        detail: "Offline · multilingual · LLM-style decoding · manual install",
-        downloadSize: "~1.5 GB",
+        detail: "Offline · multilingual · LLM-style decoding",
+        downloadSize: "~940 MB (extracts to ~1.5 GB)",
         subdir: "qwen3",
-        manualDownloadURL: URL(string: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2")!,
+        archiveURL: URL(string: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2")!,
+        archiveStripsTopLevel: true,
+        archiveExcludes: ["test_wavs", "README.md"],
         requiredItems: [
             "conv_frontend.onnx",
             "encoder.int8.onnx",
@@ -134,7 +143,10 @@ final class ModelManager {
 
     func startDownload(_ descriptor: ModelDescriptor) {
         guard case .notDownloaded = state(for: descriptor) else { return }
-        guard descriptor.manualDownloadURL == nil else { return }  // manual-install: caller opens the URL in browser
+        // Flip state synchronously so a rapid second tap on the same button
+        // sees `.downloading` and is rejected by the guard. Without this, two
+        // detached Tasks would race on the same model directory.
+        setState(.downloading(progress: 0), for: descriptor)
         let id = descriptor.id
         let task = Task {
             await download(descriptor)
@@ -187,15 +199,10 @@ final class ModelManager {
             }
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
-            let totalFiles = Double(descriptor.files.count)
-            for (index, file) in descriptor.files.enumerated() {
-                let dest = dir.appendingPathComponent(file.name)
-                let baseProgress = Double(index) / totalFiles
-                let fileShare = 1.0 / totalFiles
-
-                try await downloadFile(from: file.url, to: dest) { [weak self] p in
-                    self?.setState(.downloading(progress: baseProgress + p * fileShare), for: descriptor)
-                }
+            if let archiveURL = descriptor.archiveURL {
+                try await downloadAndExtract(descriptor: descriptor, archiveURL: archiveURL, dir: dir)
+            } else {
+                try await downloadIndividualFiles(descriptor: descriptor, dir: dir)
             }
 
             setState(.downloaded, for: descriptor)
@@ -205,8 +212,74 @@ final class ModelManager {
             try? FileManager.default.removeItem(at: dir)
         } catch {
             setState(.error(error.localizedDescription), for: descriptor)
+            try? FileManager.default.removeItem(at: dir)
             LogService.error("Download failed: \(error)", category: "ModelManager")
         }
+    }
+
+    private func downloadIndividualFiles(descriptor: ModelDescriptor, dir: URL) async throws {
+        let totalFiles = Double(descriptor.files.count)
+        for (index, file) in descriptor.files.enumerated() {
+            let dest = dir.appendingPathComponent(file.name)
+            let baseProgress = Double(index) / totalFiles
+            let fileShare = 1.0 / totalFiles
+
+            try await downloadFile(from: file.url, to: dest) { [weak self] p in
+                self?.setState(.downloading(progress: baseProgress + p * fileShare), for: descriptor)
+            }
+        }
+    }
+
+    private func downloadAndExtract(descriptor: ModelDescriptor, archiveURL: URL, dir: URL) async throws {
+        let tempArchive = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(descriptor.id)-\(UUID().uuidString).tar.bz2")
+        defer { try? FileManager.default.removeItem(at: tempArchive) }
+
+        // Reserve 0..0.92 for download, 0.92..1.0 for extraction.
+        try await downloadFile(from: archiveURL, to: tempArchive) { [weak self] p in
+            self?.setState(.downloading(progress: p * 0.92), for: descriptor)
+        }
+        await MainActor.run { self.setState(.downloading(progress: 0.93), for: descriptor) }
+
+        try await Self.extractTarArchive(
+            at: tempArchive,
+            to: dir,
+            stripTopLevel: descriptor.archiveStripsTopLevel,
+            excludes: descriptor.archiveExcludes
+        )
+        await MainActor.run { self.setState(.downloading(progress: 1.0), for: descriptor) }
+    }
+
+    private static func extractTarArchive(
+        at archive: URL,
+        to destDir: URL,
+        stripTopLevel: Bool,
+        excludes: [String]
+    ) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+            var args = ["-xjf", archive.path, "-C", destDir.path]
+            if stripTopLevel { args.append("--strip-components=1") }
+            for pattern in excludes { args.append("--exclude=\(pattern)") }
+            process.arguments = args
+
+            let errPipe = Pipe()
+            process.standardError = errPipe
+
+            try process.run()
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0 else {
+                let data = errPipe.fileHandleForReading.readDataToEndOfFile()
+                let msg = String(data: data, encoding: .utf8) ?? "tar exit \(process.terminationStatus)"
+                throw NSError(
+                    domain: "ModelManager.tar",
+                    code: Int(process.terminationStatus),
+                    userInfo: [NSLocalizedDescriptionKey: "Extraction failed: \(msg)"]
+                )
+            }
+        }.value
     }
 
     private func downloadFile(

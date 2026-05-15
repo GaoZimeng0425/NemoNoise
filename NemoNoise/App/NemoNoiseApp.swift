@@ -44,7 +44,7 @@ struct NemoNoiseApp: App {
 
                         // Dictation pipeline
                         if let primary = try? factory.makeUserPreferred() {
-                            let fallback = try? factory.makeFallback()
+                            let fallback = factory.makeFallback()
                             let dictationSink = BroadcastSink([
                                 OverlayProgressSink(target: controller),
                                 TextInjectorSink(

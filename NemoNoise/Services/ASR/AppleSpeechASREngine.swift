@@ -59,8 +59,24 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in
                 guard let self else { return }
                 if let error {
-                    let mapped: Error
                     let ns = error as NSError
+                    // "No speech detected" is normal when the user holds the
+                    // hotkey but doesn't talk. Don't surface it as an error —
+                    // resolve as an empty final result so the UI just closes.
+                    let isNoSpeech = ns.code == 1110
+                        || ns.localizedDescription.localizedCaseInsensitiveContains("no speech")
+                    if isNoSpeech {
+                        let empty = TranscriptionResult(text: "", isFinal: true, emotion: nil)
+                        let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
+                            state.finalResult = empty
+                            let cont = state.finishContinuation
+                            state.finishContinuation = nil
+                            return cont
+                        }
+                        cont?.resume(returning: empty)
+                        return
+                    }
+                    let mapped: Error
                     if ns.localizedDescription.contains("Siri and Dictation are disabled") {
                         mapped = AppleSpeechError.siriDisabled
                     } else {

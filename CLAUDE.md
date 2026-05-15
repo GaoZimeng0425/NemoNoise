@@ -92,3 +92,19 @@ See `docs/architecture.md` for the pipeline-first composition model. Briefly:
 - Both dictation and translation are configurations of the same pipeline
 - Engine fallback lives in the pipeline; controllers are UI state adapters
 - `RecordingMutex` enforces single-mode exclusion
+
+## UX: Toast over Alert
+
+Prefer `ToastWindowController.show(_:style:duration:)` over `NSAlert.runModal()`.
+Alerts block the user, steal focus, and are jarring for routine feedback
+(errors, status, completed operations). Toasts are non-modal and dismiss
+themselves.
+
+**Allowed alerts** — only when the user *must* choose between explicit
+actions to proceed (e.g. permission denied → "Open System Settings" /
+"Cancel"). The existing `ScreenRecordingAlert`, `AccessibilityAlert`,
+`MicPermissionAlert` enums are the canonical examples.
+
+**Never use alerts for**: recognition errors, engine failures, network
+problems, "no result" states, transient warnings. Those all go through
+`ToastWindowController`.

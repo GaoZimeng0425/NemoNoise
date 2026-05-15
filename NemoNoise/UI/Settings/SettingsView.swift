@@ -64,33 +64,50 @@ struct SettingsView: View {
 
     // MARK: Engine picker
 
+    private var engineOptions: [EngineOption] {
+        let mm = controller.modelManager
+        return [
+            EngineOption(
+                id: "apple",
+                icon: "apple.logo",
+                title: "Apple Speech",
+                summary: "Uses Apple's on-device/cloud recognition. No download required.",
+                status: .ready
+            ),
+            EngineOption(
+                id: "paraformer",
+                icon: "waveform",
+                title: "Paraformer (streaming)",
+                summary: "Streaming Chinese + English ASR with real-time partial results.",
+                status: mm.state(for: .paraformer) == .downloaded ? .ready : .needsDownload("~240 MB")
+            ),
+            EngineOption(
+                id: "qwen3",
+                icon: "brain",
+                title: "Qwen3-ASR 0.6B",
+                summary: "Offline multilingual ASR. High quality but non-streaming.",
+                status: mm.state(for: .qwen3) == .downloaded ? .ready : .needsDownload("~940 MB")
+            ),
+            EngineOption(
+                id: "cloud",
+                icon: "cloud",
+                title: "Cloud Paraformer",
+                summary: "Cloud ASR for higher accuracy. Requires internet connection.",
+                status: cloudAPIKey.isEmpty ? .needsAPIKey : .ready
+            ),
+        ]
+    }
+
     private var engineSection: some View {
         Section("Speech Engine") {
-            Picker("Engine", selection: $engineType) {
-                Label("Paraformer (streaming)", systemImage: "waveform").tag("paraformer")
-                Label("Qwen3-ASR 0.6B (offline)", systemImage: "brain").tag("qwen3")
-                if !cloudAPIKey.isEmpty {
-                    Label("Cloud Paraformer", systemImage: "cloud").tag("cloud")
+            VStack(spacing: 8) {
+                ForEach(engineOptions, id: \.id) { option in
+                    EngineCard(option: option, isSelected: engineType == option.id) {
+                        engineType = option.id
+                    }
                 }
-                Label("Apple Speech", systemImage: "apple.logo").tag("apple")
             }
-            .pickerStyle(.radioGroup)
-
-            switch engineType {
-            case "paraformer":
-                Text("Streaming Chinese ASR with real-time partial results. Requires ~50 MB download.")
-                    .font(.caption).foregroundStyle(.secondary)
-            case "qwen3":
-                Text("Offline multilingual ASR. High quality but non-streaming and slower. Manual install (~1.5 GB).")
-                    .font(.caption).foregroundStyle(.secondary)
-            case "cloud":
-                Text("Cloud-based Paraformer for higher accuracy. Requires internet connection and API key.")
-                    .font(.caption).foregroundStyle(.secondary)
-            case "apple":
-                Text("Uses Apple's on-device/cloud recognition. No download required.")
-                    .font(.caption).foregroundStyle(.secondary)
-            default: EmptyView()
-            }
+            .padding(.vertical, 4)
         }
     }
 
@@ -178,36 +195,15 @@ struct SettingsView: View {
 
             switch mm.state(for: descriptor) {
             case .notDownloaded:
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(descriptor.displayName).font(.subheadline)
-                            Text("\(descriptor.downloadSize) · \(descriptor.detail)")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if let manualURL = descriptor.manualDownloadURL {
-                            Button("Open Download Page") { NSWorkspace.shared.open(manualURL) }
-                                .buttonStyle(.borderedProminent)
-                        } else {
-                            Button("Download") { mm.startDownload(descriptor) }
-                                .buttonStyle(.borderedProminent)
-                        }
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(descriptor.displayName).font(.subheadline)
+                        Text("\(descriptor.downloadSize) · \(descriptor.detail)")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
-                    if descriptor.manualDownloadURL != nil {
-                        HStack {
-                            Text("After extracting, place \(descriptor.requiredItems.joined(separator: ", ")) into the model folder, then click Recheck.")
-                                .font(.caption).foregroundStyle(.secondary)
-                            Spacer()
-                            Button("Show in Finder") {
-                                mm.ensureModelDirExists(for: descriptor)
-                                NSWorkspace.shared.open(mm.modelDir(for: descriptor))
-                            }
-                            .buttonStyle(.bordered).controlSize(.small)
-                            Button("Recheck") { mm.refreshAll() }
-                                .buttonStyle(.bordered).controlSize(.small)
-                        }
-                    }
+                    Spacer()
+                    Button("Download") { mm.startDownload(descriptor) }
+                        .buttonStyle(.borderedProminent)
                 }
             case .downloading(let progress):
                 VStack(alignment: .leading, spacing: 6) {
@@ -264,11 +260,87 @@ struct SettingsView: View {
         case "paraformer":
             return controller.modelManager.state(for: .paraformer) == .downloaded
                 ? "Paraformer (streaming)" : "Apple Speech (model not downloaded)"
+        case "qwen3":
+            return controller.modelManager.state(for: .qwen3) == .downloaded
+                ? "Qwen3-ASR 0.6B" : "Apple Speech (model not installed)"
         case "cloud":
             return cloudAPIKey.isEmpty
                 ? "Apple Speech (API key not set)" : "Cloud Paraformer"
         default:
             return "Apple Speech"
         }
+    }
+}
+
+// MARK: - Engine card
+
+private struct EngineOption: Identifiable {
+    let id: String
+    let icon: String
+    let title: String
+    let summary: String
+    let status: Status
+
+    enum Status {
+        case ready
+        case needsDownload(String)  // size hint, e.g. "~240 MB"
+        case needsAPIKey
+
+        var badge: (text: String, color: Color)? {
+            switch self {
+            case .ready: return nil
+            case .needsDownload(let size): return ("Download required · \(size)", .orange)
+            case .needsAPIKey: return ("API key required", .orange)
+            }
+        }
+    }
+}
+
+private struct EngineCard: View {
+    let option: EngineOption
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : option.icon)
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .frame(width: 24, height: 24)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(option.title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                    Text(option.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let badge = option.status.badge {
+                        Label(badge.text, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(badge.color)
+                            .padding(.top, 2)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        isSelected ? Color.accentColor : Color.secondary.opacity(0.25),
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

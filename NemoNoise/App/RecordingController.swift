@@ -230,13 +230,13 @@ final class RecordingController: OverlayWriter {
                 } else if let cloud = underlying as? CloudASRError, case .authenticationFailed = cloud {
                     ToastWindowController.show("API key invalid. Please update in Settings.", style: .error, duration: 5)
                 } else {
-                    presentAlert(title: "Engine Error", message: pipelineErr.localizedDescription)
+                    ToastWindowController.show("Engine error: \(underlying.localizedDescription)", style: .error, duration: 4)
                 }
             case .finalizeFailed(let underlying):
-                presentAlert(title: "Recognition Error", message: underlying.localizedDescription)
+                ToastWindowController.show("Recognition failed: \(underlying.localizedDescription)", style: .warning, duration: 4)
             }
         } else {
-            presentAlert(title: "Error", message: error.localizedDescription)
+            ToastWindowController.show("Recording error: \(error.localizedDescription)", style: .error, duration: 4)
         }
 
         recordingState = .ready
@@ -324,14 +324,4 @@ final class RecordingController: OverlayWriter {
         }
     }
 
-    private func presentAlert(title: String, message: String) {
-        let alert = NSAlert()
-        alert.messageText = title
-        alert.informativeText = message
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "OK")
-        alert.window.level = .floating
-        alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        alert.runModal()
-    }
 }
