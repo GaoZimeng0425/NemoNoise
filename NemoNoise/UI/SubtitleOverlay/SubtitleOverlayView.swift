@@ -75,12 +75,8 @@ struct SubtitleOverlayView: View {
             SpectrumBarsView(
                 spectrum: controller.spectrum,
                 isActive: controller.translationState == .capturing,
-                barCount: 5,
-                barColor: .green,
-                barSpacing: 2.5,
-                barWidth: 3,
-                maxHeight: 20,
-                minHeight: 3
+                barCount: 16,
+                barColor: .green
             )
         }
     }

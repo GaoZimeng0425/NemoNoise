@@ -71,6 +71,11 @@ final class SpectrumAnalyzer: @unchecked Sendable {
         var count = Int32(halfSize)
         vvsqrtf(&sqrtMags, magnitudes, &count)
 
+        // vDSP_fft_zrip output scales by ~N/2 vs input amplitude. Without this
+        // normalization, even quiet mic noise reads as full-scale.
+        var scale: Float = 2.0 / Float(fftSize)
+        vDSP_vsmul(sqrtMags, 1, &scale, &sqrtMags, 1, vDSP_Length(halfSize))
+
         var output = [Float](repeating: 0, count: binCount)
         for i in 0..<binCount {
             let lo = bandEdges[i]
