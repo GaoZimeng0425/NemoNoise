@@ -6,16 +6,17 @@ struct OverlayView: View {
     @State private var isPulsing = false
     @Namespace private var glassNS
 
+    private var statusGlass: Glass {
+        GlassTint.forHUD(controller.recordingState).map { Glass.regular.tint($0) } ?? Glass.regular
+    }
+
     var body: some View {
         GlassEffectContainer(spacing: 8) {
-            VStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
                 headerBar
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .glassEffect(
-                        GlassTint.forHUD(controller.recordingState).map { Glass.regular.tint($0) } ?? Glass.regular,
-                        in: .capsule
-                    )
+                    .glassEffect(statusGlass, in: .capsule)
                     .glassEffectID("status", in: glassNS)
 
                 if shouldShowTranscript {
