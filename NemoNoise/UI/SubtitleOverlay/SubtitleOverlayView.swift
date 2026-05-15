@@ -20,7 +20,7 @@ struct SubtitleOverlayView: View {
                     .glassEffect(subtitleStatusGlass, in: .capsule)
                     .glassEffectID("subtitle-status", in: glassNS)
 
-                if hasTranscript {
+                if showTextCapsule {
                     textGroup
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -30,7 +30,7 @@ struct SubtitleOverlayView: View {
                 }
             }
         }
-        .frame(minWidth: 220, maxWidth: 900)
+        .frame(minWidth: 400, maxWidth: 900)
         .animation(.smooth(duration: 0.4), value: controller.translationState)
         .translationTask(.init(source: .init(identifier: "en"), target: .init(identifier: "zh-Hans"))) { session in
             translationSession = session
@@ -60,8 +60,10 @@ struct SubtitleOverlayView: View {
         .onDisappear { translationTask?.cancel() }
     }
 
-    private var hasTranscript: Bool {
-        !controller.englishText.isEmpty || !controller.partialText.isEmpty
+    private var showTextCapsule: Bool {
+        controller.translationState == .capturing
+            || !controller.englishText.isEmpty
+            || !controller.partialText.isEmpty
     }
 
     private var statusGroup: some View {
@@ -104,7 +106,10 @@ struct SubtitleOverlayView: View {
         if !controller.partialText.isEmpty {
             return controller.partialText
         }
-        return controller.englishText
+        if !controller.englishText.isEmpty {
+            return controller.englishText
+        }
+        return "Listening…"
     }
 
     private func waveformBarHeight(index: Int) -> CGFloat {
