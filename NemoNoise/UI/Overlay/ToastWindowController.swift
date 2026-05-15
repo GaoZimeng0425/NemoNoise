@@ -55,7 +55,7 @@ final class ToastWindowController {
         guard let screen = NSScreen.main else { return }
         let screenRect = screen.visibleFrame
         let x = screenRect.midX - fittingSize.width / 2
-        let targetY = screenRect.minY + 24
+        let targetY = screenRect.minY + 48
         let startFrame = NSRect(x: x, y: targetY - 40, width: fittingSize.width, height: fittingSize.height)
         let endFrame = NSRect(x: x, y: targetY, width: fittingSize.width, height: fittingSize.height)
 
