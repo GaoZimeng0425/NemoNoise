@@ -25,11 +25,6 @@ final class HotkeyMonitor {
 
     func start() {
         guard eventTask == nil else { return }
-        guard AXIsProcessTrusted() else {
-            LogService.warn("Accessibility permission not granted — polling", category: "HotkeyMonitor")
-            pollForAccessibility()
-            return
-        }
 
         isActive = true
         shortcutObserver = NotificationCenter.default.addObserver(
@@ -48,25 +43,9 @@ final class HotkeyMonitor {
         eventTask?.cancel()
         eventTask = nil
         isActive = false
-        accessibilityPollTimer?.invalidate()
-        accessibilityPollTimer = nil
         if let observer = shortcutObserver {
             NotificationCenter.default.removeObserver(observer)
             shortcutObserver = nil
-        }
-    }
-
-    private var accessibilityPollTimer: Timer?
-
-    private func pollForAccessibility() {
-        accessibilityPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            Task { @MainActor [weak self] in
-                guard let self else { timer.invalidate(); return }
-                guard AXIsProcessTrusted() else { return }
-                timer.invalidate()
-                self.accessibilityPollTimer = nil
-                self.start()
-            }
         }
     }
 

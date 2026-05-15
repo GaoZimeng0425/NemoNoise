@@ -113,15 +113,24 @@ final class RecordingController: OverlayWriter {
     // MARK: - Recording lifecycle
 
     private func startRecording() {
-        guard recordingState == .ready, let pipeline, let mutex else { return }
+        guard recordingState == .ready else { return }
+
+        guard AXIsProcessTrusted() else {
+            AccessibilityAlert.present()
+            return
+        }
 
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         switch micStatus {
         case .authorized: break
         case .notDetermined:
-            Task {
+            Task { @MainActor in
                 let granted = await AVCaptureDevice.requestAccess(for: .audio)
-                if granted { self.startRecording() }
+                if granted {
+                    self.startRecording()
+                } else {
+                    MicPermissionAlert.present()
+                }
             }
             return
         case .denied, .restricted:
@@ -131,6 +140,7 @@ final class RecordingController: OverlayWriter {
             return
         }
 
+        guard let pipeline, let mutex else { return }
         guard mutex.tryAcquire(.dictation) else { return }
 
         // Lock the AX target at hotkey DOWN to avoid cursor-move races.

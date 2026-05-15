@@ -95,10 +95,11 @@ final class TranslationController: SubtitleWriter {
     private var hotkeyTask: Task<Void, Never>?
 
     func startHotkeyMonitoring() {
+        hotkeyTask?.cancel()
         hotkeyTask = Task { [weak self] in
             for await event in KeyboardShortcuts.events(for: Self.translationShortcut) {
-                guard let self, event == .keyDown else { return }
-                self.toggle()
+                guard event == .keyDown else { continue }
+                self?.toggle()
             }
         }
     }
