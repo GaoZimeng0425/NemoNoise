@@ -55,7 +55,16 @@ final class ToastWindowController {
         guard let screen = NSScreen.main else { return }
         let screenRect = screen.visibleFrame
         let x = screenRect.midX - fittingSize.width / 2
-        let targetY = screenRect.minY + 48
+
+        // Stack above any visible floating panel (HUD/subtitle) so the Toast
+        // never overlaps the recording UI.
+        let baseY = screenRect.minY + 48
+        let otherFloatingTop = NSApp.windows
+            .filter { $0 !== p && $0.isVisible && $0.level == .floating }
+            .map(\.frame.maxY)
+            .max()
+        let targetY = max(baseY, (otherFloatingTop ?? baseY) + 12)
+
         let startFrame = NSRect(x: x, y: targetY - 40, width: fittingSize.width, height: fittingSize.height)
         let endFrame = NSRect(x: x, y: targetY, width: fittingSize.width, height: fittingSize.height)
 
