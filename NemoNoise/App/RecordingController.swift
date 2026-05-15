@@ -46,11 +46,6 @@ final class RecordingController: OverlayWriter {
     /// dictation pipeline's `TextInjectorSink`.
     var injector: any TextInjecting { textInjector }
 
-    /// Capture the AX target at hotkey DOWN before the pipeline starts.
-    func captureInjectionTarget() {
-        textInjector.captureTarget()
-    }
-
     // MARK: - Internal state
 
     private var silenceTimer: Timer?

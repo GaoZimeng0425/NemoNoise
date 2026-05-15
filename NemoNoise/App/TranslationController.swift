@@ -66,6 +66,8 @@ final class TranslationController: SubtitleWriter {
                 }
             } catch {
                 LogService.error("Translation pipeline error: \(error.localizedDescription)", category: "Translation")
+                self.pipeline?.stop()
+                self.mutex?.release(.translation)
                 self.translationState = .error(error.localizedDescription)
                 self.hideSubtitle()
                 ToastWindowController.show("Audio capture stopped: \(error.localizedDescription)", style: .error)
@@ -77,13 +79,15 @@ final class TranslationController: SubtitleWriter {
         LogService.info("Translation mode stopping", category: "Translation")
         pipelineTask?.cancel()
         pipelineTask = nil
-        Task { [pipeline] in
-            _ = try? await pipeline?.finalize()
-        }
-        mutex?.release(.translation)
         hideSubtitle()
         translationState = .idle
         LogService.endSession()
+        // Finalize then release mutex in the same task so dictation cannot start
+        // until the audio source has fully drained.
+        Task { [pipeline, mutex] in
+            _ = try? await pipeline?.finalize()
+            await MainActor.run { mutex?.release(.translation) }
+        }
     }
 
     // MARK: - Hotkey

@@ -34,7 +34,7 @@ final class TranscriptionPipeline {
         self.engineBox = EngineBox(engine: engine)
     }
 
-    var isStreaming: Bool { primaryEngine.isStreaming }
+    var isStreaming: Bool { engineBox.engine.isStreaming }
 
     /// Begin a new session.
     func start() -> AsyncThrowingStream<PipelineEvent, Error> {
@@ -71,6 +71,7 @@ final class TranscriptionPipeline {
                                 continuation.yield(.partial(result, rmsLevel: chunk.rmsLevel))
                             }
                         } catch where !usingFallback && fallbackEngine != nil {
+                            // The failing chunk is dropped; subsequent chunks go through the fallback.
                             usingFallback = true
                             engineBox.engine = fallbackEngine!
                             engineBox.engine.reset()
