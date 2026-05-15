@@ -1,7 +1,7 @@
 import Accelerate
 import Foundation
 
-final class SpectrumAnalyzer {
+final class SpectrumAnalyzer: @unchecked Sendable {
     private let binCount: Int
     private let sampleRate: Float
     private let fftSize: Int = 1024
