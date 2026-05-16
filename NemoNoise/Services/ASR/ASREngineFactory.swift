@@ -25,27 +25,35 @@ final class ASREngineFactory {
                 return try SherpaASREngine(modelDir: dir)
             }
             LogService.warn("SenseVoice model not found, falling back to Apple", category: "ASREngineFactory")
+            notifyFallback("SenseVoice model not installed — using Apple Speech. Open Settings to download.")
         case "paraformer":
             if let dir = modelManager.modelPath(for: .paraformer) {
                 return try ParaformerStreamingEngine(modelDir: dir)
             }
             LogService.warn("Paraformer model not found, falling back to Apple", category: "ASREngineFactory")
+            notifyFallback("Paraformer model not installed — using Apple Speech. Open Settings to download.")
         case "qwen3":
             if let dir = modelManager.modelPath(for: .qwen3) {
                 return try Qwen3ASREngine(modelDir: dir)
             }
             LogService.warn("Qwen3 model not installed, falling back to Apple", category: "ASREngineFactory")
+            notifyFallback("Qwen3 model not installed — using Apple Speech. Open Settings to download.")
         case "cloud":
             if let apiKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey), !apiKey.isEmpty {
                 return CloudASREngine(apiKey: apiKey)
             }
             LogService.warn("Cloud API key not set, falling back to Apple", category: "ASREngineFactory")
+            notifyFallback("Cloud API key not set — using Apple Speech. Set the key in Settings.")
         case "apple":
             break
         default:
             LogService.warn("Unknown engine choice '\(choice)', falling back to Apple", category: "ASREngineFactory")
         }
         return try AppleSpeechASREngine()
+    }
+
+    private func notifyFallback(_ message: String) {
+        ToastWindowController.show(message, style: .warning, duration: 5)
     }
 
     /// Build the engine used by translation: Paraformer for bilingual, falling

@@ -36,6 +36,7 @@ final class RecordingController: OverlayWriter {
     // MARK: - Dependencies
 
     let modelManager = ModelManager()
+    let historyStore = TranscriptHistoryStore()
     let hotkeyMonitor = HotkeyMonitor()
     private let textInjector = TextInjector()
 
@@ -78,9 +79,39 @@ final class RecordingController: OverlayWriter {
         self.isStreaming = pipeline.isStreaming
     }
 
+    /// OverlayWriter conformance — called by OverlayProgressSink when the
+    /// engine starts a new utterance (segment reset), so the previous partial
+    /// becomes a confirmed segment instead of being overwritten.
+    func appendConfirmedSegment(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        confirmedSegments.append(TranscriptionSegment(text: trimmed, emotion: nil))
+        LogService.info("Segment promoted (count=\(confirmedSegments.count)): \"\(trimmed.prefix(40))\"", category: "Recording")
+    }
+
+    /// Closure that rebuilds the dictation pipeline using whatever the user has
+    /// currently picked in Settings. Set by `NemoNoiseApp` once wiring is done.
+    var pipelineRebuildHandler: (@MainActor () -> Void)?
+
+    /// Triggered from Settings when the user changes engine selection. Rebuilds
+    /// the dictation pipeline so the new choice (and any fallback toast) takes
+    /// effect immediately — except while a recording is in progress, where we
+    /// defer to avoid orphaning the active session.
+    func requestPipelineRebuild() {
+        guard recordingState == .ready else {
+            ToastWindowController.show(
+                "Engine change will apply after the current recording",
+                style: .info
+            )
+            return
+        }
+        pipelineRebuildHandler?()
+    }
+
     // MARK: - Hotkey handlers
 
     func handleHotkeyDown() {
+        LogService.info("HotkeyDown — mode=\(recordingMode.rawValue) state=\(recordingState)", category: "Recording")
         switch recordingMode {
         case .pushToTalk:
             guard recordingState == .ready else { return }
@@ -95,12 +126,14 @@ final class RecordingController: OverlayWriter {
                 performHaptic()
                 stopRecording()
             default:
+                LogService.info("HotkeyDown ignored — state=\(recordingState) is neither .ready nor .recording", category: "Recording")
                 break
             }
         }
     }
 
     func handleHotkeyUp() {
+        LogService.info("HotkeyUp — mode=\(recordingMode.rawValue) state=\(recordingState)", category: "Recording")
         if recordingMode == .pushToTalk && recordingState == .recording {
             performHaptic()
             stopRecording()
@@ -186,7 +219,11 @@ final class RecordingController: OverlayWriter {
     }
 
     private func stopRecording() {
-        guard recordingState == .recording, let pipeline, let mutex else { return }
+        LogService.info("stopRecording invoked — state=\(recordingState), pipeline=\(pipeline != nil), mutex=\(mutex != nil)", category: "Recording")
+        guard recordingState == .recording, let pipeline, let mutex else {
+            LogService.warn("stopRecording guard failed — bailing out", category: "Recording")
+            return
+        }
 
         LogService.info("Recording stopped, duration: \(String(format: "%.1f", recordingDuration))s", category: "Recording")
 
@@ -198,22 +235,44 @@ final class RecordingController: OverlayWriter {
         Task { [weak self, pipeline, mutex] in
             defer { mutex.release(.dictation) }
             guard let self else { return }
+            LogService.info("stopRecording Task started — calling pipeline.finalize()", category: "Recording")
             do {
                 let final = try await pipeline.finalize()
+                LogService.info("pipeline.finalize() returned — final.text length=\(final.text.count), partialText length=\(self.partialText.count), confirmedSegments count=\(self.confirmedSegments.count)", category: "Recording")
+
+                // Engine.finish() can legitimately return empty (streaming
+                // engines flush everything via partials). Use partialText as
+                // the trailing piece in that case.
+                let lastPartial = self.partialText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trailing = final.text.isEmpty ? lastPartial : final.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 self.partialText = ""
-                if !final.text.isEmpty {
-                    let segment = TranscriptionSegment(text: final.text, emotion: final.emotion)
-                    self.confirmedSegments.append(segment)
-                    LogService.info("Transcription complete, length: \(final.text.count) chars", category: "Recording")
-                } else {
-                    LogService.info("Transcription complete, no text produced", category: "Recording")
+
+                // Promote the trailing partial into a final segment so the
+                // whole utterance is preserved in confirmedSegments for the
+                // overlay's post-stop display and any later inspection.
+                if !trailing.isEmpty {
+                    self.confirmedSegments.append(TranscriptionSegment(text: trailing, emotion: final.emotion))
                 }
+
+                let pieces = self.confirmedSegments.map(\.text).filter { !$0.isEmpty }
+                let dispatchText = pieces.joined(separator: " ")
+                LogService.info("Dispatch text assembled — \(pieces.count) segments, total length=\(dispatchText.count)", category: "Recording")
+
+                let engineLabel = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
+                await OutputDispatcher.dispatch(
+                    text: dispatchText,
+                    injector: self.textInjector,
+                    historyStore: self.historyStore,
+                    engineLabel: engineLabel
+                )
+
                 self.scheduleOverlayHide(after: 2)
                 self.micLevel = 0
                 self.spectrum = Array(repeating: 0, count: 16)
                 self.recordingState = .ready
                 LogService.endSession()
             } catch {
+                LogService.error("stopRecording Task threw: \(error)", category: "Recording")
                 self.handlePipelineError(error)
             }
         }

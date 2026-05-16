@@ -19,9 +19,15 @@ final class TextInjectorSink: Sink {
     }
 
     func deliver(_ result: TranscriptionResult, isFinal: Bool) async {
-        guard isFinal, !result.text.isEmpty else { return }
+        LogService.info("TextInjectorSink.deliver — isFinal=\(isFinal), textLength=\(result.text.count)", category: "TextInjection")
+        guard isFinal, !result.text.isEmpty else {
+            LogService.info("TextInjectorSink — skipped (isFinal=\(isFinal), empty=\(result.text.isEmpty))", category: "TextInjection")
+            return
+        }
         let success = await injector.injectAX(result.text)
+        LogService.info("TextInjectorSink — injectAX returned \(success)", category: "TextInjection")
         if !success {
+            LogService.info("TextInjectorSink — entering fallback: writing clipboard + firing onInjectionFailed", category: "TextInjection")
             await clipboardFallback.deliver(result, isFinal: true)
             onInjectionFailed()
         }

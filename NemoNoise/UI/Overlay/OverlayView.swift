@@ -97,30 +97,8 @@ struct OverlayView: View {
 
     private var transcriptArea: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Confirmed Segments
-            if !controller.confirmedSegments.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(controller.confirmedSegments) { segment in
-                        Text(segment.text.replacingOccurrences(of: "\n", with: " "))
-                            .font(.system(size: 19, weight: .medium, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .truncationMode(.head)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .transition(.asymmetric(insertion: .push(from: .bottom).combined(with: .opacity), removal: .opacity))
-                    }
-                }
-            }
-
-            // Partial Text
-            if !controller.partialText.isEmpty {
-                Text(controller.partialText.replacingOccurrences(of: "\n", with: " "))
-                    .font(.system(size: 18, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .italic()
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if !controller.confirmedSegments.isEmpty || !controller.partialText.isEmpty {
+                inlineTranscript
                     .transition(.opacity)
             }
 
@@ -136,9 +114,35 @@ struct OverlayView: View {
                 }
                 .padding(.vertical, 4)
             }
-
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: controller.confirmedSegments.count)
+    }
+
+    /// All confirmed segments + the in-flight partial concatenated into a
+    /// single Text so the whole utterance stays on one line. The partial
+    /// preserves its italic / secondary tint via Text composition. Head
+    /// truncation keeps the tail (most recent words) visible when overflow.
+    private var inlineTranscript: some View {
+        let confirmedJoined = controller.confirmedSegments
+            .map { $0.text.replacingOccurrences(of: "\n", with: " ") }
+            .joined(separator: " ")
+        let partial = controller.partialText.replacingOccurrences(of: "\n", with: " ")
+
+        let confirmedPart = Text(confirmedJoined)
+            .font(.system(size: 19, weight: .medium, design: .rounded))
+            .foregroundColor(.primary)
+
+        let separator = (confirmedJoined.isEmpty || partial.isEmpty) ? Text("") : Text(" ")
+
+        let partialPart = Text(partial)
+            .font(.system(size: 18, weight: .regular, design: .rounded))
+            .italic()
+            .foregroundColor(.secondary)
+
+        return (confirmedPart + separator + partialPart)
+            .lineLimit(1)
+            .truncationMode(.head)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
 }

@@ -52,21 +52,33 @@ final class ToastWindowController {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.contentView = hostingView
 
-        guard let screen = NSScreen.main else { return }
+        // Anchor on the screen under the mouse so multi-display setups land
+        // the toast where the user is looking — `NSScreen.main` follows the
+        // key window which may be on a different display.
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let screen else { return }
         let screenRect = screen.visibleFrame
-        let x = screenRect.midX - fittingSize.width / 2
 
-        // Stack above any visible floating panel (HUD/subtitle) so the Toast
-        // never overlaps the recording UI.
-        let baseY = screenRect.minY + 48
-        let otherFloatingTop = NSApp.windows
-            .filter { $0 !== p && $0.isVisible && $0.level == .floating }
-            .map(\.frame.maxY)
-            .max()
-        let targetY = max(baseY, (otherFloatingTop ?? baseY) + 12)
+        // Force a fixed panel width so positioning is deterministic regardless
+        // of what NSHostingView.fittingSize reports.
+        let panelWidth: CGFloat = 420
+        let panelHeight = fittingSize.height
+        let x = screenRect.midX - panelWidth / 2
 
-        let startFrame = NSRect(x: x, y: targetY - 40, width: fittingSize.width, height: fittingSize.height)
-        let endFrame = NSRect(x: x, y: targetY, width: fittingSize.width, height: fittingSize.height)
+        // Vertically: 30% from the top of the visible frame — well above the
+        // bottom HUD and clearly in the user's natural reading area, but not
+        // so high it crowds the menubar.
+        let targetY = screenRect.maxY - (screenRect.height * 0.30) - panelHeight / 2
+
+        LogService.info(
+            "Toast position — screen=\(screenRect) panelWidth=\(panelWidth) panelHeight=\(panelHeight) x=\(x) y=\(targetY)",
+            category: "Toast"
+        )
+
+        let startFrame = NSRect(x: x, y: targetY - 40, width: panelWidth, height: panelHeight)
+        let endFrame = NSRect(x: x, y: targetY, width: panelWidth, height: panelHeight)
 
         p.setFrame(startFrame, display: false)
         p.makeKeyAndOrderFront(nil)
@@ -111,7 +123,7 @@ private struct ToastCapsule: View {
     let style: ToastStyle
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: style.icon)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(style.color)
@@ -119,10 +131,11 @@ private struct ToastCapsule: View {
             Text(message)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
-                .lineLimit(2)
+                .multilineTextAlignment(.leading)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .glassEffect(.regular, in: .capsule)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .frame(width: 420, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 }

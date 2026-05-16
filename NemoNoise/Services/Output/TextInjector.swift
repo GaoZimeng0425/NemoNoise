@@ -28,52 +28,46 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
         LogService.debug("Captured target AXUIElement, pid: \(pid)", category: "TextInjection")
     }
 
+    /// Returns true only when AX selectedText truly succeeded. If that fails,
+    /// best-effort fires a synthesised ⌘V keystroke and still returns false —
+    /// because CGEvent posting yields no signal about whether the target app
+    /// consumed it, claiming success would silently swallow failures. The
+    /// caller (OutputDispatcher) always writes the pasteboard and shows a
+    /// toast, so a false return still leaves the user with a usable result.
     @discardableResult
     func injectAX(_ text: String) async -> Bool {
-        // Strategy 1: Insert via kAXSelectedTextAttribute (inserts at cursor)
-        if let element = targetElement {
-            let result = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
-            if result == .success {
-                LogService.info("Injection method: AX selectedText, length: \(text.count)", category: "TextInjection")
-                return true
-            }
-            LogService.debug("AX selectedText failed (\(result.rawValue)), trying paste", category: "TextInjection")
-        }
-
-        // Strategy 2: Clipboard + Cmd+V paste
-        if await pasteViaClipboard(text) {
-            LogService.info("Injection method: clipboard paste, length: \(text.count)", category: "TextInjection")
-            return true
-        }
-
-        LogService.warn("All injection methods failed", category: "TextInjection")
-        return false
-    }
-
-    private func pasteViaClipboard(_ text: String) async -> Bool {
-        guard let pid = targetApp,
-              let app = NSRunningApplication(processIdentifier: pid) else {
+        guard let element = targetElement else {
+            LogService.info("AX injection — no captured element, skipping", category: "TextInjection")
             return false
         }
+        let status = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
+        if status == .success {
+            LogService.info("AX injection — selectedText succeeded, length: \(text.count)", category: "TextInjection")
+            return true
+        }
+        LogService.info("AX injection — selectedText failed (AX status \(status.rawValue)); attempting ⌘V keystroke", category: "TextInjection")
 
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-
-        // Yield to let the pasteboard settle, then activate the target app and yield again
-        // before synthesising Cmd+V so the keystroke lands in the right process.
+        // Best-effort ⌘V into the target app. We deliberately do not return
+        // true: in web views, Electron, terminals etc. this often does paste,
+        // but there's no API to confirm. Toast still reads "Copied to
+        // clipboard — press ⌘V to paste" which is accurate either way.
+        guard let pid = targetApp,
+              let app = NSRunningApplication(processIdentifier: pid) else {
+            LogService.info("AX injection — no target pid for ⌘V fallback", category: "TextInjection")
+            return false
+        }
         try? await Task.sleep(for: .milliseconds(50))
         app.activate(options: [])
         try? await Task.sleep(for: .milliseconds(50))
 
         let src = CGEventSource(stateID: .hidSystemState)
-        let keyDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true) // V key
+        let keyDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true) // V
         keyDown?.flags = .maskCommand
         let keyUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
         keyUp?.flags = .maskCommand
         keyDown?.post(tap: .cghidEventTap)
         keyUp?.post(tap: .cghidEventTap)
-
-        return true
+        LogService.info("AX injection — ⌘V keystroke posted to pid \(pid) (outcome unverifiable)", category: "TextInjection")
+        return false
     }
 }

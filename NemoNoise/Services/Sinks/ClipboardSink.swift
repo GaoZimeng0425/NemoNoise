@@ -7,7 +7,8 @@ final class ClipboardSink: Sink {
     func deliver(_ result: TranscriptionResult, isFinal: Bool) async {
         guard isFinal, !result.text.isEmpty else { return }
         let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(result.text, forType: .string)
+        let changeCount = pasteboard.clearContents()
+        let wrote = pasteboard.setString(result.text, forType: .string)
+        LogService.info("ClipboardSink — changeCount=\(changeCount), setString=\(wrote), len=\(result.text.count)", category: "TextInjection")
     }
 }

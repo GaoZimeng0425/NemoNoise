@@ -16,9 +16,12 @@ struct SettingsView: View {
 
             shortcutsTab
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+
+            historyTab
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 420)
+        .frame(width: 480, height: 480)
         .onAppear {
             cloudAPIKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey) ?? ""
             // LSUIElement apps default to .accessory policy which suppresses
@@ -64,6 +67,12 @@ struct SettingsView: View {
         Form {
             shortcutsSection
         }
+    }
+
+    // MARK: - History tab
+
+    private var historyTab: some View {
+        TranscriptHistoryView(store: controller.historyStore)
     }
 
     // MARK: Engine picker
@@ -112,6 +121,9 @@ struct SettingsView: View {
                 }
             }
             .padding(.vertical, 4)
+        }
+        .onChange(of: engineType) { _, _ in
+            controller.requestPipelineRebuild()
         }
     }
 

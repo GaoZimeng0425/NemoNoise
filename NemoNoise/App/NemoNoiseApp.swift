@@ -42,24 +42,16 @@ struct NemoNoiseApp: App {
                         let punctuator = Self.makePunctuator(modelManager: controller.modelManager)
                         let postProcessors: [any PostProcessor] = punctuator.map { [PunctuationProcessor(punctuator: $0)] } ?? []
 
-                        // Dictation pipeline
-                        if let primary = try? factory.makeUserPreferred() {
+                        // Dictation pipeline: the only sink wired here is the
+                        // overlay (real-time partial display). Final delivery
+                        // (clipboard, history, AX injection, toast) is handled
+                        // by RecordingController via OutputDispatcher — see
+                        // OutputDispatcher.swift for why the previous
+                        // sink-based fan-out was unreliable.
+                        let dictationSink: any Sink = OverlayProgressSink(target: controller)
+                        let buildDictation: @MainActor () -> Void = {
+                            guard let primary = try? factory.makeUserPreferred() else { return }
                             let fallback = factory.makeFallback()
-                            let dictationSink = BroadcastSink([
-                                OverlayProgressSink(target: controller),
-                                TextInjectorSink(
-                                    injector: controller.injector,
-                                    clipboardFallback: ClipboardSink(),
-                                    onInjectionFailed: {
-                                        Task { @MainActor in
-                                            if !AXIsProcessTrusted() {
-                                                AccessibilityAlert.present()
-                                            }
-                                            ToastWindowController.show("Copied to clipboard", style: .success)
-                                        }
-                                    }
-                                )
-                            ])
                             let dictationPipeline = TranscriptionPipeline(
                                 source: MicAudioSource(),
                                 engine: primary,
@@ -69,6 +61,8 @@ struct NemoNoiseApp: App {
                             )
                             controller.bind(pipeline: dictationPipeline, mutex: mutex)
                         }
+                        buildDictation()
+                        controller.pipelineRebuildHandler = buildDictation
 
                         // Translation pipeline
                         if let engine = try? factory.makeForTranslation() {
