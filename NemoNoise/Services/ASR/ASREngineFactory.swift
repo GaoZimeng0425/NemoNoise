@@ -74,9 +74,14 @@ final class ASREngineFactory: ASREngineFactoring {
         return EngineBuild(engine: apple, fallbackReason: nil)
     }
 
+    /// Build the fallback engine used by the dictation pipeline when the
+    /// primary engine fails mid-recording. Returns nil unless the user has
+    /// already authorized Apple Speech — otherwise an unexpected fallback
+    /// would trigger the speech-recognition permission prompt mid-session
+    /// even though the user never picked Apple Speech.
     func makeFallback() -> (any ASREngine)? {
         let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType) ?? AppDefaults.Defaults.engineType
-        if choice == "apple" { return nil }
+        if choice == "apple" { return nil }  // primary is Apple, fallback redundant
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else { return nil }
         return try? AppleSpeechASREngine()
     }
