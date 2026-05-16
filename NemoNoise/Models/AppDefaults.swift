@@ -14,7 +14,7 @@ enum AppDefaults {
     }
 
     enum Defaults {
-        static let engineType = "paraformer"
+        static let engineType = "apple"
         static let recordingMode = "pushToTalk"
         static let languagePreference = "auto"
     }
