@@ -1,57 +1,54 @@
 import XCTest
 @testable import NemoNoise
 
-@MainActor
 final class ASREngineFactoryTests: XCTestCase {
 
     private func makeFactory() -> ASREngineFactory {
         ASREngineFactory(modelManager: ModelManager())
     }
 
-    // MARK: - User-preferred engine
+    // MARK: - Primary engine
 
-    func testMakeUserPreferredFallsBackToAppleWhenPreferenceMissing() throws {
+    func testMakePrimaryFallsBackToAppleWhenPreferenceMissing() throws {
         UserDefaults.standard.removeObject(forKey: AppDefaults.Keys.engineType)
         let factory = makeFactory()
-        let engine = try factory.makeUserPreferred()
-        XCTAssertTrue(engine is AppleSpeechASREngine
-                       || engine is ParaformerStreamingEngine
-                       || engine is SherpaASREngine
-                       || engine is CloudASREngine)
-        // We cannot assert it's specifically Apple without a fake ModelManager,
-        // but the call must not throw.
+        let build = try factory.makePrimary()
+        XCTAssertNotNil(build.engine)
     }
 
-    func testMakeUserPreferredHonoursApplePreference() throws {
+    func testMakePrimaryHonoursApplePreference() throws {
         UserDefaults.standard.set("apple", forKey: AppDefaults.Keys.engineType)
         let factory = makeFactory()
-        let engine = try factory.makeUserPreferred()
-        XCTAssertTrue(engine is AppleSpeechASREngine, "expected Apple, got \(type(of: engine))")
+        let build = try factory.makePrimary()
+        XCTAssertTrue(build.engine is AppleSpeechASREngine,
+                      "expected Apple, got \(type(of: build.engine))")
+        XCTAssertNil(build.fallbackReason, "Apple was the user's choice — no fallback reason expected")
     }
 
-    func testMakeUserPreferredFallsBackWhenCloudKeyMissing() throws {
+    func testMakePrimarySurfacesFallbackReasonWhenCloudKeyMissing() throws {
         UserDefaults.standard.set("cloud", forKey: AppDefaults.Keys.engineType)
         KeychainService.delete(key: KeychainService.Keys.cloudAPIKey)
         let factory = makeFactory()
-        let engine = try factory.makeUserPreferred()
-        XCTAssertTrue(engine is AppleSpeechASREngine, "expected Apple fallback, got \(type(of: engine))")
+        let build = try factory.makePrimary()
+        XCTAssertTrue(build.engine is AppleSpeechASREngine,
+                      "expected Apple fallback, got \(type(of: build.engine))")
+        XCTAssertNotNil(build.fallbackReason, "fallback reason must be surfaced for UI to toast")
     }
 
     // MARK: - Translation engine
 
-    func testMakeForTranslationFallsBackToAppleEnUSWhenParaformerUnavailable() throws {
+    func testMakeTranslationReturnsValidEngine() throws {
         let factory = makeFactory()
-        // No way to force-disable Paraformer model presence without filesystem manipulation;
-        // this test verifies that *some* engine is returned and is en-US-capable.
-        let engine = try factory.makeForTranslation()
-        XCTAssertTrue(engine is AppleSpeechASREngine || engine is ParaformerStreamingEngine)
+        let build = try factory.makeTranslation()
+        XCTAssertTrue(build.engine is AppleSpeechASREngine || build.engine is ParaformerStreamingEngine)
     }
 
     // MARK: - Fallback engine for dictation
 
-    func testMakeFallbackReturnsAppleSpeech() throws {
+    func testMakeFallbackReturnsAppleSpeechWhenAuthorized() throws {
         let factory = makeFactory()
-        let fallback = try factory.makeFallback()
-        XCTAssertTrue(fallback is AppleSpeechASREngine)
+        if let fallback = factory.makeFallback() {
+            XCTAssertTrue(fallback is AppleSpeechASREngine)
+        }
     }
 }

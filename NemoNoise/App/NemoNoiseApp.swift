@@ -50,7 +50,7 @@ struct NemoNoiseApp: App {
                         // sink-based fan-out was unreliable.
                         let dictationSink: any Sink = OverlayProgressSink(target: controller)
                         let buildDictation: @MainActor () -> Void = {
-                            guard let primary = try? factory.makeUserPreferred() else { return }
+                            guard let primary = try? factory.makePrimary().engine else { return }
                             let fallback = factory.makeFallback()
                             let dictationPipeline = TranscriptionPipeline(
                                 source: MicAudioSource(),
@@ -65,7 +65,7 @@ struct NemoNoiseApp: App {
                         controller.pipelineRebuildHandler = buildDictation
 
                         // Translation pipeline
-                        if let engine = try? factory.makeForTranslation() {
+                        if let engine = try? factory.makeTranslation().engine {
                             let translationPipeline = TranscriptionPipeline(
                                 source: SystemAudioSource(),
                                 engine: engine,

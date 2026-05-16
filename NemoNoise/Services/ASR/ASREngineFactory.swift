@@ -1,81 +1,82 @@
 import Foundation
 import Speech
 
-/// Single place to construct ASR engines. Reads `UserDefaults` for the user's
-/// preferred engine and `Keychain` for API keys, with predictable fallback to
-/// Apple Speech when models or keys are missing.
-@MainActor
-final class ASREngineFactory {
+struct EngineBuild: Sendable {
+    let engine: any ASREngine
+    let fallbackReason: String?
+}
+
+protocol ASREngineFactoring: Sendable {
+    func makePrimary() throws -> EngineBuild
+    func makeTranslation() throws -> EngineBuild
+    func makeFallback() -> (any ASREngine)?
+}
+
+final class ASREngineFactory: ASREngineFactoring {
     private let modelManager: ModelManager
 
     init(modelManager: ModelManager) {
         self.modelManager = modelManager
     }
 
-    /// Build the engine the user has selected in Settings. Falls back to Apple
-    /// Speech if the chosen engine's prerequisites (model files, API key) are
-    /// not satisfied.
-    func makeUserPreferred() throws -> any ASREngine {
+    func makePrimary() throws -> EngineBuild {
         let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType) ?? AppDefaults.Defaults.engineType
         LogService.info("Factory creating engine: \(choice)", category: "ASREngineFactory")
+
+        var fallbackReason: String?
 
         switch choice {
         case "sensevoice":
             if let dir = modelManager.modelPath(for: .senseVoice) {
-                return try SherpaASREngine(modelDir: dir)
+                let engine = try SherpaASREngine(modelDir: dir)
+                return EngineBuild(engine: engine, fallbackReason: nil)
             }
             LogService.warn("SenseVoice model not found, falling back to Apple", category: "ASREngineFactory")
-            notifyFallback("SenseVoice model not installed — using Apple Speech. Open Settings to download.")
+            fallbackReason = "SenseVoice model not installed — using Apple Speech. Open Settings to download."
         case "paraformer":
             if let dir = modelManager.modelPath(for: .paraformer) {
-                return try ParaformerStreamingEngine(modelDir: dir)
+                let engine = try ParaformerStreamingEngine(modelDir: dir)
+                return EngineBuild(engine: engine, fallbackReason: nil)
             }
             LogService.warn("Paraformer model not found, falling back to Apple", category: "ASREngineFactory")
-            notifyFallback("Paraformer model not installed — using Apple Speech. Open Settings to download.")
+            fallbackReason = "Paraformer model not installed — using Apple Speech. Open Settings to download."
         case "qwen3":
             if let dir = modelManager.modelPath(for: .qwen3) {
-                return try Qwen3ASREngine(modelDir: dir)
+                let engine = try Qwen3ASREngine(modelDir: dir)
+                return EngineBuild(engine: engine, fallbackReason: nil)
             }
             LogService.warn("Qwen3 model not installed, falling back to Apple", category: "ASREngineFactory")
-            notifyFallback("Qwen3 model not installed — using Apple Speech. Open Settings to download.")
+            fallbackReason = "Qwen3 model not installed — using Apple Speech. Open Settings to download."
         case "cloud":
             if let apiKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey), !apiKey.isEmpty {
-                return CloudASREngine(apiKey: apiKey)
+                return EngineBuild(engine: CloudASREngine(apiKey: apiKey), fallbackReason: nil)
             }
             LogService.warn("Cloud API key not set, falling back to Apple", category: "ASREngineFactory")
-            notifyFallback("Cloud API key not set — using Apple Speech. Set the key in Settings.")
+            fallbackReason = "Cloud API key not set — using Apple Speech. Set the key in Settings."
         case "apple":
             break
         default:
             LogService.warn("Unknown engine choice '\(choice)', falling back to Apple", category: "ASREngineFactory")
         }
-        return try AppleSpeechASREngine()
+
+        let apple = try AppleSpeechASREngine()
+        return EngineBuild(engine: apple, fallbackReason: fallbackReason)
     }
 
-    private func notifyFallback(_ message: String) {
-        ToastWindowController.show(message, style: .warning, duration: 5)
-    }
-
-    /// Build the engine used by translation: Paraformer for bilingual, falling
-    /// back to Apple Speech locked to en-US.
-    func makeForTranslation() throws -> any ASREngine {
+    func makeTranslation() throws -> EngineBuild {
         if let dir = modelManager.modelPath(for: .paraformer),
            let paraformer = try? ParaformerStreamingEngine(modelDir: dir) {
             LogService.info("Translation engine: Paraformer", category: "ASREngineFactory")
-            return paraformer
+            return EngineBuild(engine: paraformer, fallbackReason: nil)
         }
         LogService.info("Translation engine: Apple Speech en-US", category: "ASREngineFactory")
-        return try AppleSpeechASREngine(locale: "en-US")
+        let apple = try AppleSpeechASREngine(locale: "en-US")
+        return EngineBuild(engine: apple, fallbackReason: nil)
     }
 
-    /// Build the fallback engine used by the dictation pipeline when the
-    /// primary engine fails mid-recording. Returns nil unless the user has
-    /// already authorized Apple Speech — otherwise an unexpected fallback
-    /// would trigger the speech-recognition permission prompt mid-session
-    /// even though the user never picked Apple Speech.
     func makeFallback() -> (any ASREngine)? {
         let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType) ?? AppDefaults.Defaults.engineType
-        if choice == "apple" { return nil }  // primary is Apple, fallback redundant
+        if choice == "apple" { return nil }
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else { return nil }
         return try? AppleSpeechASREngine()
     }
