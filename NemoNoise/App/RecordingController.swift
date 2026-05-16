@@ -174,7 +174,12 @@ final class RecordingController: OverlayWriter {
             return
         }
 
-        guard let pipeline, let mutex else { return }
+        guard let pipeline, let mutex else {
+            if pipeline == nil {
+                ToastWindowController.show("Engines warming up…", style: .info, duration: 1.5)
+            }
+            return
+        }
         guard mutex.tryAcquire(.dictation) else { return }
 
         // Lock the AX target at hotkey DOWN to avoid cursor-move races.
