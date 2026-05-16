@@ -24,6 +24,8 @@ final class PipelineProvider {
     private weak var translationController: TranslationController?
 
     /// Cached so engine swaps from Settings don't re-pay the punctuator load.
+    /// `nil` means the punctuation model is absent or failed to load —
+    /// silent degradation, not retried on rebuild.
     private var cachedPunctuator: SherpaOfflinePunctuator?
 
     init(factory: any ASREngineFactoring,
@@ -104,6 +106,9 @@ final class PipelineProvider {
                 )
                 recordingController.bind(pipeline: pipeline, mutex: mutex)
             }
+            // Set readiness even if recordingController weak-ref is nil — in
+            // production the controller outlives the provider, so this branch
+            // only matters in tests that discard their controller references.
             dictation = .ready
             if let reason = build.fallbackReason {
                 ToastWindowController.show(reason, style: .warning, duration: 5)
@@ -133,12 +138,16 @@ final class PipelineProvider {
                 )
                 translationController.bind(pipeline: pipeline, mutex: mutex)
             }
+            // Same rationale as dictation: readiness flips even if the
+            // translationController weak-ref is nil (only happens in tests).
             translation = .ready
         }
     }
 
     // MARK: - Punctuator
 
+    /// Called from `Task.detached` — `nonisolated` because the enclosing class
+    /// is `@MainActor` but this helper does no MainActor work.
     nonisolated private static func makePunctuator(modelManager: ModelManager) -> SherpaOfflinePunctuator? {
         guard let dir = modelManager.modelPath(for: .punctuation) else { return nil }
         let path = dir.appendingPathComponent("model.onnx").path
