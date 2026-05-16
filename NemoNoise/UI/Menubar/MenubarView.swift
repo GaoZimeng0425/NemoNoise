@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuBarPopoverView: View {
     @Environment(RecordingController.self) private var controller
     @Environment(TranslationController.self) private var translationController
+    @Environment(PipelineProvider.self) private var pipelineProvider
     let updater: SPUUpdater
 
     var body: some View {
@@ -31,6 +32,25 @@ struct MenuBarPopoverView: View {
                 Text(warning)
                     .font(.caption2)
                     .foregroundStyle(.orange)
+            }
+
+            if pipelineProvider.dictation == .loading {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Preparing engines…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if case .failed(let msg) = pipelineProvider.dictation {
+                Text("Dictation: \(msg)")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
+            if case .failed(let msg) = pipelineProvider.translation {
+                Text("Translation: \(msg)")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
             }
 
             Text(controller.hotkeyDisplayText)
