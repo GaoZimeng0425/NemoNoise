@@ -5,6 +5,8 @@ struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
     @Environment(PermissionService.self) private var permissions
     @AppStorage(AppDefaults.Keys.engineType) private var engineType = AppDefaults.Defaults.engineType
+    @AppStorage(AppDefaults.Keys.preferredMicUID) private var preferredMicUID = ""
+    @State private var availableMics: [AudioInputDevice] = []
     @State private var cloudAPIKey: String = ""
     @State private var showExportAlert = false
     @State private var exportedLogPath = ""
@@ -24,6 +26,7 @@ struct SettingsView: View {
         .frame(width: 480, height: 480)
         .onAppear {
             cloudAPIKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey) ?? ""
+            availableMics = AudioInputDeviceCatalog.availableInputDevices()
             // LSUIElement apps default to .accessory policy which suppresses
             // activation. Briefly switch to .regular so the Settings window
             // can come to the front; .onDisappear flips it back.
@@ -41,6 +44,7 @@ struct SettingsView: View {
         Form {
             cloudAPIKeySection
             engineSection
+            audioInputSection
             if engineType == "paraformer" {
                 modelSection(for: .paraformer)
             }
@@ -109,6 +113,19 @@ struct SettingsView: View {
                 status: cloudAPIKey.isEmpty ? .needsAPIKey : .ready
             ),
         ]
+    }
+
+    private var audioInputSection: some View {
+        Section("Audio Input") {
+            Picker("Microphone", selection: $preferredMicUID) {
+                Text("System Default").tag("")
+                ForEach(availableMics) { device in
+                    Text(device.name).tag(device.uid)
+                }
+            }
+            Text("Used for voice input only. Translation mode always captures system audio.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
     }
 
     private var engineSection: some View {
