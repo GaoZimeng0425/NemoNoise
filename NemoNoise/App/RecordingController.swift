@@ -149,6 +149,7 @@ final class RecordingController: OverlayWriter {
 
     private func startRecording() {
         guard recordingState == .ready else { return }
+        hideTask?.cancel()
 
         guard AXIsProcessTrusted() else {
             AccessibilityAlert.present()
