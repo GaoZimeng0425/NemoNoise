@@ -236,6 +236,8 @@ final class RecordingController: OverlayWriter {
         LogService.info("Recording stopped, duration: \(String(format: "%.1f", recordingDuration))s", category: "Recording")
 
         recordingState = .processing
+        pipelineTask?.cancel()
+        pipelineTask = nil
         stopTimer()
         invalidateSilenceTimer()
         stopEscMonitor()
