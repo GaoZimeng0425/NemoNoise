@@ -7,6 +7,8 @@ final class TranslationController: SubtitleWriter {
     var englishText: String = ""
     var partialText: String = ""
     var chineseText: String = ""
+    var isTranslating: Bool = false
+    var displayedSeq: Int = -1
     var audioLevel: Float = 0
     var spectrum: [Float] = Array(repeating: 0, count: 16)
 
@@ -15,13 +17,15 @@ final class TranslationController: SubtitleWriter {
     private var pipelineTask: Task<Void, Never>?
     private var pipeline: TranscriptionPipeline?
     private var mutex: RecordingMutex?
+    private var translateProcessor: AsyncTranslateProcessor?
 
     private static let translationShortcut = KeyboardShortcuts.Name("translationMode")
 
     /// Called by NemoNoiseApp after both controllers and their pipelines are constructed.
-    func bind(pipeline: TranscriptionPipeline, mutex: RecordingMutex) {
+    func bind(pipeline: TranscriptionPipeline, mutex: RecordingMutex, translateProcessor: AsyncTranslateProcessor? = nil) {
         self.pipeline = pipeline
         self.mutex = mutex
+        self.translateProcessor = translateProcessor
     }
 
     var isActive: Bool { translationState != .idle }
@@ -48,6 +52,9 @@ final class TranslationController: SubtitleWriter {
         englishText = ""
         partialText = ""
         chineseText = ""
+        isTranslating = false
+        displayedSeq = -1
+        translateProcessor?.resetInflight()
         showSubtitle()
 
         pipelineTask = Task { [weak self, pipeline] in
@@ -85,6 +92,9 @@ final class TranslationController: SubtitleWriter {
         audioLevel = 0
         spectrum = Array(repeating: 0, count: 16)
         translationState = .idle
+        chineseText = ""
+        isTranslating = false
+        displayedSeq = -1
         LogService.endSession()
         // Finalize then release mutex in the same task so dictation cannot start
         // until the audio source has fully drained.
@@ -143,5 +153,10 @@ final class TranslationController: SubtitleWriter {
             let alpha = 1 - exp(-dt / tau)
             spectrum[i] += (target[i] - spectrum[i]) * alpha
         }
+    }
+
+    func applyTranslation(seq: Int, chinese: String) {
+        guard seq == displayedSeq else { return }
+        chineseText = chinese
     }
 }

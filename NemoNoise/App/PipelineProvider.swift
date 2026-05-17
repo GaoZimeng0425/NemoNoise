@@ -127,12 +127,17 @@ final class PipelineProvider {
         case .success(let build):
             if let translationController {
                 var postProcessors: [any PostProcessor] = []
+                postProcessors.append(
+                    SentenceSegmenter(engine: build.engine)
+                )
                 if let punctuator {
                     postProcessors.append(PunctuationProcessor(punctuator: punctuator))
                 }
-                postProcessors.append(
-                    TranslateProcessor(service: translationController.translationService)
+                let translateProcessor = AsyncTranslateProcessor(
+                    service: translationController.translationService,
+                    writer: translationController
                 )
+                postProcessors.append(translateProcessor)
                 let pipeline = TranscriptionPipeline(
                     source: SystemAudioSource(),
                     engine: build.engine,
@@ -140,7 +145,11 @@ final class PipelineProvider {
                     sink: SubtitleOverlaySink(target: translationController),
                     fallback: nil
                 )
-                translationController.bind(pipeline: pipeline, mutex: mutex)
+                translationController.bind(
+                    pipeline: pipeline,
+                    mutex: mutex,
+                    translateProcessor: translateProcessor
+                )
             }
             translation = .ready
         }

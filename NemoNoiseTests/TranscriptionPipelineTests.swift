@@ -280,4 +280,64 @@ extension TranscriptionPipelineTests {
             XCTFail("expected sourceUnavailable, got \(pipelineErr)")
         }
     }
+
+    // MARK: - Translation pipeline force-segment integration
+
+    final class TickingClock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _current: Date = Date(timeIntervalSinceReferenceDate: 0)
+        func readNow() -> Date {
+            lock.lock(); defer { lock.unlock() }
+            return _current
+        }
+        var read: @Sendable () -> Date { { [weak self] in self?.readNow() ?? Date() } }
+        func tick(_ s: TimeInterval) {
+            lock.lock(); defer { lock.unlock() }
+            _current = _current.addingTimeInterval(s)
+        }
+    }
+
+    @MainActor
+    func testTranslationPipelineForceSegmentsAfterHardLimit() async throws {
+        let engine = MockASREngine()
+        // Seven accumulating partials, none isFinal.
+        engine.feedChunkScript = [
+            TranscriptionResult(text: "the speaker",                                          isFinal: false, emotion: nil),
+            TranscriptionResult(text: "the speaker is",                                       isFinal: false, emotion: nil),
+            TranscriptionResult(text: "the speaker is saying",                                isFinal: false, emotion: nil),
+            TranscriptionResult(text: "the speaker is saying many",                           isFinal: false, emotion: nil),
+            TranscriptionResult(text: "the speaker is saying many things",                    isFinal: false, emotion: nil),
+            TranscriptionResult(text: "the speaker is saying many things now",                isFinal: false, emotion: nil),
+            TranscriptionResult(text: "the speaker is saying many things now and continuing", isFinal: false, emotion: nil),
+        ]
+        let clock = TickingClock()
+        let segmenter = SentenceSegmenter(engine: engine, now: clock.read)
+
+        let source = MockAudioSource()
+        let writer = StubSubtitleWriter()
+        let pipeline = TranscriptionPipeline(
+            source: source, engine: engine,
+            postProcessors: [segmenter],
+            sink: SubtitleOverlaySink(target: writer),
+            fallback: nil
+        )
+
+        let events = pipeline.start()
+        let consumer = Task { for try await _ in events { /* drain */ } }
+
+        try await Task.sleep(for: .milliseconds(50))
+        for _ in 0..<7 {
+            clock.tick(1.1)
+            source.emit(samples: [0.1])
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        source.finishStream()
+        _ = try? await pipeline.finalize()
+        _ = try? await consumer.value
+
+        XCTAssertFalse(writer.englishText.isEmpty,
+                       "after 7 partials over >6s, hard-limit must have force-segmented at least once")
+        XCTAssertGreaterThan(writer.displayedSeq, 0,
+                             "displayedSeq must have advanced past initial -1")
+    }
 }

@@ -65,12 +65,29 @@ struct SubtitleOverlayView: View {
                 .truncationMode(.head)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(controller.chineseText.isEmpty ? displayEnglishText : controller.chineseText)
+            chineseLine
                 .font(.system(size: 16, weight: .medium, design: .rounded))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .truncationMode(.head)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var chineseLine: some View {
+        if !controller.chineseText.isEmpty {
+            Text(controller.chineseText)
+        } else if controller.isTranslating {
+            HStack(spacing: 4) {
+                ProgressView()
+                    .controlSize(.mini)
+                    .scaleEffect(0.7)
+                Text("翻译中…")
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Text(" ")  // empty placeholder, preserves baseline
         }
     }
 
