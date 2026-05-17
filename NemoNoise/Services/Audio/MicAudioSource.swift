@@ -18,6 +18,7 @@ final class MicAudioSource: AudioSource, Sendable {
         try await requestMicrophoneAccess()
 
         let inputNode = engine.inputNode
+        applyPreferredInputDevice(to: inputNode)
         let hardwareFormat = inputNode.outputFormat(forBus: 0)
 
         guard hardwareFormat.sampleRate > 0 else {
@@ -60,6 +61,36 @@ final class MicAudioSource: AudioSource, Sendable {
         let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count))
         let spectrum = analyzer.analyze(samples)
         continuation.value?.yield(AudioChunk(samples: samples, rmsLevel: rms, spectrum: spectrum))
+    }
+
+    /// Reads `AppDefaults.Keys.preferredMicUID` and pins the input audio unit
+    /// to that device if it resolves. Any failure falls back silently to the
+    /// system default — recording must always work.
+    private func applyPreferredInputDevice(to inputNode: AVAudioInputNode) {
+        let uid = UserDefaults.standard.string(forKey: AppDefaults.Keys.preferredMicUID) ?? ""
+        guard !uid.isEmpty else { return }
+        guard let deviceID = AudioInputDeviceCatalog.deviceID(forUID: uid) else {
+            LogService.info("Preferred mic UID=\(uid) not connected; using system default", category: "AudioCapture")
+            return
+        }
+        guard let audioUnit = inputNode.audioUnit else {
+            LogService.warn("Input node audioUnit unavailable; cannot set preferred mic", category: "AudioCapture")
+            return
+        }
+        var id = deviceID
+        let status = AudioUnitSetProperty(
+            audioUnit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &id,
+            UInt32(MemoryLayout<AudioDeviceID>.size)
+        )
+        if status == noErr {
+            LogService.info("Mic input set to UID=\(uid)", category: "AudioCapture")
+        } else {
+            LogService.warn("AudioUnitSetProperty failed (status=\(status)); using system default", category: "AudioCapture")
+        }
     }
 
     private func requestMicrophoneAccess() async throws {
