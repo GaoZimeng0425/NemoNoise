@@ -22,14 +22,12 @@ final class ParaformerStreamingEngine: ASREngine, @unchecked Sendable {
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
-        var text = recognizer.feed(samples: samples, sampleRate: Int32(sampleRate))
-        if recognizer.isEndpoint {
-            if !text.isEmpty {
-                text += "。"
-            }
+        let text = recognizer.feed(samples: samples, sampleRate: Int32(sampleRate))
+        let isEndpoint = recognizer.isEndpoint
+        if isEndpoint {
             recognizer.resetStream()
         }
-        return TranscriptionResult(text: text, isFinal: false, emotion: nil)
+        return Self.buildResult(rawText: text, isEndpoint: isEndpoint)
     }
 
     func finish() async throws -> TranscriptionResult {
@@ -39,5 +37,15 @@ final class ParaformerStreamingEngine: ASREngine, @unchecked Sendable {
 
     func reset() {
         recognizer.startStream()
+    }
+
+    /// Pure helper to keep the endpoint-handling logic unit-testable without
+    /// needing the underlying ONNX recognizer to be loaded.
+    static func buildResult(rawText: String, isEndpoint: Bool) -> TranscriptionResult {
+        if isEndpoint {
+            let text = rawText.isEmpty ? "" : rawText + "。"
+            return TranscriptionResult(text: text, isFinal: true, emotion: nil)
+        }
+        return TranscriptionResult(text: rawText, isFinal: false, emotion: nil)
     }
 }

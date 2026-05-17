@@ -189,6 +189,70 @@ extension TranscriptionPipelineTests {
         XCTAssertGreaterThanOrEqual(source.stopCalls, 1)
     }
 
+    // MARK: - Mid-stream isFinal propagation
+
+    func testEngineMidStreamFinalYieldsFinalEvent() async throws {
+        let source = MockAudioSource()
+        let engine = MockASREngine()
+        engine.feedChunkScript = [
+            TranscriptionResult(text: "sentence one.", isFinal: true, emotion: nil)
+        ]
+        let sink = RecordingSink()
+        let pipeline = TranscriptionPipeline(
+            source: source, engine: engine, postProcessors: [], sink: sink, fallback: nil
+        )
+
+        let events = pipeline.start()
+        var collected: [PipelineEvent] = []
+        let consumer = Task {
+            for try await event in events {
+                collected.append(event)
+                if case .final = event { break }
+            }
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+        source.emit(samples: [0.1])
+        try await Task.sleep(for: .milliseconds(50))
+        source.finishStream()
+        _ = try? await consumer.value
+        pipeline.stop()
+
+        XCTAssertTrue(collected.contains { event in
+            if case .final(let r) = event { return r.text == "sentence one." && r.isFinal }
+            return false
+        }, "engine's mid-stream isFinal=true must surface as PipelineEvent.final, got: \(collected)")
+    }
+
+    func testEngineMidStreamFinalDeliveredToSinkWithIsFinalTrue() async throws {
+        let source = MockAudioSource()
+        let engine = MockASREngine()
+        engine.feedChunkScript = [
+            TranscriptionResult(text: "sentence one.", isFinal: true, emotion: nil)
+        ]
+        let sink = RecordingSink()
+        let pipeline = TranscriptionPipeline(
+            source: source, engine: engine, postProcessors: [], sink: sink, fallback: nil
+        )
+
+        let events = pipeline.start()
+        let consumer = Task {
+            for try await event in events {
+                if case .final = event { break }
+            }
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+        source.emit(samples: [0.1])
+        try await Task.sleep(for: .milliseconds(60))
+        source.finishStream()
+        _ = try? await consumer.value
+        pipeline.stop()
+
+        let finalDelivery = sink.delivered.first { $0.isFinal && $0.text == "sentence one." }
+        XCTAssertNotNil(finalDelivery, "sink.deliver must be called with isFinal=true for the mid-stream final, got: \(sink.delivered)")
+    }
+
     // MARK: - Source failure
 
     func testSourceStartFailureSurfacesAsSourceUnavailable() async throws {

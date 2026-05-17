@@ -2,6 +2,35 @@ import Speech
 import AVFoundation
 import os
 
+/// FIFO queue of mid-stream final results emitted by SFSpeech. Extracted as a
+/// value type so the queueing logic is unit-testable without an SFSpeech IO
+/// dependency.
+struct AppleSpeechFinalQueue {
+    private var pending: [TranscriptionResult] = []
+
+    mutating func enqueue(_ result: TranscriptionResult) {
+        pending.append(result)
+    }
+
+    mutating func popNext() -> TranscriptionResult? {
+        guard !pending.isEmpty else { return nil }
+        return pending.removeFirst()
+    }
+
+    /// Drain every queued final into one concatenated result (text joined by
+    /// a single space, emotion of the first non-nil). Returns nil if empty.
+    mutating func drainConcatenated() -> TranscriptionResult? {
+        guard !pending.isEmpty else { return nil }
+        let pieces = pending.map(\.text).filter { !$0.isEmpty }
+        let combined = pieces.joined(separator: " ")
+        let emotion = pending.compactMap(\.emotion).first
+        pending.removeAll()
+        return TranscriptionResult(text: combined, isFinal: true, emotion: emotion)
+    }
+
+    var isEmpty: Bool { pending.isEmpty }
+}
+
 final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
     private let recognizer: SFSpeechRecognizer
 
@@ -10,7 +39,7 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
 
     private struct State {
         var partialText: String = ""
-        var finalResult: TranscriptionResult?
+        var queue: AppleSpeechFinalQueue = AppleSpeechFinalQueue()
         var finishContinuation: CheckedContinuation<TranscriptionResult, Error>?
         var pendingError: Error?
     }
@@ -68,9 +97,9 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
                     if isNoSpeech {
                         let empty = TranscriptionResult(text: "", isFinal: true, emotion: nil)
                         let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
-                            state.finalResult = empty
                             let cont = state.finishContinuation
                             state.finishContinuation = nil
+                            if cont == nil { state.queue.enqueue(empty) }
                             return cont
                         }
                         cont?.resume(returning: empty)
@@ -99,10 +128,12 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
                             emotion: nil
                         )
                         let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
-                            state.finalResult = transcription
-                            let cont = state.finishContinuation
-                            state.finishContinuation = nil
-                            return cont
+                            if let c = state.finishContinuation {
+                                state.finishContinuation = nil
+                                return c
+                            }
+                            state.queue.enqueue(transcription)
+                            return nil
                         }
                         cont?.resume(returning: transcription)
                     } else {
@@ -110,6 +141,17 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
                     }
                 }
             }
+        }
+
+        // Pop any queued mid-stream final BEFORE feeding more audio so the
+        // pipeline sees finals in order.
+        if let queued = stateLock.withLock({ $0.queue.popNext() }) {
+            // Still feed this chunk for future recognition — but the result
+            // we return is the queued final.
+            if let buffer = makePCMBuffer(from: samples, sampleRate: sampleRate) {
+                request?.append(buffer)
+            }
+            return queued
         }
 
         if let buffer = makePCMBuffer(from: samples, sampleRate: sampleRate) {
@@ -123,16 +165,24 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
     func finish() async throws -> TranscriptionResult {
         request?.endAudio()
 
+        // If finals were queued but not yet drained by feedChunk, return their
+        // concatenation rather than waiting on the recognizer.
         let snapshot = stateLock.withLock { state -> (TranscriptionResult?, Error?) in
-            (state.finalResult, state.pendingError)
+            if let err = state.pendingError {
+                state.pendingError = nil
+                return (nil, err)
+            }
+            if let drained = state.queue.drainConcatenated() {
+                return (drained, nil)
+            }
+            return (nil, nil)
         }
         if let error = snapshot.1 {
             LogService.error("Recognition failed: \(error.localizedDescription)", category: "AppleSpeechASREngine")
             throw error
         }
         if let final = snapshot.0 {
-            stateLock.withLock { $0.finalResult = nil }
-            LogService.info("Recognition complete, length: \(final.text.count) chars", category: "AppleSpeechASREngine")
+            LogService.info("Recognition complete (drained queue), length: \(final.text.count) chars", category: "AppleSpeechASREngine")
             return final
         }
 
@@ -143,9 +193,8 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
                         state.pendingError = nil
                         return (nil, error)
                     }
-                    if let final = state.finalResult {
-                        state.finalResult = nil
-                        return (final, nil)
+                    if let drained = state.queue.drainConcatenated() {
+                        return (drained, nil)
                     }
                     state.finishContinuation = continuation
                     return (nil, nil)

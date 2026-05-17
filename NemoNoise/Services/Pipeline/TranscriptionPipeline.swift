@@ -59,14 +59,17 @@ final class TranscriptionPipeline {
                         let engine = engineBox.engine
                         do {
                             var result = try await engine.feedChunk(chunk.samples, sampleRate: 16000)
+                            let final = result.isFinal
                             for proc in postProcessors {
-                                if let next = try await proc.process(result, isFinal: false) {
+                                if let next = try await proc.process(result, isFinal: final) {
                                     result = next
                                 }
                             }
-                            await sink.deliver(result, isFinal: false)
+                            await sink.deliver(result, isFinal: final)
                             if result.text.isEmpty {
                                 continuation.yield(.level(rms: chunk.rmsLevel, spectrum: chunk.spectrum))
+                            } else if final {
+                                continuation.yield(.final(result))
                             } else {
                                 continuation.yield(.partial(result, rms: chunk.rmsLevel, spectrum: chunk.spectrum))
                             }

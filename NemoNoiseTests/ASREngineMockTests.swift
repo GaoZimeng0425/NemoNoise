@@ -15,11 +15,20 @@ final class MockASREngine: ASREngine, @unchecked Sendable {
     var finishResultText: String = "mock final"
     var finishShouldThrow: Error?
 
+    /// FIFO queue of results to return from successive `feedChunk` calls.
+    /// When the queue is non-empty, `feedChunk` pops from the front
+    /// (ignoring `feedChunkResultText`). Use this to simulate mid-stream
+    /// finals interleaved with partials.
+    var feedChunkScript: [TranscriptionResult] = []
+
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
         feedChunkCallCount += 1
         lastFeedSamples = samples
         lastFeedSampleRate = sampleRate
         if let err = feedChunkShouldThrow { throw err }
+        if !feedChunkScript.isEmpty {
+            return feedChunkScript.removeFirst()
+        }
         return TranscriptionResult(text: feedChunkResultText, isFinal: false, emotion: nil)
     }
 

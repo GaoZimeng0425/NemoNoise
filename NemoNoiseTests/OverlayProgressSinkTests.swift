@@ -54,4 +54,19 @@ final class OverlayProgressSinkTests: XCTestCase {
         XCTAssertEqual(target.partialText, "second sentence")
         XCTAssertEqual(target.promotedSegments, ["hello world"], "non-extending new partial should promote the old one")
     }
+
+    func testMidStreamFinalDoesNotMutateTargetState() async {
+        let target = StubOverlayTarget()
+        target.partialText = "in-flight partial"
+        let sink = OverlayProgressSink(target: target)
+        // Simulating the new pipeline behavior: a mid-stream isFinal=true delivery
+        await sink.deliver(
+            TranscriptionResult(text: "sentence one.", isFinal: true, emotion: nil),
+            isFinal: true
+        )
+        XCTAssertEqual(target.partialText, "in-flight partial",
+                       "partialText must be preserved across mid-stream finals")
+        XCTAssertEqual(target.promotedSegments, [],
+                       "mid-stream finals must NOT promote partial segments via the dictation sink")
+    }
 }

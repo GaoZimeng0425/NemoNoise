@@ -11,4 +11,12 @@ struct TranscriptionResult: Sendable {
     let text: String
     let isFinal: Bool
     let emotion: String?
+    let originalText: String?
+
+    init(text: String, isFinal: Bool, emotion: String?, originalText: String? = nil) {
+        self.text = text
+        self.isFinal = isFinal
+        self.emotion = emotion
+        self.originalText = originalText
+    }
 }
