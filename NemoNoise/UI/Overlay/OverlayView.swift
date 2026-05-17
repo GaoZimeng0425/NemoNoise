@@ -22,6 +22,7 @@ struct OverlayView: View {
                         .layoutPriority(1)
 
                     engineChip
+                        .fixedSize()
                         .glassEffect(.regular, in: .capsule)
                         .glassEffectID("engineChip", in: glassNS)
                 }
