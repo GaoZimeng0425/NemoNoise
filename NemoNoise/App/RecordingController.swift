@@ -212,6 +212,7 @@ final class RecordingController: OverlayWriter {
                         self.applyEnvelope(spectrum)
                     case .engineFallback(let from):
                         self.isStreaming = pipeline.isStreaming
+                        self.currentEngineLabel = "Apple (fallback)"
                         LogService.info("Engine fallback from \(from)", category: "Recording")
                         ToastWindowController.show("Switched to local engine", style: .info)
                     case .final:
