@@ -317,6 +317,7 @@ final class RecordingController: OverlayWriter {
         micLevel = 0
         spectrum = Array(repeating: 0, count: 16)
         recordingState = .ready
+        LogService.endSession()
         hideOverlay()
     }
 
