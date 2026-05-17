@@ -57,6 +57,7 @@ final class RecordingController: OverlayWriter {
     private var timerTask: Task<Void, Never>?
     private var pipelineTask: Task<Void, Never>?
     private var escMonitor: Any?
+    private var recordingStartedAt: Date?
 
     // MARK: - Init
 
@@ -137,7 +138,12 @@ final class RecordingController: OverlayWriter {
         LogService.info("HotkeyUp — mode=\(recordingMode.rawValue) state=\(recordingState)", category: "Recording")
         if recordingMode == .pushToTalk && recordingState == .recording {
             performHaptic()
-            stopRecording()
+            let elapsed = recordingStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+            if elapsed < 0.3 {
+                abortRecording()
+            } else {
+                stopRecording()
+            }
         }
     }
 
@@ -189,6 +195,7 @@ final class RecordingController: OverlayWriter {
         _ = LogService.startSession()
         LogService.info("Recording started, mode: \(recordingMode.rawValue), engine streaming: \(pipeline.isStreaming)", category: "Recording")
 
+        recordingStartedAt = Date()
         recordingState = .recording
         confirmedSegments = []
         partialText = ""
@@ -286,6 +293,31 @@ final class RecordingController: OverlayWriter {
                 self.handlePipelineError(error)
             }
         }
+    }
+
+    /// Abort an in-flight recording without finalizing. Used when a
+    /// push-to-talk press is shorter than the minimum useful duration:
+    /// audio is discarded, the mutex is released synchronously, and state
+    /// returns to `.ready` in the same MainActor tick (no `.processing`
+    /// window). Toggle mode never triggers this path.
+    private func abortRecording() {
+        guard recordingState == .recording, let pipeline, let mutex else { return }
+        LogService.info("Aborting recording (too short)", category: "Recording")
+
+        pipelineTask?.cancel()
+        pipelineTask = nil
+        pipeline.stop()
+        mutex.release(.dictation)
+        stopTimer()
+        invalidateSilenceTimer()
+        stopEscMonitor()
+
+        confirmedSegments = []
+        partialText = ""
+        micLevel = 0
+        spectrum = Array(repeating: 0, count: 16)
+        recordingState = .ready
+        hideOverlay()
     }
 
     private func handlePipelineError(_ error: Error) {
