@@ -1,3 +1,4 @@
+import AppKit
 import Sparkle
 import SwiftUI
 
@@ -5,6 +6,7 @@ struct MenuBarPopoverView: View {
     @Environment(RecordingController.self) private var controller
     @Environment(TranslationController.self) private var translationController
     @Environment(PipelineProvider.self) private var pipelineProvider
+    @Environment(\.openSettings) private var openSettings
     let updater: SPUUpdater
 
     var body: some View {
@@ -76,9 +78,15 @@ struct MenuBarPopoverView: View {
                 Button("Check for Updates…") { updater.checkForUpdates() }
                     .buttonStyle(.plain)
                 Spacer()
-                SettingsLink {
+                Button {
+                    // SettingsLink alone doesn't activate an LSUIElement app, so a
+                    // window opened behind another app stays hidden on re-click.
+                    NSApp.activate(ignoringOtherApps: true)
+                    openSettings()
+                } label: {
                     Label("Settings", systemImage: "gear")
                 }
+                .buttonStyle(.plain)
             }
             .font(.subheadline)
 
