@@ -14,6 +14,6 @@ final class PunctuationProcessor: PostProcessor {
     func process(_ result: TranscriptionResult, isFinal: Bool) async throws -> TranscriptionResult? {
         guard isFinal, !result.text.isEmpty else { return nil }
         let punctuated = punctuator.addPunctuation(to: result.text)
-        return TranscriptionResult(text: punctuated, isFinal: true, emotion: result.emotion)
+        return TranscriptionResult(text: punctuated, isFinal: true, emotion: result.emotion, sequence: result.sequence)
     }
 }
