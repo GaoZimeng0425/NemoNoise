@@ -4,8 +4,8 @@ import AVFoundation
 struct OnboardingView: View {
     @AppStorage(AppDefaults.Keys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
     @AppStorage(AppDefaults.Keys.engineType) private var engineType = AppDefaults.Defaults.engineType
+    @Environment(PermissionService.self) private var permissions
     @State private var currentStep = 0
-    @State private var micPermissionGranted = false
 
     let onComplete: () -> Void
 
@@ -63,7 +63,7 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
-            if micPermissionGranted {
+            if permissions.micStatus == .authorized {
                 Label("Microphone enabled", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.subheadline.bold())
@@ -214,9 +214,9 @@ struct OnboardingView: View {
 
     private func requestMicPermission() {
         Task {
-            let granted = await AVAudioApplication.requestRecordPermission()
+            _ = await AVAudioApplication.requestRecordPermission()
             await MainActor.run {
-                micPermissionGranted = granted
+                permissions.refresh()
             }
         }
     }

@@ -1,9 +1,9 @@
 import SwiftUI
 import KeyboardShortcuts
-import ApplicationServices
 
 struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
+    @Environment(PermissionService.self) private var permissions
     @AppStorage(AppDefaults.Keys.engineType) private var engineType = AppDefaults.Defaults.engineType
     @State private var cloudAPIKey: String = ""
     @State private var showExportAlert = false
@@ -168,7 +168,7 @@ struct SettingsView: View {
                 }
             }
 
-            if !AXIsProcessTrusted() {
+            if !permissions.isAXTrusted {
                 Label("Accessibility permission required for global hotkey", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.caption)
@@ -178,7 +178,7 @@ struct SettingsView: View {
                 .font(.caption)
             }
 
-            if !CGPreflightScreenCaptureAccess() {
+            if !permissions.hasScreenRecording {
                 Label("Screen recording permission required for translation mode", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.caption)

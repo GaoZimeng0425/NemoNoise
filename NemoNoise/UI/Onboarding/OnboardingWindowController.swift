@@ -4,7 +4,7 @@ import SwiftUI
 final class OnboardingWindowController {
     private static var activePanel: NSPanel?
 
-    static func show(onComplete: @escaping () -> Void) {
+    static func show(permissions: PermissionService, onComplete: @escaping () -> Void) {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 480, height: 360),
             styleMask: [.titled, .closable, .fullSizeContentView],
@@ -25,6 +25,7 @@ final class OnboardingWindowController {
                 panel.orderOut(nil)
                 panel.close()
             })
+            .environment(permissions)
         )
         hostingView.sizingOptions = .preferredContentSize
 

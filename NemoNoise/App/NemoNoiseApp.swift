@@ -7,6 +7,7 @@ struct NemoNoiseApp: App {
     @State private var controller: RecordingController
     @State private var translationController: TranslationController
     @State private var pipelineProvider: PipelineProvider
+    @State private var permissions = PermissionService()
 
     private let updaterDelegate = UpdaterFeedProvider()
     private let updaterController: SPUStandardUpdaterController
@@ -46,11 +47,12 @@ struct NemoNoiseApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            OnboardingGate {
+            OnboardingGate(permissions: permissions) {
                 MenuBarPopoverView(updater: updaterController.updater)
                     .environment(controller)
                     .environment(translationController)
                     .environment(pipelineProvider)
+                    .environment(permissions)
             }
         } label: {
             MenuBarLabel()
@@ -63,19 +65,21 @@ struct NemoNoiseApp: App {
                 .environment(controller)
                 .environment(controller.modelManager)
                 .environment(translationController)
+                .environment(permissions)
         }
     }
 }
 
 private struct OnboardingGate<Content: View>: View {
     @AppStorage(AppDefaults.Keys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
+    let permissions: PermissionService
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         content()
             .onAppear {
                 if !hasCompletedOnboarding {
-                    OnboardingWindowController.show {
+                    OnboardingWindowController.show(permissions: permissions) {
                         hasCompletedOnboarding = true
                     }
                 }
