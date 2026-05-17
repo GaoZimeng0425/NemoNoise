@@ -13,11 +13,18 @@ struct OverlayView: View {
     var body: some View {
         GlassEffectContainer(spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
-                headerBar
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .glassEffect(statusGlass, in: .capsule)
-                    .glassEffectID("status", in: glassNS)
+                HStack(alignment: .center, spacing: 8) {
+                    headerBar
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .glassEffect(statusGlass, in: .capsule)
+                        .glassEffectID("status", in: glassNS)
+                        .layoutPriority(1)
+
+                    engineChip
+                        .glassEffect(.regular, in: .capsule)
+                        .glassEffectID("engineChip", in: glassNS)
+                }
 
                 if shouldShowTranscript {
                     transcriptArea
@@ -30,6 +37,15 @@ struct OverlayView: View {
         }
         .frame(minWidth: 360, maxWidth: 520)
         .animation(.smooth(duration: 0.4), value: controller.recordingState)
+    }
+
+    private var engineChip: some View {
+        Text(controller.currentEngineLabel)
+            .font(.system(.caption2, design: .rounded))
+            .fontWeight(.medium)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
     }
 
     private var shouldShowTranscript: Bool {
