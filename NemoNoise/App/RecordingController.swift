@@ -15,6 +15,7 @@ final class RecordingController: OverlayWriter {
     var spectrum: [Float] = Array(repeating: 0, count: 16)
     var isListeningSilence: Bool = false
     var recordingDuration: TimeInterval = 0
+    var currentEngineLabel: String = "Apple"
 
     var recordingMode: RecordingMode {
         didSet { UserDefaults.standard.set(recordingMode.rawValue, forKey: AppDefaults.Keys.recordingMode) }

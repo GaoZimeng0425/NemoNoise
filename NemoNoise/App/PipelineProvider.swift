@@ -105,6 +105,15 @@ final class PipelineProvider {
                     fallback: fallback
                 )
                 recordingController.bind(pipeline: pipeline, mutex: mutex)
+                let label: String
+                if build.fallbackReason != nil {
+                    label = "Apple"
+                } else {
+                    let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
+                                 ?? AppDefaults.Defaults.engineType
+                    label = Self.engineDisplayName(for: choice)
+                }
+                recordingController.currentEngineLabel = label
             }
             // Set readiness even if recordingController weak-ref is nil — in
             // production the controller outlives the provider, so this branch
@@ -156,6 +165,17 @@ final class PipelineProvider {
     }
 
     // MARK: - Punctuator
+
+    private static func engineDisplayName(for choice: String) -> String {
+        switch choice {
+        case "apple":      return "Apple"
+        case "sensevoice": return "SenseVoice"
+        case "paraformer": return "Paraformer"
+        case "qwen3":      return "Qwen3"
+        case "cloud":      return "Cloud"
+        default:           return "Apple"
+        }
+    }
 
     /// Called from `Task.detached` — `nonisolated` because the enclosing class
     /// is `@MainActor` but this helper does no MainActor work.

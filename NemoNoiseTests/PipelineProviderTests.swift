@@ -106,4 +106,28 @@ final class PipelineProviderTests: XCTestCase {
         try await waitUntilReady(provider)
         XCTAssertEqual(provider.dictation, .ready)
     }
+
+    func testApplyDictation_setsLabelFromUserChoice() async throws {
+        UserDefaults.standard.set("sensevoice", forKey: AppDefaults.Keys.engineType)
+        defer { UserDefaults.standard.removeObject(forKey: AppDefaults.Keys.engineType) }
+
+        let (provider, recording, _) = makeProvider()
+        provider.bootstrap()
+        try await waitUntilReady(provider)
+
+        XCTAssertEqual(recording.currentEngineLabel, "SenseVoice")
+    }
+
+    func testApplyDictation_labelFallsBackToAppleWhenBuildHasFallbackReason() async throws {
+        UserDefaults.standard.set("sensevoice", forKey: AppDefaults.Keys.engineType)
+        defer { UserDefaults.standard.removeObject(forKey: AppDefaults.Keys.engineType) }
+
+        let factory = StubFactory()
+        factory.primaryResult = .success(.init(engine: StubEngine(), fallbackReason: "model missing"))
+        let (provider, recording, _) = makeProvider(factory: factory)
+        provider.bootstrap()
+        try await waitUntilReady(provider)
+
+        XCTAssertEqual(recording.currentEngineLabel, "Apple")
+    }
 }
