@@ -7,6 +7,7 @@ enum AppDefaults {
         static let engineType = "engineType"
         static let recordingMode = "recordingMode"
         static let languagePreference = "languagePreference"
+        static let preferredMicUID = "preferredMicUID"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let sentryEnabled = "sentryEnabled"
         /// Legacy hotkey key — read once by `HotkeyMigration` and then deleted.
