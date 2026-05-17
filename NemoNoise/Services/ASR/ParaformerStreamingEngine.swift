@@ -39,6 +39,10 @@ final class ParaformerStreamingEngine: ASREngine, @unchecked Sendable {
         recognizer.startStream()
     }
 
+    func markBoundary() {
+        recognizer.resetStream()
+    }
+
     /// Pure helper to keep the endpoint-handling logic unit-testable without
     /// needing the underlying ONNX recognizer to be loaded.
     static func buildResult(rawText: String, isEndpoint: Bool) -> TranscriptionResult {
