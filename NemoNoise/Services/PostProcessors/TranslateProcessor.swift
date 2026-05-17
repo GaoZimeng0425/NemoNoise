@@ -4,8 +4,11 @@ import Foundation
 /// Partial results pass through unchanged (translating every keystroke is
 /// expensive and produces unstable text).
 ///
-/// Translation failures do NOT propagate as throws — the original text is
-/// returned so that the recording session is never lost to a translation hiccup.
+/// On success, the translated text becomes `result.text` and the source is
+/// preserved in `result.originalText` so downstream sinks can render both.
+/// On failure, the source is returned as `result.text` and `originalText` is
+/// left nil — sinks treat this as un-translated and avoid overwriting any
+/// previously-good Chinese.
 final class TranslateProcessor: PostProcessor {
     private let service: any TranslationService
 
@@ -19,10 +22,20 @@ final class TranslateProcessor: PostProcessor {
 
         do {
             let translated = try await service.translate(result.text)
-            return TranscriptionResult(text: translated, isFinal: true, emotion: result.emotion)
+            return TranscriptionResult(
+                text: translated,
+                isFinal: true,
+                emotion: result.emotion,
+                originalText: result.text
+            )
         } catch {
             LogService.warn("Translation failed, returning source: \(error.localizedDescription)", category: "TranslateProcessor")
-            return TranscriptionResult(text: result.text, isFinal: true, emotion: result.emotion)
+            return TranscriptionResult(
+                text: result.text,
+                isFinal: true,
+                emotion: result.emotion,
+                originalText: nil
+            )
         }
     }
 }

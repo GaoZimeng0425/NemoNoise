@@ -3,8 +3,6 @@ import Translation
 
 struct SubtitleOverlayView: View {
     @Environment(TranslationController.self) private var controller
-    @State private var translationSession: TranslationSession?
-    @State private var translationTask: Task<Void, Never>?
     @Namespace private var glassNS
 
     private var subtitleStatusGlass: Glass {
@@ -33,31 +31,8 @@ struct SubtitleOverlayView: View {
         .frame(minWidth: 400, maxWidth: 900)
         .animation(.smooth(duration: 0.4), value: controller.translationState)
         .translationTask(.init(source: .init(identifier: "en"), target: .init(identifier: "zh-Hans"))) { session in
-            translationSession = session
             controller.translationService.setSession(session)
         }
-        .onChange(of: controller.englishText) { _, newText in
-            translationTask?.cancel()
-            guard !newText.isEmpty else { return }
-            translationTask = Task {
-                try? await Task.sleep(for: .milliseconds(300))
-                guard !Task.isCancelled else { return }
-
-                controller.isTranslating = true
-                do {
-                    let result = try await controller.translationService.translate(newText)
-                    guard !Task.isCancelled else { return }
-                    controller.chineseText = result
-                } catch is CancellationError {
-                    return
-                } catch {
-                    LogService.warn("Translation failed: \(error.localizedDescription)", category: "Translation")
-                    controller.chineseText = "—"
-                }
-                controller.isTranslating = false
-            }
-        }
-        .onDisappear { translationTask?.cancel() }
     }
 
     private var showTextCapsule: Bool {
@@ -108,5 +83,4 @@ struct SubtitleOverlayView: View {
         }
         return "Listening…"
     }
-
 }

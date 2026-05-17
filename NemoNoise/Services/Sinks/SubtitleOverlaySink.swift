@@ -4,6 +4,7 @@ import Foundation
 protocol SubtitleWriter: AnyObject {
     var englishText: String { get set }
     var partialText: String { get set }
+    var chineseText: String { get set }
 }
 
 final class SubtitleOverlaySink: Sink {
@@ -16,7 +17,11 @@ final class SubtitleOverlaySink: Sink {
     func deliver(_ result: TranscriptionResult, isFinal: Bool) async {
         guard !result.text.isEmpty else { return }
         await MainActor.run {
-            if isFinal {
+            if let original = result.originalText {
+                target.englishText = original
+                target.chineseText = result.text
+                target.partialText = ""
+            } else if isFinal {
                 target.englishText = result.text
                 target.partialText = ""
             } else {

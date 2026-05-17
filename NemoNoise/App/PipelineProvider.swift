@@ -126,9 +126,13 @@ final class PipelineProvider {
                             category: "PipelineProvider")
         case .success(let build):
             if let translationController {
-                let postProcessors: [any PostProcessor] = punctuator.map {
-                    [PunctuationProcessor(punctuator: $0)]
-                } ?? []
+                var postProcessors: [any PostProcessor] = []
+                if let punctuator {
+                    postProcessors.append(PunctuationProcessor(punctuator: punctuator))
+                }
+                postProcessors.append(
+                    TranslateProcessor(service: translationController.translationService)
+                )
                 let pipeline = TranscriptionPipeline(
                     source: SystemAudioSource(),
                     engine: build.engine,
@@ -138,8 +142,6 @@ final class PipelineProvider {
                 )
                 translationController.bind(pipeline: pipeline, mutex: mutex)
             }
-            // Same rationale as dictation: readiness flips even if the
-            // translationController weak-ref is nil (only happens in tests).
             translation = .ready
         }
     }

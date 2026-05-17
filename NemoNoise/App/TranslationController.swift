@@ -6,8 +6,7 @@ final class TranslationController: SubtitleWriter {
     var translationState: TranslationState = .idle
     var englishText: String = ""
     var partialText: String = ""
-    var chineseText: String = ""        // populated by SubtitleOverlayView post-translation
-    var isTranslating: Bool = false
+    var chineseText: String = ""
     var audioLevel: Float = 0
     var spectrum: [Float] = Array(repeating: 0, count: 16)
 

@@ -37,6 +37,18 @@ final class TranslateProcessorTests: XCTestCase {
         XCTAssertEqual(service.translateCalls, ["hello"])
     }
 
+    func testFinalPopulatesOriginalText() async throws {
+        let service = StubTranslationService()
+        service.resultText = "你好"
+        let processor = TranslateProcessor(service: service)
+        let input = TranscriptionResult(text: "hello", isFinal: true, emotion: "joy")
+
+        let out = try await processor.process(input, isFinal: true)
+        XCTAssertEqual(out?.originalText, "hello",
+                       "successful translation must preserve the source in originalText")
+        XCTAssertEqual(out?.emotion, "joy", "emotion must survive the processor")
+    }
+
     func testTranslationErrorReturnsOriginalNotNil() async throws {
         let service = StubTranslationService()
         service.shouldThrow = NSError(domain: "translate", code: 1)
@@ -44,7 +56,18 @@ final class TranslateProcessorTests: XCTestCase {
         let input = TranscriptionResult(text: "hello", isFinal: true, emotion: nil)
 
         let out = try await processor.process(input, isFinal: true)
-        XCTAssertEqual(out?.text, "hello", "on translation failure, keep the source text")
+        XCTAssertEqual(out?.text, "hello", "on failure, keep the source text as the primary text")
+    }
+
+    func testFailureLeavesOriginalTextNil() async throws {
+        let service = StubTranslationService()
+        service.shouldThrow = NSError(domain: "translate", code: 1)
+        let processor = TranslateProcessor(service: service)
+        let input = TranscriptionResult(text: "hello", isFinal: true, emotion: nil)
+
+        let out = try await processor.process(input, isFinal: true)
+        XCTAssertNil(out?.originalText,
+                     "on failure, originalText must be nil so the sink treats this as un-translated")
     }
 
     func testEmptyTextSkipsTranslation() async throws {
