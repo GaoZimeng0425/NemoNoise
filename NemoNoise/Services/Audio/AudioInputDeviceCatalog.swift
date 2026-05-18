@@ -11,10 +11,12 @@ struct AudioInputDevice: Identifiable, Hashable {
 /// reads; safe to call from any thread, including MainActor.
 enum AudioInputDeviceCatalog {
 
-    /// Every audio device with at least one input stream, in HAL order.
+    /// Physical input devices, in HAL order. Virtual loopback devices
+    /// (BlackHole, Loopback) and user-defined aggregates are excluded so the
+    /// voice-input picker can't accidentally route system audio into the mic.
     static func availableInputDevices() -> [AudioInputDevice] {
         return allDeviceIDs()
-            .filter { hasInputStream($0) }
+            .filter { hasInputStream($0) && isPhysicalDevice($0) }
             .compactMap { id in
                 guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID),
                       let name = stringProperty(id, kAudioObjectPropertyName)
@@ -53,6 +55,23 @@ enum AudioInputDeviceCatalog {
             AudioObjectGetPropertyData(system, &address, 0, nil, &dataSize, buf.baseAddress!)
         }
         return status == noErr ? ids : []
+    }
+
+    /// Excludes virtual and aggregate devices. Unknown transport types are
+    /// treated as physical (conservative — better to surface a real mic we
+    /// can't classify than hide it).
+    private static func isPhysicalDevice(_ id: AudioDeviceID) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr
+        else { return true }
+        return value != kAudioDeviceTransportTypeVirtual
+            && value != kAudioDeviceTransportTypeAggregate
     }
 
     private static func hasInputStream(_ id: AudioDeviceID) -> Bool {
