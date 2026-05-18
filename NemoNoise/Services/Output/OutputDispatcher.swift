@@ -1,8 +1,8 @@
 import AppKit
 
-/// Single chokepoint for the post-transcription side effects: clipboard, history,
-/// AX/keystroke injection, and user feedback. Clipboard is written unconditionally
-/// here in Task 1; Task 4 reorders so secure-field outcomes skip the clipboard.
+/// Single chokepoint for the post-transcription side effects: history, injection,
+/// clipboard, and user feedback. Clipboard write happens after injection so
+/// secure-field outcomes (Task 3) can skip pasteboard pollution.
 @MainActor
 enum OutputDispatcher {
     static func dispatch(
@@ -17,16 +17,21 @@ enum OutputDispatcher {
             return
         }
 
+        // History first — always recorded, regardless of target type.
+        historyStore.add(text: trimmed, engineLabel: engineLabel)
+        LogService.info("OutputDispatcher — history saved, total=\(historyStore.records.count)", category: "Output")
+
+        // Inject.
+        let outcome = await injector.inject(trimmed)
+        LogService.info("OutputDispatcher — inject outcome=\(outcome)", category: "Output")
+
+        // Clipboard — written for everything except secure-field skip (Task 3).
+        // For now (Task 2), always write to preserve current observable behaviour.
         NSPasteboard.general.clearContents()
         let wrote = NSPasteboard.general.setString(trimmed, forType: .string)
         LogService.info("OutputDispatcher — clipboard wrote=\(wrote), len=\(trimmed.count)", category: "Output")
 
-        historyStore.add(text: trimmed, engineLabel: engineLabel)
-        LogService.info("OutputDispatcher — history saved, total=\(historyStore.records.count)", category: "Output")
-
-        let outcome = await injector.inject(trimmed)
-        LogService.info("OutputDispatcher — inject outcome=\(outcome)", category: "Output")
-
+        // Toast.
         switch outcome {
         case .injectedAX, .injectedKeystroke:
             ToastWindowController.show(
