@@ -36,9 +36,58 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
         LogService.debug("Captured target AXUIElement, pid: \(pid)", category: "TextInjection")
     }
 
+    private static let maxTextLength = 5_000
+    private static let charDelayMs = 3
+    private static let activationTimeoutMs = 300
+    private static let safeVirtualKey: CGKeyCode = 0xCC
+
+    private func waitUntilFrontmost(pid: pid_t) async -> Bool {
+        guard let app = NSRunningApplication(processIdentifier: pid) else { return false }
+        app.activate(options: [.activateIgnoringOtherApps])
+
+        let deadline = Date().addingTimeInterval(Double(Self.activationTimeoutMs) / 1000.0)
+        while Date() < deadline {
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
+    }
+
+    private func postKeystrokes(_ text: String) async {
+        let source = CGEventSource(stateID: .privateState)
+        for scalar in text.unicodeScalars {
+            let utf16 = Array(String(scalar).utf16)
+
+            if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: Self.safeVirtualKey, keyDown: true) {
+                keyDown.flags = []
+                utf16.withUnsafeBufferPointer { buf in
+                    keyDown.keyboardSetUnicodeString(stringLength: buf.count, unicodeString: buf.baseAddress)
+                }
+                keyDown.post(tap: .cghidEventTap)
+            }
+
+            if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: Self.safeVirtualKey, keyDown: false) {
+                keyUp.flags = []
+                utf16.withUnsafeBufferPointer { buf in
+                    keyUp.keyboardSetUnicodeString(stringLength: buf.count, unicodeString: buf.baseAddress)
+                }
+                keyUp.post(tap: .cghidEventTap)
+            }
+
+            try? await Task.sleep(for: .milliseconds(Self.charDelayMs))
+        }
+    }
+
     func inject(_ text: String) async -> InjectionOutcome {
+        guard text.count <= Self.maxTextLength else {
+            LogService.info("inject — path=failed, reason=text_too_long, len=\(text.count)", category: "TextInjection")
+            return .failed(reason: "text_too_long_\(text.count)")
+        }
+
         guard let element = targetElement else {
-            LogService.info("inject — no captured element", category: "TextInjection")
+            LogService.info("inject — path=failed, reason=no_target", category: "TextInjection")
             return .failed(reason: "no_target")
         }
 
@@ -47,13 +96,29 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
             return .skippedSecureField
         }
 
-        let status = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
-        if status == .success {
+        let axStatus = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
+        if axStatus == .success {
             LogService.info("inject — path=AX, len=\(text.count)", category: "TextInjection")
             return .injectedAX
         }
-        LogService.info("inject — path=AX failed (status=\(status.rawValue))", category: "TextInjection")
-        return .failed(reason: "ax_failed_status_\(status.rawValue)")
+        LogService.info("inject — AX set failed (status=\(axStatus.rawValue)), trying keystroke", category: "TextInjection")
+
+        guard let pid = targetApp else {
+            LogService.info("inject — path=failed, reason=no_pid_for_keystroke", category: "TextInjection")
+            return .failed(reason: "no_pid_for_keystroke")
+        }
+
+        let isFrontmost = await waitUntilFrontmost(pid: pid)
+        guard isFrontmost else {
+            LogService.info("inject — path=failed, reason=not_frontmost_after_\(Self.activationTimeoutMs)ms, target_pid=\(pid)", category: "TextInjection")
+            return .failed(reason: "not_frontmost_after_\(Self.activationTimeoutMs)ms")
+        }
+
+        let start = Date()
+        await postKeystrokes(text)
+        let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
+        LogService.info("inject — path=keystroke, len=\(text.count), charDelayMs=\(Self.charDelayMs), elapsed=\(elapsedMs)ms", category: "TextInjection")
+        return .injectedKeystroke
     }
 
     private func isSecureField(_ element: AXUIElement) -> Bool {
