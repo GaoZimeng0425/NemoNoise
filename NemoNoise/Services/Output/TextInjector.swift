@@ -41,12 +41,25 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
             LogService.info("inject — no captured element", category: "TextInjection")
             return .failed(reason: "no_target")
         }
+
+        if isSecureField(element) {
+            LogService.info("inject — path=secure_field", category: "TextInjection")
+            return .skippedSecureField
+        }
+
         let status = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
         if status == .success {
             LogService.info("inject — path=AX, len=\(text.count)", category: "TextInjection")
             return .injectedAX
         }
-        LogService.info("inject — path=AX failed (status=\(status.rawValue)), bridge returns .failed", category: "TextInjection")
+        LogService.info("inject — path=AX failed (status=\(status.rawValue))", category: "TextInjection")
         return .failed(reason: "ax_failed_status_\(status.rawValue)")
+    }
+
+    private func isSecureField(_ element: AXUIElement) -> Bool {
+        var subrole: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &subrole)
+        guard status == .success, let str = subrole as? String else { return false }
+        return str == (kAXSecureTextFieldSubrole as String)
     }
 }

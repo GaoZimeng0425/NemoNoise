@@ -25,11 +25,16 @@ enum OutputDispatcher {
         let outcome = await injector.inject(trimmed)
         LogService.info("OutputDispatcher — inject outcome=\(outcome)", category: "Output")
 
-        // Clipboard — written for everything except secure-field skip (Task 3).
-        // For now (Task 2), always write to preserve current observable behaviour.
-        NSPasteboard.general.clearContents()
-        let wrote = NSPasteboard.general.setString(trimmed, forType: .string)
-        LogService.info("OutputDispatcher — clipboard wrote=\(wrote), len=\(trimmed.count)", category: "Output")
+        // Clipboard — written for every outcome EXCEPT secure-field skip.
+        // Writing the transcript to the pasteboard after a captured password
+        // field would leak the password to any clipboard manager.
+        if case .skippedSecureField = outcome {
+            LogService.info("OutputDispatcher — skipping clipboard write (secure field)", category: "Output")
+        } else {
+            NSPasteboard.general.clearContents()
+            let wrote = NSPasteboard.general.setString(trimmed, forType: .string)
+            LogService.info("OutputDispatcher — clipboard wrote=\(wrote), len=\(trimmed.count)", category: "Output")
+        }
 
         // Toast.
         switch outcome {
