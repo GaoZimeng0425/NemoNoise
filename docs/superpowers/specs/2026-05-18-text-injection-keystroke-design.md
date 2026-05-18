@@ -93,7 +93,7 @@ for scalar in text.unicodeScalars {
 
 Key choices and the reason for each:
 
-- **`.privateState`** event source, not the current `.hidSystemState`. A private state means the injected events are not contaminated by whatever modifier keys the user happens to be holding. With `.hidSystemState`, an inadvertent Shift hold during recording can capitalise injected characters; an inadvertent Cmd hold can turn injected letters into command combinations.
+- **`.hidSystemState`** event source. Initial design used `.privateState` to isolate from user-held modifiers, but real-world testing showed Electron/Chromium and a number of other non-Cocoa text systems silently drop events whose source is `.privateState`, even when posted to `.cghidEventTap`. Cursor, Chrome, Warp, and WeChat all failed under `.privateState`. Switched to `.hidSystemState` so the events look like they came from real hardware; modifier contamination is mitigated by `flags = []` below.
 - **Safe virtual keycode `0xCC`** (unassigned). If `keyboardSetUnicodeString` is ignored downstream for any reason, a `0xCC` keypress is a no-op rather than an unexpected character.
 - **`flags = []`** on both events to clear any inherited modifier state.
 - **Iterate `unicodeScalars`, not `Character`s.** Emoji and CJK ideographs that involve modifier scalars (skin tone, ZWJ sequences) decompose cleanly per scalar. Each scalar's UTF-16 representation handles surrogate pairs naturally.
@@ -248,6 +248,6 @@ inject — path=failed, reason=not_frontmost_after_300ms, target_pid=1234
 
 ## Risks and rollback
 
-- **`.privateState` event source change** may surface a regression in a niche app where the modifier-clean behaviour interacts differently with that app's input handler. Rollback: change one line back to `.hidSystemState`; functionality remains, only the modifier-pollution mitigation is lost.
+- **`.hidSystemState` event source means modifier keys held during dictation may bleed in.** `flags = []` on each event clears the per-event modifier set, but the receiving app's `NSEvent.modifierFlags` reads from the live system state, so if the user holds Shift while a character is posted, some apps capitalise it. This is a real tradeoff vs. the earlier `.privateState` choice (which was modifier-clean but failed everywhere outside Cocoa). If a user reports modifier-bleed in practice, revisit; the spec's working assumption is dictation-while-holding-modifier is rare enough to accept.
 - **macOS HID event-rate limiting.** If diagnostic logs show `elapsed >> charDelayMs × charCount`, the 3 ms inter-scalar delay is being throttled. Bump to 5 ms; reassess if persistent.
 - **`.activateIgnoringOtherApps` deprecation.** When Apple eventually removes it, swap to parameterless `activate()`. Behavioural equivalent in our context.

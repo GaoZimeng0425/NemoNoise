@@ -56,7 +56,11 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
     }
 
     private func postKeystrokes(_ text: String) async {
-        let source = CGEventSource(stateID: .privateState)
+        // .hidSystemState: events look like they came from real hardware.
+        // Electron/Chromium input layers reject events from .privateState even
+        // when posted to .cghidEventTap, so we use system state and rely on
+        // flags=[] below to neutralise any held modifiers.
+        let source = CGEventSource(stateID: .hidSystemState)
         for scalar in text.unicodeScalars {
             let utf16 = Array(String(scalar).utf16)
 
