@@ -1,14 +1,8 @@
 import AppKit
 
 /// Single chokepoint for the post-transcription side effects: clipboard, history,
-/// AX injection, and user feedback. Each step runs unconditionally so a failure
-/// in one (e.g. AX injection silently no-ops) never causes the others to be skipped.
-///
-/// This intentionally bypasses the Sink fan-out for finals — the Sink protocol's
-/// "guard isFinal, !empty" pattern hides empty-text edge cases (some streaming
-/// engines flush all text via partials and return empty on finish), which made
-/// the previous design collapse silently. Here, the controller decides what
-/// `text` to dispatch (with partial fallback) and we just guarantee delivery.
+/// AX/keystroke injection, and user feedback. Clipboard is written unconditionally
+/// here in Task 1; Task 4 reorders so secure-field outcomes skip the clipboard.
 @MainActor
 enum OutputDispatcher {
     static func dispatch(
@@ -23,28 +17,30 @@ enum OutputDispatcher {
             return
         }
 
-        // ① Clipboard — always. This is the user's last-resort retrieval path.
         NSPasteboard.general.clearContents()
         let wrote = NSPasteboard.general.setString(trimmed, forType: .string)
         LogService.info("OutputDispatcher — clipboard wrote=\(wrote), len=\(trimmed.count)", category: "Output")
 
-        // ② History — always. The user must be able to find this later.
         historyStore.add(text: trimmed, engineLabel: engineLabel)
         LogService.info("OutputDispatcher — history saved, total=\(historyStore.records.count)", category: "Output")
 
-        // ③ AX injection — best effort. Only AX selectedText: no Cmd-V simulation
-        // because that path silently "succeeds" even when nothing was pasted.
-        let injected = await injector.injectAX(trimmed)
-        LogService.info("OutputDispatcher — AX injection success=\(injected)", category: "Output")
+        let outcome = await injector.inject(trimmed)
+        LogService.info("OutputDispatcher — inject outcome=\(outcome)", category: "Output")
 
-        // ④ Feedback — always. The user must know what happened.
-        if injected {
+        switch outcome {
+        case .injectedAX, .injectedKeystroke:
             ToastWindowController.show(
                 "Inserted (\(trimmed.count) chars)",
                 style: .success,
                 duration: 2.5
             )
-        } else {
+        case .skippedSecureField:
+            ToastWindowController.show(
+                "Secure field detected — not auto-typed",
+                style: .info,
+                duration: 4
+            )
+        case .failed:
             ToastWindowController.show(
                 "Copied to clipboard — press ⌘V to paste",
                 style: .info,

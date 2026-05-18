@@ -3,22 +3,26 @@ import XCTest
 
 final class TextInjectorTests: XCTestCase {
 
-    func testInjectAXReturnsFalseWhenNoTarget() async {
+    func testInjectReturnsFailedWhenNoTarget() async {
         let injector = TextInjector()
-        let result = await injector.injectAX("hello world")
-        XCTAssertFalse(result)
+        let outcome = await injector.inject("hello world")
+        XCTAssertEqual(outcome, .failed(reason: "no_target"))
     }
 
     func testCaptureTargetWithNoFocusedElement() async {
         let injector = TextInjector()
         injector.captureTarget()
-        let result = await injector.injectAX("test")
-        XCTAssertFalse(result)
+        let outcome = await injector.inject("test")
+        if case .failed = outcome {
+            // expected — running under XCTest, no focused element
+        } else {
+            XCTFail("expected .failed when no focused element, got \(outcome)")
+        }
     }
 
     func testInjectEmptyStringWithNoTarget() async {
         let injector = TextInjector()
-        let result = await injector.injectAX("")
-        XCTAssertFalse(result)
+        let outcome = await injector.inject("")
+        XCTAssertEqual(outcome, .failed(reason: "no_target"))
     }
 }

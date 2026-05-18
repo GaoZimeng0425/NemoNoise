@@ -4,7 +4,7 @@ import XCTest
 final class TextInjectorSinkTests: XCTestCase {
 
     func testSuccessfulInjectionDoesNotTriggerFallback() async {
-        let injector = StubInjector(successResult: true)
+        let injector = StubInjector(outcome: .injectedAX)
         var failureCalled = false
         let sink = TextInjectorSink(
             injector: injector,
@@ -19,7 +19,7 @@ final class TextInjectorSinkTests: XCTestCase {
     }
 
     func testFailedInjectionFallsBackToClipboardAndFiresCallback() async {
-        let injector = StubInjector(successResult: false)
+        let injector = StubInjector(outcome: .failed(reason: "test"))
         let clipboard = TextInjectorSinkRecordingClipboard()
         var failureCalled = false
         let sink = TextInjectorSink(
@@ -35,8 +35,24 @@ final class TextInjectorSinkTests: XCTestCase {
         XCTAssertTrue(failureCalled)
     }
 
+    func testSecureFieldOutcomeAlsoFallsBack() async {
+        let injector = StubInjector(outcome: .skippedSecureField)
+        let clipboard = TextInjectorSinkRecordingClipboard()
+        var failureCalled = false
+        let sink = TextInjectorSink(
+            injector: injector,
+            clipboardFallback: clipboard,
+            onInjectionFailed: { failureCalled = true }
+        )
+
+        await sink.deliver(TranscriptionResult(text: "pwd", isFinal: true, emotion: nil), isFinal: true)
+
+        XCTAssertEqual(clipboard.delivered, ["pwd"])
+        XCTAssertTrue(failureCalled)
+    }
+
     func testIgnoresPartialAndEmpty() async {
-        let injector = StubInjector(successResult: true)
+        let injector = StubInjector(outcome: .injectedAX)
         let sink = TextInjectorSink(
             injector: injector,
             clipboardFallback: TextInjectorSinkRecordingClipboard(),
@@ -54,11 +70,12 @@ final class TextInjectorSinkTests: XCTestCase {
 
 final class StubInjector: TextInjecting, @unchecked Sendable {
     private(set) var injectCalls: [String] = []
-    private let successResult: Bool
-    init(successResult: Bool) { self.successResult = successResult }
-    func injectAX(_ text: String) async -> Bool {
+    private let outcome: InjectionOutcome
+    init(outcome: InjectionOutcome) { self.outcome = outcome }
+    func captureTarget() {}
+    func inject(_ text: String) async -> InjectionOutcome {
         injectCalls.append(text)
-        return successResult
+        return outcome
     }
 }
 
