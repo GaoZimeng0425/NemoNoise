@@ -3,6 +3,7 @@ import ApplicationServices
 
 enum InjectionOutcome: Sendable, Equatable {
     case injectedAX
+    case injectedPaste
     case injectedKeystroke
     case skippedSecureField
     case failed(reason: String)
@@ -16,24 +17,80 @@ protocol TextInjecting: Sendable {
 final class TextInjector: TextInjecting, @unchecked Sendable {
     private var targetElement: AXUIElement?
     private var targetApp: pid_t?
+    /// `true` when the target app has an unreliable AX write bridge — AX
+    /// `setValue` / `kAXSelectedText` return `.success` but the writes are
+    /// no-ops in the actual text storage. Two root causes seen in the wild:
+    /// (1) Electron/Chromium's AX bridge stubbing writes at the renderer
+    /// boundary, (2) hybrid native apps (e.g. WeChat) shipping custom text
+    /// controls that expose `AXTextArea` for read but reject writes silently.
+    /// Behavior is the same → skip AX, go straight to `paste:` selector on
+    /// the NSResponder chain, which both classes of app implement natively.
+    private var skipAXWrites: Bool = false
+
+    /// Bundle IDs known to silently reject AX writes. Mixed origins: Electron
+    /// apps (Slack, VSCode, Discord) and Chinese hybrid apps (WeChat). For
+    /// Electron, `isAXWriteHostile` also checks for `Electron Framework`, so
+    /// unlisted Electron apps still get caught. Native-ish hybrids (WeChat,
+    /// Lark, etc.) must be listed explicitly — no framework signature to detect.
+    private static let axHostileBundleIDs: Set<String> = [
+        "com.tinyspeck.slackmacgap",        // Slack            (Electron)
+        "com.microsoft.VSCode",              // VS Code          (Electron)
+        "com.hnc.Discord",                   // Discord          (Electron)
+        "notion.id",                         // Notion           (Electron)
+        "com.figma.Desktop",                 // Figma            (Electron)
+        "com.linear",                        // Linear           (Electron)
+        "com.github.GitHubClient",           // GitHub Desktop   (Electron)
+        "com.tencent.xinWeChat",             // WeChat for Mac   (hybrid native)
+    ]
+
+    private static func isAXWriteHostile(_ app: NSRunningApplication) -> Bool {
+        if let id = app.bundleIdentifier, axHostileBundleIDs.contains(id) {
+            return true
+        }
+        guard let bundleURL = app.bundleURL else { return false }
+        let frameworks = bundleURL.appendingPathComponent("Contents/Frameworks", isDirectory: true)
+        let fm = FileManager.default
+        // Electron — standard electron-builder / electron-packager output.
+        let electron = frameworks.appendingPathComponent("Electron Framework.framework", isDirectory: true)
+        if fm.fileExists(atPath: electron.path) { return true }
+        // CEF (Chromium Embedded Framework) — Spotify old versions, some game
+        // launchers / Adobe tools. Same Chromium AX bridge → same no-op problem.
+        let cef = frameworks.appendingPathComponent("Chromium Embedded Framework.framework", isDirectory: true)
+        return fm.fileExists(atPath: cef.path)
+    }
 
     func captureTarget() {
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        let frontmostBundle = frontmost?.bundleIdentifier ?? "<unknown>"
+        // Always record frontmost pid — even when AX query returns no element
+        // (common for Electron / WebView targets), the paste path still works
+        // because ⌘V routes through the frontmost app, not via an AX handle.
+        targetApp = frontmost?.processIdentifier
+        skipAXWrites = frontmost.map(Self.isAXWriteHostile) ?? false
+        if skipAXWrites {
+            LogService.info("captureTarget — AX-hostile target detected (\(frontmostBundle)), AX writes will be skipped", category: "TextInjection")
+        }
+
         let systemWide = AXUIElementCreateSystemWide()
+        // Cap AX messaging at 1 s — default is 6 s, which freezes inject when
+        // the target app (Electron / Chrome) is slow to respond to AX queries.
+        AXUIElementSetMessagingTimeout(systemWide, 1.0)
         var focusedElement: CFTypeRef?
         let status = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElement)
         guard status == .success, let element = focusedElement else {
-            LogService.debug("No focused element captured (AX error: \(status.rawValue))", category: "TextInjection")
             targetElement = nil
-            targetApp = nil
+            LogService.info("captureTarget — frontmost=\(frontmostBundle) (pid=\(targetApp ?? -1)), AX status=\(status.rawValue), no element — paste/keystroke fallback only", category: "TextInjection")
             return
         }
-        let axElement = unsafeBitCast(element, to: AXUIElement.self)
+        let axElement = element as! AXUIElement
+        AXUIElementSetMessagingTimeout(axElement, 1.0)
         targetElement = axElement
 
-        var pid: pid_t = 0
-        AXUIElementGetPid(axElement, &pid)
-        targetApp = pid
-        LogService.debug("Captured target AXUIElement, pid: \(pid)", category: "TextInjection")
+        var role: CFTypeRef?
+        AXUIElementCopyAttributeValue(axElement, kAXRoleAttribute as CFString, &role)
+        var subrole: CFTypeRef?
+        AXUIElementCopyAttributeValue(axElement, kAXSubroleAttribute as CFString, &subrole)
+        LogService.info("captureTarget — frontmost=\(frontmostBundle) (pid=\(targetApp ?? -1)), role=\(role as? String ?? "?"), subrole=\(subrole as? String ?? "?")", category: "TextInjection")
     }
 
     private static let maxTextLength = 5_000
@@ -62,6 +119,9 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
         // flags=[] below to neutralise any held modifiers.
         let source = CGEventSource(stateID: .hidSystemState)
         for scalar in text.unicodeScalars {
+            // Short-circuit if the surrounding task was cancelled mid-typing.
+            // Up to 5000 chars × ~4 ms = ~20 s loop; cancellation must land fast.
+            if Task.isCancelled { return }
             let utf16 = Array(String(scalar).utf16)
 
             if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: Self.safeVirtualKey, keyDown: true) {
@@ -71,6 +131,10 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
                 }
                 keyDown.post(tap: .cghidEventTap)
             }
+
+            // Playbook 07 Pitfall 1: ≥1 ms between keyDown and keyUp of the same
+            // char so Electron/Chromium IPC queues (Slack, Discord) don't drop it.
+            try? await Task.sleep(for: .milliseconds(1))
 
             if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: Self.safeVirtualKey, keyDown: false) {
                 keyUp.flags = []
@@ -90,26 +154,55 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
             return .failed(reason: "text_too_long_\(text.count)")
         }
 
-        guard let element = targetElement else {
+        guard let pid = targetApp else {
             LogService.info("inject — path=failed, reason=no_target", category: "TextInjection")
             return .failed(reason: "no_target")
         }
 
-        if isSecureField(element) {
-            LogService.info("inject — path=secure_field", category: "TextInjection")
-            return .skippedSecureField
-        }
+        // AX paths only run if a focused element was captured. Electron / WebView
+        // targets (Slack, Discord, WeChat) often don't expose their renderer's
+        // focused element through systemwide AX query, so targetElement may be
+        // nil — that's OK, paste path doesn't need it.
+        if let element = targetElement {
+            if isSecureField(element) {
+                LogService.info("inject — path=secure_field", category: "TextInjection")
+                return .skippedSecureField
+            }
 
-        let axStatus = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
-        if axStatus == .success {
-            LogService.info("inject — path=AX, len=\(text.count)", category: "TextInjection")
-            return .injectedAX
-        }
-        LogService.info("inject — AX set failed (status=\(axStatus.rawValue)), trying keystroke", category: "TextInjection")
+            if skipAXWrites {
+                // AX writes on this target return .success but don't land
+                // (Chromium AX bridge or WeChat-style hybrid stub). Paste path
+                // goes through paste: on NSResponder chain, which these apps
+                // all implement natively.
+                LogService.info("inject — AX-hostile target, bypassing AX paths", category: "TextInjection")
+            } else {
+                // AX path A: replace selected text (caret-aware, preserves rest of field).
+                var axStatus = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
+                if axStatus == .success {
+                    LogService.info("inject — path=AX_selected, len=\(text.count)", category: "TextInjection")
+                    return .injectedAX
+                }
+                LogService.info("inject — AX kAXSelectedText failed (status=\(axStatus.rawValue))", category: "TextInjection")
 
-        guard let pid = targetApp else {
-            LogService.info("inject — path=failed, reason=no_pid_for_keystroke", category: "TextInjection")
-            return .failed(reason: "no_pid_for_keystroke")
+                // AX path B: kAXValue full-value write — gated on empty field so we
+                // don't clobber a user draft. Many Electron AXTextArea targets reject
+                // kAXSelectedText but accept this path.
+                var currentValue: CFTypeRef?
+                let readStatus = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &currentValue)
+                let fieldIsEmpty = (readStatus == .success) && ((currentValue as? String)?.isEmpty ?? false)
+                if fieldIsEmpty {
+                    axStatus = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFString)
+                    if axStatus == .success {
+                        LogService.info("inject — path=AX_value, len=\(text.count)", category: "TextInjection")
+                        return .injectedAX
+                    }
+                    LogService.info("inject — AX kAXValue failed (status=\(axStatus.rawValue))", category: "TextInjection")
+                } else {
+                    LogService.info("inject — field non-empty (readStatus=\(readStatus.rawValue)), skipping kAXValue replace", category: "TextInjection")
+                }
+            }
+        } else {
+            LogService.info("inject — no AX element captured, skipping AX paths, going straight to paste", category: "TextInjection")
         }
 
         let isFrontmost = await waitUntilFrontmost(pid: pid)
@@ -118,11 +211,82 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
             return .failed(reason: "not_frontmost_after_\(Self.activationTimeoutMs)ms")
         }
 
+        // Playbook 07 step 1: only the keystroke path needs CGEvent post access;
+        // AX writes above use a different permission. Without it CGEvent.post
+        // returns success but events are silently dropped.
+        guard CGPreflightPostEventAccess() else {
+            LogService.info("inject — path=failed, reason=input_access_denied", category: "TextInjection")
+            return .failed(reason: "input_access_denied")
+        }
+
+        // Playbook 07 §8.1 Step 2: AX press re-focuses the captured element in
+        // the renderer process — app activation alone doesn't restore per-element
+        // focus inside Electron. 50 ms lets the renderer IPC settle. Skip if we
+        // never captured an element to begin with.
+        if let element = targetElement {
+            AXUIElementPerformAction(element, kAXPressAction as CFString)
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+
+        // Paste path: covers Slack/Discord/WeChat where AX writes are rejected
+        // and raw keystrokes get IPC-dropped or IME-intercepted. ⌘V goes through
+        // the standard paste: command and is accepted by virtually every text
+        // input that accepts paste at all.
+        if await pasteViaCmdV(text) {
+            LogService.info("inject — path=paste, len=\(text.count)", category: "TextInjection")
+            return .injectedPaste
+        }
+        LogService.info("inject — paste path setup failed, falling through to keystroke", category: "TextInjection")
+
         let start = Date()
         await postKeystrokes(text)
         let elapsedMs = Int(Date().timeIntervalSince(start) * 1000)
         LogService.info("inject — path=keystroke, len=\(text.count), charDelayMs=\(Self.charDelayMs), elapsed=\(elapsedMs)ms", category: "TextInjection")
         return .injectedKeystroke
+    }
+
+    /// Writes `text` to the general pasteboard and synthesizes ⌘V to the
+    /// frontmost app. Returns `true` if the events were posted (no signal that
+    /// the target actually consumed them — same trust model as `postKeystrokes`).
+    private func pasteViaCmdV(_ text: String) async -> Bool {
+        NSPasteboard.general.clearContents()
+        guard NSPasteboard.general.setString(text, forType: .string) else {
+            return false
+        }
+
+        let source = CGEventSource(stateID: .hidSystemState)
+        // kVK_ANSI_V = 0x09. Cmd+V is dispatched by the system as the paste:
+        // selector — keycode for 'v' is not layout-dependent for this purpose
+        // because the menu equivalent is looked up by character.
+        let vKey: CGKeyCode = 0x09
+
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
+              let up   = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
+        else { return false }
+
+        down.flags = .maskCommand
+        // Playbook 07 Pitfall 2: keyUp must carry the same modifier flags as
+        // keyDown so the system modifier state machine ends cleanly.
+        up.flags = .maskCommand
+
+        var upPosted = false
+        defer {
+            if !upPosted {
+                // Guarantee Cmd-up posts even on task cancellation, otherwise
+                // the Cmd flag leaks into the user's next real keystroke.
+                up.post(tap: .cghidEventTap)
+            }
+        }
+
+        down.post(tap: .cghidEventTap)
+        // Playbook 07 Pitfall 1: ≥1 ms between down and up for Electron IPC.
+        try? await Task.sleep(for: .milliseconds(2))
+        up.post(tap: .cghidEventTap)
+        upPosted = true
+
+        // Give the target a moment to handle paste: before any caller continues.
+        try? await Task.sleep(for: .milliseconds(50))
+        return true
     }
 
     private func isSecureField(_ element: AXUIElement) -> Bool {

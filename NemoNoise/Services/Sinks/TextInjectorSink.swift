@@ -27,7 +27,7 @@ final class TextInjectorSink: Sink {
         let outcome = await injector.inject(result.text)
         LogService.info("TextInjectorSink — inject outcome=\(outcome)", category: "TextInjection")
         switch outcome {
-        case .injectedAX, .injectedKeystroke:
+        case .injectedAX, .injectedPaste, .injectedKeystroke:
             return
         case .skippedSecureField, .failed:
             LogService.info("TextInjectorSink — entering fallback: writing clipboard + firing onInjectionFailed", category: "TextInjection")

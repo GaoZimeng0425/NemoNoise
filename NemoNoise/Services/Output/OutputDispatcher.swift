@@ -38,7 +38,7 @@ enum OutputDispatcher {
 
         // Toast.
         switch outcome {
-        case .injectedAX, .injectedKeystroke:
+        case .injectedAX, .injectedPaste, .injectedKeystroke:
             ToastWindowController.show(
                 "Inserted (\(trimmed.count) chars)",
                 style: .success,
