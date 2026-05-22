@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SpectrumBarsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let spectrum: [Float]
     let isActive: Bool
     let barCount: Int
@@ -19,7 +21,7 @@ struct SpectrumBarsView: View {
             }
         }
         .frame(height: maxHeight)
-        .animation(.easeOut(duration: 0.08), value: spectrum)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: spectrum)
     }
 
     private func barHeight(at index: Int) -> CGFloat {
