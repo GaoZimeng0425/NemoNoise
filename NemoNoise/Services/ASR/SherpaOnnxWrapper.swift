@@ -180,8 +180,18 @@ final class SherpaOnlineRecognizer {
     }
 
     /// Signal end of audio, drain remaining frames, return final text.
+    ///
+    /// Pads the stream with 500 ms of silence before `InputFinished`. Online
+    /// Paraformer's chunk-based decoder needs right-context to commit the
+    /// final token — without trailing audio, the last 1-2 chars of an
+    /// utterance get held back and never emitted. The synthetic silence acts
+    /// as that right-context. Cost: a few extra ms in `decodeReady()`.
     func finalize() -> String {
         guard let s = stream else { return "" }
+        let pad = [Float](repeating: 0, count: 8000)   // 500 ms @ 16 kHz
+        pad.withUnsafeBufferPointer { buf in
+            SherpaOnnxOnlineStreamAcceptWaveform(s, 16000, buf.baseAddress, Int32(pad.count))
+        }
         SherpaOnnxOnlineStreamInputFinished(s)
         decodeReady()
         let text = currentText()

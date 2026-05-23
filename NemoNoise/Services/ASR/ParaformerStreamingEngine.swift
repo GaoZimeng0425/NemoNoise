@@ -43,13 +43,12 @@ final class ParaformerStreamingEngine: ASREngine, @unchecked Sendable {
         recognizer.resetStream()
     }
 
-    /// Pure helper to keep the endpoint-handling logic unit-testable without
-    /// needing the underlying ONNX recognizer to be loaded.
+    /// Pure helper. Engine emits recognition text only — punctuation is
+    /// PunctuationProcessor's job downstream. Adding "。" here was the source
+    /// of two bugs: duplicate punctuation (engine "。" + CT-Transformer "。")
+    /// and intermittent last-char loss (CT-Transformer behaves unpredictably
+    /// when fed pre-punctuated input, sometimes stripping a content token).
     static func buildResult(rawText: String, isEndpoint: Bool) -> TranscriptionResult {
-        if isEndpoint {
-            let text = rawText.isEmpty ? "" : rawText + "。"
-            return TranscriptionResult(text: text, isFinal: true, emotion: nil)
-        }
-        return TranscriptionResult(text: rawText, isFinal: false, emotion: nil)
+        return TranscriptionResult(text: rawText, isFinal: isEndpoint, emotion: nil)
     }
 }
