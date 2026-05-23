@@ -6,10 +6,6 @@ struct OverlayView: View {
     @State private var isPulsing = false
     @Namespace private var glassNS
 
-    private var statusGlass: Glass {
-        GlassTint.forHUD(controller.recordingState).map { Glass.regular.tint($0) } ?? Glass.regular
-    }
-
     var body: some View {
         GlassEffectContainer(spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
@@ -22,7 +18,7 @@ struct OverlayView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .glassEffect(statusGlass, in: .rect(cornerRadius: 26))
+            .glassEffect(.regular, in: .rect(cornerRadius: 26))
             .glassEffectID("hud", in: glassNS)
         }
         .frame(minWidth: 360, maxWidth: 520)
@@ -61,8 +57,8 @@ struct OverlayView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(.white.opacity(0.10), in: .capsule)
-            .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 0.5))
+            .glassEffect(.regular, in: .capsule)
+            .glassEffectID("engineChip", in: glassNS)
             .fixedSize()
     }
 
