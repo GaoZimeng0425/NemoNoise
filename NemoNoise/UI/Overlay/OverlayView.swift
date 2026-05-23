@@ -13,40 +13,21 @@ struct OverlayView: View {
     var body: some View {
         GlassEffectContainer(spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 8) {
-                    headerBar
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .glassEffect(statusGlass, in: .capsule)
-                        .glassEffectID("status", in: glassNS)
-                        .layoutPriority(1)
-
-                    engineChip
-                        .fixedSize()
-                        .glassEffect(.regular, in: .capsule)
-                        .glassEffectID("engineChip", in: glassNS)
-                }
+                headerBar
 
                 if shouldShowTranscript {
                     transcriptArea
-                        .padding(16)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 22))
-                        .glassEffectID("transcript", in: glassNS)
                         .transition(.opacity)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .glassEffect(statusGlass, in: .rect(cornerRadius: 26))
+            .glassEffectID("hud", in: glassNS)
         }
         .frame(minWidth: 360, maxWidth: 520)
         .animation(.smooth(duration: 0.4), value: controller.recordingState)
-    }
-
-    private var engineChip: some View {
-        Text(controller.currentEngineLabel)
-            .font(.system(.caption2, design: .rounded))
-            .fontWeight(.medium)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: shouldShowTranscript)
     }
 
     private var shouldShowTranscript: Bool {
@@ -56,20 +37,33 @@ struct OverlayView: View {
     private var headerBar: some View {
         HStack(spacing: 12) {
             statusIndicator
-            
+
             Text(timerText)
                 .font(.system(.caption, design: .monospaced))
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
-            
+
             Spacer()
-            
+
             SpectrumBarsView(
                 spectrum: controller.spectrum,
                 isActive: controller.recordingState == .recording,
                 barCount: 16
             )
+
+            engineNameChip
         }
+    }
+
+    private var engineNameChip: some View {
+        Text(controller.currentEngineLabel)
+            .font(.system(.caption2, design: .rounded).weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(.white.opacity(0.10), in: .capsule)
+            .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 0.5))
+            .fixedSize()
     }
 
     private var statusIndicator: some View {
