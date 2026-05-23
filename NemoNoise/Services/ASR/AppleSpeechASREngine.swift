@@ -38,10 +38,19 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
     private var task: SFSpeechRecognitionTask?
 
     private struct State {
+        /// Apple's latest cumulative transcription, updated on every callback
+        /// (partial or isFinal). The source of truth for what was recognised.
+        var latestCumulative: String = ""
+        /// Mirror exposed to the UI as partialText. Same content as
+        /// latestCumulative; kept separate to make the contract explicit.
         var partialText: String = ""
-        var queue: AppleSpeechFinalQueue = AppleSpeechFinalQueue()
         var finishContinuation: CheckedContinuation<TranscriptionResult, Error>?
         var pendingError: Error?
+        /// True once finish() called request.endAudio(). Mid-stream isFinal
+        /// events from Apple BEFORE this point are unreliable (it keeps
+        /// refining/replacing them); we only trust isFinal events AFTER this
+        /// point as the true end-of-recording final.
+        var endAudioCalled: Bool = false
     }
     private let stateLock = OSAllocatedUnfairLock(initialState: State())
 
@@ -96,10 +105,13 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
                         || ns.localizedDescription.localizedCaseInsensitiveContains("no speech")
                     if isNoSpeech {
                         let empty = TranscriptionResult(text: "", isFinal: true, emotion: nil)
+                        // If finish() is already waiting, resolve it. Otherwise
+                        // do nothing — when finish() arrives, the 500 ms timeout
+                        // fallback will fire and return latestCumulative (which
+                        // is "" since nothing was recognised), same result.
                         let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
                             let cont = state.finishContinuation
                             state.finishContinuation = nil
-                            if cont == nil { state.queue.enqueue(empty) }
                             return cont
                         }
                         cont?.resume(returning: empty)
@@ -121,37 +133,28 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
                     return
                 }
                 if let result {
-                    if result.isFinal {
-                        let transcription = TranscriptionResult(
-                            text: result.bestTranscription.formattedString,
-                            isFinal: true,
-                            emotion: nil
-                        )
-                        let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
-                            if let c = state.finishContinuation {
-                                state.finishContinuation = nil
-                                return c
-                            }
-                            state.queue.enqueue(transcription)
-                            return nil
+                    let cumulative = result.bestTranscription.formattedString
+                    // Always update latestCumulative + partialText. The
+                    // isFinal flag from Apple is unreliable as a segment
+                    // boundary — Apple emits isFinal repeatedly with
+                    // refinements that REPLACE earlier "finals". Treat
+                    // mid-stream isFinal as just-another-update; only when
+                    // endAudioCalled is true do we trust an isFinal as the
+                    // true end-of-recording signal.
+                    let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
+                        state.latestCumulative = cumulative
+                        state.partialText = cumulative
+                        if result.isFinal, state.endAudioCalled, let c = state.finishContinuation {
+                            state.finishContinuation = nil
+                            return c
                         }
-                        cont?.resume(returning: transcription)
-                    } else {
-                        self.stateLock.withLock { $0.partialText = result.bestTranscription.formattedString }
+                        return nil
+                    }
+                    if let cont {
+                        cont.resume(returning: TranscriptionResult(text: cumulative, isFinal: true, emotion: nil))
                     }
                 }
             }
-        }
-
-        // Pop any queued mid-stream final BEFORE feeding more audio so the
-        // pipeline sees finals in order.
-        if let queued = stateLock.withLock({ $0.queue.popNext() }) {
-            // Still feed this chunk for future recognition — but the result
-            // we return is the queued final.
-            if let buffer = makePCMBuffer(from: samples, sampleRate: sampleRate) {
-                request?.append(buffer)
-            }
-            return queued
         }
 
         if let buffer = makePCMBuffer(from: samples, sampleRate: sampleRate) {
@@ -165,25 +168,17 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
     func finish() async throws -> TranscriptionResult {
         request?.endAudio()
 
-        // If finals were queued but not yet drained by feedChunk, return their
-        // concatenation rather than waiting on the recognizer.
-        let snapshot = stateLock.withLock { state -> (TranscriptionResult?, Error?) in
+        let snapshot = stateLock.withLock { state -> Error? in
             if let err = state.pendingError {
                 state.pendingError = nil
-                return (nil, err)
+                return err
             }
-            if let drained = state.queue.drainConcatenated() {
-                return (drained, nil)
-            }
-            return (nil, nil)
+            state.endAudioCalled = true
+            return nil
         }
-        if let error = snapshot.1 {
+        if let error = snapshot {
             LogService.error("Recognition failed: \(error.localizedDescription)", category: "AppleSpeechASREngine")
             throw error
-        }
-        if let final = snapshot.0 {
-            LogService.info("Recognition complete (drained queue), length: \(final.text.count) chars", category: "AppleSpeechASREngine")
-            return final
         }
 
         if task != nil {
@@ -193,16 +188,30 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
                         state.pendingError = nil
                         return (nil, error)
                     }
-                    if let drained = state.queue.drainConcatenated() {
-                        return (drained, nil)
-                    }
                     state.finishContinuation = continuation
                     return (nil, nil)
                 }
                 if let error = resolved.1 {
                     continuation.resume(throwing: error)
-                } else if let final = resolved.0 {
+                    return
+                }
+                if let final = resolved.0 {
                     continuation.resume(returning: final)
+                    return
+                }
+                // Timeout fallback: if Apple doesn't emit a post-endAudio
+                // isFinal within 500 ms, use whatever latestCumulative we have.
+                // Apple usually emits within ~100 ms of endAudio(); 500 ms gives
+                // headroom for longer buffered audio.
+                Task { [weak self] in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    guard let self else { return }
+                    let (cont, latest) = self.stateLock.withLock { state -> (CheckedContinuation<TranscriptionResult, Error>?, String) in
+                        let c = state.finishContinuation
+                        state.finishContinuation = nil
+                        return (c, state.latestCumulative)
+                    }
+                    cont?.resume(returning: TranscriptionResult(text: latest, isFinal: true, emotion: nil))
                 }
             }
         }
