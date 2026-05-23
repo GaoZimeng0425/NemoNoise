@@ -18,18 +18,25 @@ final class OverlayProgressSink: Sink {
     }
 
     func deliver(_ result: TranscriptionResult, isFinal: Bool) async {
-        guard !isFinal, !result.text.isEmpty else { return }
+        guard !result.text.isEmpty else { return }
         await MainActor.run {
-            let newPartial = result.text
-            let oldPartial = target.partialText
-            // If the engine reset (e.g. silence-driven segment boundary in
-            // Apple Speech), the new partial won't be a continuation of the
-            // old one. Promote the old partial so it stays visible and is
-            // included in the final dispatch.
-            if !oldPartial.isEmpty, !newPartial.hasPrefix(oldPartial) {
-                target.appendConfirmedSegment(oldPartial)
+            if isFinal {
+                // Segment boundary. The engine's text is authoritative —
+                // for Paraformer it includes tokens the chunk-based decoder
+                // held in lookahead; for Apple Speech (after the engine-side
+                // delta normalization in AppleSpeechASREngine) it's the new
+                // portion since the last commit.
+                target.appendConfirmedSegment(result.text)
+                target.partialText = ""
+                return
             }
-            target.partialText = newPartial
+            // Partial: just display state. No segment-boundary heuristics
+            // here — that's the engine adapter's job (Apple Speech emits
+            // isFinal at boundaries via addsPunctuation=true; Paraformer
+            // emits isFinal at endpoint). Inferring boundaries from partial
+            // prefix mismatches double-fires with isFinal and causes the
+            // "duplicate sentence" bug.
+            target.partialText = result.text
         }
     }
 }

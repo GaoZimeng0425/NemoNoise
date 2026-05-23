@@ -257,18 +257,16 @@ final class RecordingController: OverlayWriter {
                 let final = try await pipeline.finalize()
                 LogService.info("pipeline.finalize() returned — final.text length=\(final.text.count), partialText length=\(self.partialText.count), confirmedSegments count=\(self.confirmedSegments.count)", category: "Recording")
 
-                // Engine.finish() can legitimately return empty (streaming
-                // engines flush everything via partials). Use partialText as
-                // the trailing piece in that case.
+                // pipeline.finalize() calls sink.deliver(isFinal=true), which
+                // OverlayProgressSink now handles by appending final.text to
+                // confirmedSegments. So the trailing piece is already there
+                // when final.text is non-empty. The fallback below covers the
+                // case where engine.finish() returned empty but a partial is
+                // still on screen (engines that flush entirely via partials).
                 let lastPartial = self.partialText.trimmingCharacters(in: .whitespacesAndNewlines)
-                let trailing = final.text.isEmpty ? lastPartial : final.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 self.partialText = ""
-
-                // Promote the trailing partial into a final segment so the
-                // whole utterance is preserved in confirmedSegments for the
-                // overlay's post-stop display and any later inspection.
-                if !trailing.isEmpty {
-                    self.confirmedSegments.append(TranscriptionSegment(text: trailing, emotion: final.emotion))
+                if final.text.isEmpty, !lastPartial.isEmpty {
+                    self.confirmedSegments.append(TranscriptionSegment(text: lastPartial, emotion: final.emotion))
                 }
 
                 let pieces = self.confirmedSegments.map(\.text).filter { !$0.isEmpty }
