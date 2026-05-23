@@ -13,6 +13,7 @@ final class MicAudioSource: AudioSource, Sendable {
     private let targetSampleRate: Double = 16000
     private let bufferSize: AVAudioFrameCount = 4096
     private let analyzer = SpectrumAnalyzer(binCount: 16, sampleRate: 16000)
+    private let isCapturing = OSAllocatedUnfairLock<Bool>(initialState: false)
 
     func start() async throws -> AsyncStream<AudioChunk> {
         try await requestMicrophoneAccess()
@@ -40,7 +41,13 @@ final class MicAudioSource: AudioSource, Sendable {
             self?.processTap(buffer: buffer, resampler: resampler)
         }
 
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            inputNode.removeTap(onBus: 0)
+            throw error
+        }
+        isCapturing.withLock { $0 = true }
         LogService.info("Capture started, converting \(hardwareFormat.sampleRate)Hz -> \(targetSampleRate)Hz", category: "AudioCapture")
         return stream
     }
@@ -48,9 +55,23 @@ final class MicAudioSource: AudioSource, Sendable {
     func stop() {
         continuation.value?.finish()
         continuation.value = nil
+        stopEngine()
     }
 
+    deinit {
+        stopEngine()
+    }
+
+    /// Idempotent: only the first call after a successful `start()` actually
+    /// touches the engine. Safe to invoke from `stop()` directly *and* from
+    /// `AsyncStream.onTermination` — whichever fires first wins.
     private func stopEngine() {
+        let wasCapturing = isCapturing.withLock { running -> Bool in
+            let was = running
+            running = false
+            return was
+        }
+        guard wasCapturing else { return }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         LogService.info("Capture stopped", category: "AudioCapture")
