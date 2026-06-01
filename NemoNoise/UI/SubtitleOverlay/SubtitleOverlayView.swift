@@ -5,17 +5,13 @@ struct SubtitleOverlayView: View {
     @Environment(TranslationController.self) private var controller
     @Namespace private var glassNS
 
-    private var subtitleStatusGlass: Glass {
-        GlassTint.forSubtitle(controller.translationState).map { Glass.regular.tint($0) } ?? Glass.regular
-    }
-
     var body: some View {
         GlassEffectContainer(spacing: 6) {
             HStack(alignment: .center, spacing: 8) {
                 statusGroup
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .glassEffect(subtitleStatusGlass, in: .capsule)
+                    .glassEffect(.regular, in: .capsule)
                     .glassEffectID("subtitle-status", in: glassNS)
 
                 if showTextCapsule {
@@ -44,8 +40,9 @@ struct SubtitleOverlayView: View {
     private var statusGroup: some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(controller.translationState == .capturing ? Color.green : Color.gray)
+                .fill(statusColor)
                 .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
 
             SpectrumBarsView(
                 spectrum: controller.spectrum,
@@ -56,18 +53,22 @@ struct SubtitleOverlayView: View {
         }
     }
 
+    private var statusColor: Color {
+        controller.translationState == .capturing ? .green : .secondary
+    }
+
     private var textGroup: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(displayEnglishText)
-                .font(.system(size: 14, weight: .regular, design: .rounded))
-                .foregroundStyle(.gray)
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.head)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             chineseLine
-                .font(.system(size: 16, weight: .medium, design: .rounded))
-                .foregroundStyle(.white)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.head)
                 .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
@@ -98,6 +99,6 @@ struct SubtitleOverlayView: View {
         if !controller.englishText.isEmpty {
             return controller.englishText
         }
-        return "Listening…"
+        return "Listening..."
     }
 }

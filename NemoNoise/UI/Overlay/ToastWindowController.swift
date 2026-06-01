@@ -47,7 +47,7 @@ final class ToastWindowController {
         )
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = false
+        p.hasShadow = true
         p.level = .floating
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.contentView = hostingView
@@ -123,19 +123,21 @@ private struct ToastCapsule: View {
     let style: ToastStyle
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             Image(systemName: style.icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.callout.weight(.semibold))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(style.color)
 
             Text(message)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.leading)
+                .lineLimit(2)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
         .frame(width: 420, alignment: .leading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .glassEffect(.regular, in: .capsule)
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OverlayView: View {
     @Environment(RecordingController.self) private var controller
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var isPulsing = false
     @Namespace private var glassNS
@@ -9,19 +10,32 @@ struct OverlayView: View {
     var body: some View {
         GlassEffectContainer(spacing: 8) {
             VStack(alignment: .leading, spacing: 8) {
+                // Header stays a compact capsule so its edges keep the curved
+                // Liquid Glass lensing/highlight even when transcript appears.
                 headerBar
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .glassEffect(.regular, in: .capsule)
+                    .glassEffectID("header", in: glassNS)
 
                 if shouldShowTranscript {
+                    // A separate glass blob; within the container's 8pt spacing
+                    // it fluidly merges with the header instead of growing the
+                    // header into one big flat (frosted-looking) card.
                     transcriptArea
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                        .glassEffectID("transcript", in: glassNS)
                         .transition(.opacity)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .glassEffect(.regular, in: .rect(cornerRadius: 26))
-            .glassEffectID("hud", in: glassNS)
         }
         .frame(minWidth: 360, maxWidth: 520)
+        // Transparent breathing room so the glass's own soft shadow/highlight
+        // renders fully instead of being clipped at the (now shadowless,
+        // borderless, clear) window edge.
+        .padding(20)
         .animation(.smooth(duration: 0.4), value: controller.recordingState)
         .animation(.spring(response: 0.45, dampingFraction: 0.85), value: shouldShowTranscript)
     }
@@ -52,30 +66,42 @@ struct OverlayView: View {
     }
 
     private var engineNameChip: some View {
-        Text(controller.currentEngineLabel)
-            .font(.system(.caption2, design: .rounded).weight(.medium))
+        Label(controller.currentEngineLabel, systemImage: "cpu")
+            .font(.caption2.weight(.medium))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .glassEffect(.regular, in: .capsule)
-            .glassEffectID("engineChip", in: glassNS)
+            .labelStyle(.titleAndIcon)
             .fixedSize()
     }
 
     private var statusIndicator: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(controller.recordingState == .recording ? Color.red : Color.gray)
+                .fill(statusColor)
                 .frame(width: 8, height: 8)
-                .opacity(isPulsing ? 0.4 : 1.0)
-                .animation(controller.recordingState == .recording ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default, value: isPulsing)
+                .opacity(controller.recordingState == .recording && isPulsing ? 0.42 : 1.0)
+                .animation(statusPulseAnimation, value: isPulsing)
                 .onAppear { isPulsing = true }
+                .accessibilityHidden(true)
             
             Text(statusText)
                 .font(.caption)
                 .fontWeight(.semibold)
-                .foregroundStyle(controller.recordingState == .recording ? .primary : .secondary)
+                .foregroundStyle(.primary)
         }
+    }
+
+    private var statusColor: Color {
+        switch controller.recordingState {
+        case .ready: return .secondary
+        case .recording: return .red
+        case .processing: return .blue
+        case .failed: return .orange
+        }
+    }
+
+    private var statusPulseAnimation: Animation? {
+        guard controller.recordingState == .recording, !reduceMotion else { return .default }
+        return .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
     }
 
     private var timerText: String {
@@ -95,10 +121,10 @@ struct OverlayView: View {
     
     private var statusText: String {
         switch controller.recordingState {
-        case .ready: return "READY"
-        case .recording: return "RECORDING"
-        case .processing: return "THINKING"
-        case .failed: return "ERROR"
+        case .ready: return "Ready"
+        case .recording: return "Recording"
+        case .processing: return "Processing"
+        case .failed: return "Error"
         }
     }
 
@@ -112,11 +138,10 @@ struct OverlayView: View {
             // Empty State / Listening Prompt
             if controller.isListeningSilence && controller.confirmedSegments.isEmpty && controller.partialText.isEmpty {
                 HStack(spacing: 8) {
-                    Image(systemName: "mic.badge.waveform")
-                        .foregroundStyle(.blue)
-                        .symbolEffect(.variableColor.iterative.dimInactiveLayers.nonReversing)
-                    Text("I'm listening...")
-                        .font(.system(.subheadline, design: .rounded))
+                    Image(systemName: "mic")
+                        .foregroundStyle(.secondary)
+                    Text("Listening...")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
@@ -136,13 +161,13 @@ struct OverlayView: View {
         let partial = controller.partialText.replacingOccurrences(of: "\n", with: " ")
 
         let confirmedPart = Text(confirmedJoined)
-            .font(.system(size: 19, weight: .medium, design: .rounded))
+            .font(.system(size: 19, weight: .medium))
             .foregroundColor(.primary)
 
         let separator = (confirmedJoined.isEmpty || partial.isEmpty) ? Text("") : Text(" ")
 
         let partialPart = Text(partial)
-            .font(.system(size: 18, weight: .regular, design: .rounded))
+            .font(.system(size: 18, weight: .regular))
             .italic()
             .foregroundColor(.secondary)
 

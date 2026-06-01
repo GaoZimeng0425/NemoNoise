@@ -47,10 +47,9 @@ final class OverlayWindowController: NSObject {
             defer: false
         )
         panel.level = .floating
-        panel.appearance = NSAppearance(named: .darkAqua)
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
         panel.contentView = hostingView
