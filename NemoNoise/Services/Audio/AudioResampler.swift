@@ -13,15 +13,25 @@ final class AudioResampler: @unchecked Sendable {
     private let targetFormat: AVAudioFormat
     private let converter: AVAudioConverter
 
-    init?(sourceRate: Double, targetRate: Double) {
-        guard sourceRate > 0, targetRate > 0,
-              let sf = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sourceRate, channels: 1, interleaved: false),
-              let tf = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: targetRate, channels: 1, interleaved: false),
-              let conv = AVAudioConverter(from: sf, to: tf)
+    convenience init?(sourceRate: Double, targetRate: Double) {
+        guard sourceRate > 0,
+              let sf = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sourceRate, channels: 1, interleaved: false)
         else { return nil }
-        self.sourceRate = sourceRate
+        self.init(sourceFormat: sf, targetRate: targetRate)
+    }
+
+    /// Use this initialiser when the source buffer's channel layout isn't mono
+    /// (e.g. AVAudioEngine inputNode with voice processing enabled exposes a
+    /// multi-channel format). `AVAudioConverter` will downmix N→1 automatically
+    /// in addition to resampling.
+    init?(sourceFormat: AVAudioFormat, targetRate: Double) {
+        guard targetRate > 0,
+              let tf = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: targetRate, channels: 1, interleaved: false),
+              let conv = AVAudioConverter(from: sourceFormat, to: tf)
+        else { return nil }
+        self.sourceRate = sourceFormat.sampleRate
         self.targetRate = targetRate
-        self.sourceFormat = sf
+        self.sourceFormat = sourceFormat
         self.targetFormat = tf
         self.converter = conv
     }
