@@ -58,7 +58,7 @@ extension ModelDescriptor {
         id: "sensevoice",
         displayName: "SenseVoiceSmall (int8)",
         detail: "Chinese · English · Japanese · Korean · Cantonese · emotion detection",
-        downloadSize: "~60 MB",
+        downloadSize: "~230 MB",
         subdir: "sensevoice",
         files: [
             (name: "model.int8.onnx", url: URL(string: "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx")!),

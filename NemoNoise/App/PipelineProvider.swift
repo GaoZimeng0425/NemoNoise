@@ -172,7 +172,6 @@ final class PipelineProvider {
         case "sensevoice": return "SenseVoice"
         case "paraformer": return "Paraformer"
         case "qwen3":      return "Qwen3"
-        case "cloud":      return "Cloud"
         default:           return "Apple"
         }
     }

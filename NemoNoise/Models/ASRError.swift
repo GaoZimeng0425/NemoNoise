@@ -10,14 +10,6 @@ enum ASRError: Error {
     case engineInitFailed
 }
 
-enum CloudASRError: Error {
-    case apiKeyNotSet
-    case authenticationFailed
-    case requestTimeout
-    case serverError(Int)
-    case invalidResponse
-}
-
 enum AppleSpeechError: Error, Equatable {
     case siriDisabled
     case recognizerUnavailable

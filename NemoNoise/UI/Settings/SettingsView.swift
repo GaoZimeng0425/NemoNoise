@@ -6,8 +6,8 @@ struct SettingsView: View {
     @Environment(PermissionService.self) private var permissions
     @AppStorage(AppDefaults.Keys.engineType) private var engineType = AppDefaults.Defaults.engineType
     @AppStorage(AppDefaults.Keys.preferredMicUID) private var preferredMicUID = ""
+    @AppStorage(AppDefaults.Keys.echoCancellation) private var echoCancellation = false
     @State private var availableMics: [AudioInputDevice] = []
-    @State private var cloudAPIKey: String = ""
     @State private var showExportAlert = false
     @State private var exportedLogPath = ""
 
@@ -25,7 +25,6 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480, height: 480)
         .onAppear {
-            cloudAPIKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey) ?? ""
             availableMics = AudioInputDeviceCatalog.availableInputDevices()
             // LSUIElement apps default to .accessory policy which suppresses
             // activation. Briefly switch to .regular so the Settings window
@@ -42,11 +41,13 @@ struct SettingsView: View {
 
     private var engineTab: some View {
         Form {
-            cloudAPIKeySection
             engineSection
             audioInputSection
             if engineType == "paraformer" {
                 modelSection(for: .paraformer)
+            }
+            if engineType == "sensevoice" {
+                modelSection(for: .senseVoice)
             }
             if engineType == "qwen3" {
                 modelSection(for: .qwen3)
@@ -99,18 +100,18 @@ struct SettingsView: View {
                 status: mm.state(for: .paraformer) == .downloaded ? .ready : .needsDownload("~240 MB")
             ),
             EngineOption(
+                id: "sensevoice",
+                icon: "globe",
+                title: "SenseVoice",
+                summary: "Offline zh/en/ja/ko/yue ASR with emotion detection. Non-streaming.",
+                status: mm.state(for: .senseVoice) == .downloaded ? .ready : .needsDownload("~230 MB")
+            ),
+            EngineOption(
                 id: "qwen3",
                 icon: "brain",
                 title: "Qwen3-ASR 0.6B",
                 summary: "Offline multilingual ASR. High quality but non-streaming.",
                 status: mm.state(for: .qwen3) == .downloaded ? .ready : .needsDownload("~940 MB")
-            ),
-            EngineOption(
-                id: "cloud",
-                icon: "cloud",
-                title: "Cloud Paraformer",
-                summary: "Cloud ASR for higher accuracy. Requires internet connection.",
-                status: cloudAPIKey.isEmpty ? .needsAPIKey : .ready
             ),
         ]
     }
@@ -124,6 +125,10 @@ struct SettingsView: View {
                 }
             }
             Text("Used for voice input only. Translation mode always captures system audio.")
+                .font(.caption).foregroundStyle(.secondary)
+
+            Toggle("Echo cancellation", isOn: $echoCancellation)
+            Text("Suppresses speaker audio leaking into the built-in mic. Enables Apple's voice processing (AEC + noise suppression + AGC) — tuned for speech, may slightly affect non-voice audio. Takes effect on the next recording.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -141,26 +146,6 @@ struct SettingsView: View {
         }
         .onChange(of: engineType) { _, _ in
             controller.requestPipelineRebuild()
-        }
-    }
-
-    private var cloudAPIKeySection: some View {
-        Section("Cloud Engine") {
-            SecureField("DashScope API Key", text: $cloudAPIKey)
-                .textFieldStyle(.roundedBorder)
-                .task(id: cloudAPIKey) {
-                    // Debounce so we only touch Keychain after the user pauses typing.
-                    try? await Task.sleep(for: .milliseconds(500))
-                    guard !Task.isCancelled else { return }
-                    if cloudAPIKey.isEmpty {
-                        KeychainService.delete(key: KeychainService.Keys.cloudAPIKey)
-                        if engineType == "cloud" { engineType = "paraformer" }
-                    } else {
-                        try? KeychainService.save(key: KeychainService.Keys.cloudAPIKey, value: cloudAPIKey)
-                    }
-                }
-            Text("Enter a DashScope API key to enable cloud-based Paraformer transcription.")
-                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -293,12 +278,12 @@ struct SettingsView: View {
         case "paraformer":
             return controller.modelManager.state(for: .paraformer) == .downloaded
                 ? "Paraformer (streaming)" : "Apple Speech (model not downloaded)"
+        case "sensevoice":
+            return controller.modelManager.state(for: .senseVoice) == .downloaded
+                ? "SenseVoice" : "Apple Speech (model not installed)"
         case "qwen3":
             return controller.modelManager.state(for: .qwen3) == .downloaded
                 ? "Qwen3-ASR 0.6B" : "Apple Speech (model not installed)"
-        case "cloud":
-            return cloudAPIKey.isEmpty
-                ? "Apple Speech (API key not set)" : "Cloud Paraformer"
         default:
             return "Apple Speech"
         }
@@ -317,13 +302,11 @@ private struct EngineOption: Identifiable {
     enum Status {
         case ready
         case needsDownload(String)  // size hint, e.g. "~240 MB"
-        case needsAPIKey
 
         var badge: (text: String, color: Color)? {
             switch self {
             case .ready: return nil
             case .needsDownload(let size): return ("Download required · \(size)", .orange)
-            case .needsAPIKey: return ("API key required", .orange)
             }
         }
     }

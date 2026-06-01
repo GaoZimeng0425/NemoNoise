@@ -121,15 +121,6 @@ final class TranscriptionPipeline {
             runningInfo?.0.finish()
             state = .idle
             return result
-        } catch let cloud as CloudASRError {
-            runningInfo?.0.finish()
-            state = .idle
-            switch cloud {
-            case .requestTimeout:
-                return TranscriptionResult(text: "", isFinal: true, emotion: nil)
-            default:
-                throw cloud
-            }
         } catch {
             // Close the event stream normally so the pipelineTask's for-await
             // exits cleanly. The caller of finalize() is the single place that

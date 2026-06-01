@@ -332,8 +332,6 @@ final class RecordingController: OverlayWriter {
             case .engineFailedFatally(let underlying):
                 if let apple = underlying as? AppleSpeechError, apple == .siriDisabled {
                     ToastWindowController.show("请启用 Siri：系统设置 → Siri 与听写", style: .warning, duration: 5)
-                } else if let cloud = underlying as? CloudASRError, case .authenticationFailed = cloud {
-                    ToastWindowController.show("API key invalid. Please update in Settings.", style: .error, duration: 5)
                 } else {
                     ToastWindowController.show("Engine error: \(underlying.localizedDescription)", style: .error, duration: 4)
                 }

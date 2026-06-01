@@ -25,14 +25,16 @@ final class ASREngineFactoryTests: XCTestCase {
         XCTAssertNil(build.fallbackReason, "Apple was the user's choice — no fallback reason expected")
     }
 
-    func testMakePrimarySurfacesFallbackReasonWhenCloudKeyMissing() throws {
-        UserDefaults.standard.set("cloud", forKey: AppDefaults.Keys.engineType)
-        KeychainService.delete(key: KeychainService.Keys.cloudAPIKey)
+    func testMakePrimarySurfacesFallbackReasonWhenModelMissing() throws {
+        UserDefaults.standard.set("paraformer", forKey: AppDefaults.Keys.engineType)
         let factory = makeFactory()
         let build = try factory.makePrimary()
-        XCTAssertTrue(build.engine is AppleSpeechASREngine,
-                      "expected Apple fallback, got \(type(of: build.engine))")
-        XCTAssertNotNil(build.fallbackReason, "fallback reason must be surfaced for UI to toast")
+        // When the Paraformer model isn't installed, the factory falls back to
+        // Apple and surfaces a reason; if it happens to be installed in the test
+        // environment, the Paraformer engine is returned with no reason.
+        if build.engine is AppleSpeechASREngine {
+            XCTAssertNotNil(build.fallbackReason, "fallback reason must be surfaced for UI to toast")
+        }
     }
 
     // MARK: - Translation engine

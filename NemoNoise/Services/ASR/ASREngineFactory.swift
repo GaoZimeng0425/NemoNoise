@@ -47,12 +47,6 @@ final class ASREngineFactory: ASREngineFactoring {
             }
             LogService.warn("Qwen3 model not installed, falling back to Apple", category: "ASREngineFactory")
             fallbackReason = "Qwen3 model not installed — using Apple Speech. Open Settings to download."
-        case "cloud":
-            if let apiKey = KeychainService.load(key: KeychainService.Keys.cloudAPIKey), !apiKey.isEmpty {
-                return EngineBuild(engine: CloudASREngine(apiKey: apiKey), fallbackReason: nil)
-            }
-            LogService.warn("Cloud API key not set, falling back to Apple", category: "ASREngineFactory")
-            fallbackReason = "Cloud API key not set — using Apple Speech. Set the key in Settings."
         case "apple":
             break
         default:
