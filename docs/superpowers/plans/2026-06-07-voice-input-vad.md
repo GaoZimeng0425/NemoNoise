@@ -12,7 +12,7 @@
 
 ## Conventions for every task
 
-- **Code lives at** `NemoNoise/NemoNoise/` (the Swift app). New VAD files go in `NemoNoise/NemoNoise/Services/Audio/VAD/`. Tests go in `NemoNoise/NemoNoise/../NemoNoiseTests/` i.e. `NemoNoiseTests/`.
+- **Code lives at** `<repo-root>/NemoNoise/` (the Swift app sources). New VAD files go in `NemoNoise/Services/Audio/VAD/`. Tests go in `NemoNoiseTests/`. All paths in this plan are relative to repo root `/Users/gaozimeng/Learn/macOS/NemoNoise`.
 - The Xcode project uses **file-system-synchronized groups** — new `.swift` files under existing synchronized folders are auto-added to the target. No `.pbxproj` edits.
 - **Build/test command** (run from repo root `/Users/gaozimeng/Learn/macOS/NemoNoise`):
   ```bash
@@ -30,7 +30,7 @@
 The model-free seam and the fallback detector. No sherpa dependency, fully unit-testable.
 
 **Files:**
-- Create: `NemoNoise/NemoNoise/Services/Audio/VAD/VADSpeechDetector.swift`
+- Create: `NemoNoise/Services/Audio/VAD/VADSpeechDetector.swift`
 - Test: `NemoNoiseTests/EnergySpeechDetectorTests.swift`
 
 - [ ] **Step 1: Write the failing test**
@@ -85,7 +85,7 @@ Expected: build FAILS with "cannot find 'EnergySpeechDetector' / 'VADConfig' in 
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `NemoNoise/NemoNoise/Services/Audio/VAD/VADSpeechDetector.swift`:
+Create `NemoNoise/Services/Audio/VAD/VADSpeechDetector.swift`:
 
 ```swift
 import Foundation
@@ -147,7 +147,7 @@ Run the Step 2 command. Expected: `** TEST SUCCEEDED **`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add NemoNoise/NemoNoise/Services/Audio/VAD/VADSpeechDetector.swift NemoNoiseTests/EnergySpeechDetectorTests.swift
+git add NemoNoise/Services/Audio/VAD/VADSpeechDetector.swift NemoNoiseTests/EnergySpeechDetectorTests.swift
 git commit -m "feat(vad): add VADSpeechDetector seam + energy fallback detector"
 ```
 
@@ -158,7 +158,7 @@ git commit -m "feat(vad): add VADSpeechDetector seam + energy fallback detector"
 Decides what to emit per window: silence for non-speech, pre-buffer flush on onset.
 
 **Files:**
-- Create: `NemoNoise/NemoNoise/Services/Audio/VAD/VADGate.swift`
+- Create: `NemoNoise/Services/Audio/VAD/VADGate.swift`
 - Test: `NemoNoiseTests/VADGateTests.swift`
 
 - [ ] **Step 1: Write the failing test**
@@ -239,7 +239,7 @@ Expected: FAIL — "cannot find 'VADGate' in scope".
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `NemoNoise/NemoNoise/Services/Audio/VAD/VADGate.swift`:
+Create `NemoNoise/Services/Audio/VAD/VADGate.swift`:
 
 ```swift
 import Foundation
@@ -300,7 +300,7 @@ Run the Step 2 command. Expected: `** TEST SUCCEEDED **`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add NemoNoise/NemoNoise/Services/Audio/VAD/VADGate.swift NemoNoiseTests/VADGateTests.swift
+git add NemoNoise/Services/Audio/VAD/VADGate.swift NemoNoiseTests/VADGateTests.swift
 git commit -m "feat(vad): add pure VADGate (silence gating + pre-speech onset buffer)"
 ```
 
@@ -311,7 +311,7 @@ git commit -m "feat(vad): add pure VADGate (silence gating + pre-speech onset bu
 Slices inner chunks into windows, drives detector + gate, repackages gated audio into `AudioChunk`s.
 
 **Files:**
-- Create: `NemoNoise/NemoNoise/Services/Audio/VAD/VADGatedSource.swift`
+- Create: `NemoNoise/Services/Audio/VAD/VADGatedSource.swift`
 - Test: `NemoNoiseTests/VADGatedSourceTests.swift`
 
 - [ ] **Step 1: Write the failing test**
@@ -398,7 +398,7 @@ Expected: FAIL — "cannot find 'VADGatedSource' in scope".
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `NemoNoise/NemoNoise/Services/Audio/VAD/VADGatedSource.swift`:
+Create `NemoNoise/Services/Audio/VAD/VADGatedSource.swift`:
 
 ```swift
 import Foundation
@@ -475,7 +475,7 @@ Run the Step 2 command. Expected: `** TEST SUCCEEDED **`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add NemoNoise/NemoNoise/Services/Audio/VAD/VADGatedSource.swift NemoNoiseTests/VADGatedSourceTests.swift
+git add NemoNoise/Services/Audio/VAD/VADGatedSource.swift NemoNoiseTests/VADGatedSourceTests.swift
 git commit -m "feat(vad): add VADGatedSource AudioSource decorator"
 ```
 
@@ -486,11 +486,11 @@ git commit -m "feat(vad): add VADGatedSource AudioSource decorator"
 Real detector backing `VADSpeechDetector` with sherpa's `SherpaOnnxVoiceActivityDetector`. No unit test (requires the model + audio); verified by compile + manual QA in Task 6. Mirrors the `OpaquePointer` pattern of `SherpaOfflinePunctuator` (no bridging-header change needed).
 
 **Files:**
-- Create: `NemoNoise/NemoNoise/Services/Audio/VAD/SileroSpeechDetector.swift`
+- Create: `NemoNoise/Services/Audio/VAD/SileroSpeechDetector.swift`
 
 - [ ] **Step 1: Write the implementation**
 
-Create `NemoNoise/NemoNoise/Services/Audio/VAD/SileroSpeechDetector.swift`:
+Create `NemoNoise/Services/Audio/VAD/SileroSpeechDetector.swift`:
 
 ```swift
 import Foundation
@@ -560,13 +560,13 @@ Run a build of the app target:
 xcodebuild build -project NemoNoise.xcodeproj -scheme NemoNoise -destination 'platform=macOS' -quiet 2>&1 | tail -25
 ```
 Expected: `** BUILD SUCCEEDED **`. If the compiler reports an unknown field on `SherpaOnnxSileroVadModelConfig` / `SherpaOnnxVadModelConfig`, open
-`NemoNoise/NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers/sherpa-onnx/c-api/c-api.h`
+`NemoNoise/Resources/sherpa-onnx.xcframework/macos-arm64_x86_64/Headers/sherpa-onnx/c-api/c-api.h`
 (struct defs near line 1848 / 1920) and match the exact field names.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add NemoNoise/NemoNoise/Services/Audio/VAD/SileroSpeechDetector.swift
+git add NemoNoise/Services/Audio/VAD/SileroSpeechDetector.swift
 git commit -m "feat(vad): add SileroSpeechDetector wrapping sherpa VAD"
 ```
 
@@ -577,7 +577,7 @@ git commit -m "feat(vad): add SileroSpeechDetector wrapping sherpa VAD"
 Add a `.sileroVad` descriptor so the model can be downloaded and located.
 
 **Files:**
-- Modify: `NemoNoise/NemoNoise/Services/ModelManagement/ModelManager.swift` (descriptor extension ~line 123–186; `allDescriptors` ~line 200)
+- Modify: `NemoNoise/Services/ModelManagement/ModelManager.swift` (descriptor extension ~line 123–186; `allDescriptors` ~line 200)
 - Test: `NemoNoiseTests/ModelManagerTests.swift` (append)
 
 - [ ] **Step 1: Verify the model URL resolves**
@@ -643,7 +643,7 @@ Run the Step 3 command. Expected: `** TEST SUCCEEDED **`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add NemoNoise/NemoNoise/Services/ModelManagement/ModelManager.swift NemoNoiseTests/ModelManagerTests.swift
+git add NemoNoise/Services/ModelManagement/ModelManager.swift NemoNoiseTests/ModelManagerTests.swift
 git commit -m "feat(vad): register Silero VAD model descriptor"
 ```
 
@@ -654,7 +654,7 @@ git commit -m "feat(vad): register Silero VAD model descriptor"
 Swap `MicAudioSource()` for the gated source in `PipelineProvider`, choosing Silero when the model is present and energy otherwise.
 
 **Files:**
-- Modify: `NemoNoise/NemoNoise/App/PipelineProvider.swift` (`applyDictation`, ~line 90–120; add a private helper)
+- Modify: `NemoNoise/App/PipelineProvider.swift` (`applyDictation`, ~line 90–120; add a private helper)
 
 - [ ] **Step 1: Add the source-building helper**
 
@@ -714,7 +714,7 @@ Record results in the commit message.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add NemoNoise/NemoNoise/App/PipelineProvider.swift
+git add NemoNoise/App/PipelineProvider.swift
 git commit -m "feat(vad): gate dictation mic input through VAD (Silero + energy fallback)"
 ```
 
