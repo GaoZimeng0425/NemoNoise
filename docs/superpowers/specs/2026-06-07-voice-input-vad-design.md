@@ -53,7 +53,7 @@ MicAudioSource
    └─▶ VADGatedSource ────────────────────────────────────────────┐
         每个变长 chunk:                                             │
           切成 512 样本窗口(Silero 原生窗口)                       │
-          → VADConfidenceSource.confidence(window)  (Silero 每帧)   │
+          → VADSpeechDetector.isSpeech(window)  (Silero 段级 Detected) │
           → VADGate.step(window, conf):                            │
                · 静默/非人声  → 输出静音帧(zeros),引擎端点照常工作 │
                · 检测到开口   → 先吐 pre-speech 环形缓冲里的真实音频 │
@@ -70,9 +70,9 @@ MicAudioSource
 
 | 组件 | 类型 | 职责 | 依赖 | 测试 |
 |---|---|---|---|---|
-| `VADConfidenceSource` | 协议 | `confidence(for window:[Float]) -> Float`(0~1)、`reset()` | 无 | — |
-| `SileroConfidenceSource` | class | 跑 Silero,出每帧人声概率 | sherpa/onnx + 模型 | 手动 QA |
-| `EnergyConfidenceSource` | struct | RMS 归一化兜底(无模型时降级) | 无 | 单测 |
+| `VADSpeechDetector` | 协议 | `isSpeech(_ window:[Float]) -> Bool`、`reset()`、`windowSize` | 无 | — |
+| `SileroSpeechDetector` | class | 包 sherpa VAD,每窗口出"当前是否在说话" | sherpa + 模型 | 手动 QA |
+| `EnergySpeechDetector` | class | RMS 阈值兜底(无模型时降级) | 无 | 单测 |
 | `VADGate` | 纯逻辑 struct/class | 状态机:开口/收口判定 + pre-speech 环形缓冲 + 决定每窗口"原样/补缓冲/置零" | 无 IO | **纯单测** |
 | `VADGatedSource` | class : `AudioSource` | 包真实源;切 512 窗口、驱动上面两者、重打包 chunk | inner `AudioSource` + `VADConfidenceSource` + `VADGate` | 单测(假源 + 脚本化置信度) |
 | `VADConfig` | struct | 阈值/pre-speech 窗数等常量,默认值照搬 LiveTranslate | 无 | — |
@@ -111,11 +111,19 @@ MicAudioSource
 ## 模型与依赖
 
 - 新增 Silero VAD 模型:`ModelManager` 加 `.sileroVad` 描述符 + 下载项(~2MB)。
-- 取每帧概率的实现路径**留待 writing-plans 做小 spike**:sherpa-onnx 暴露的
-  `SherpaOnnxVoiceActivityDetector` 是段级、自带静音逻辑,**不直接给每帧概率**。两条路:
-  (a) 在 `SherpaOnnxWrapper` 薄加一层直接跑 Silero ONNX 拿每帧概率(倾向);
-  (b) 直接用段级 VAD 输出(会丢失对每帧的精细控制,但 Phase 1 的"门控+补首字"基本够用)。
-  `VADConfidenceSource` 这个 seam 让后端可换,不影响其余设计。
+
+### Spike 结论(2026-06-07,已用真实头文件核实)
+
+读了 `sherpa-onnx.xcframework` 的 `c-api.h`:sherpa 的 VAD 是**段级** API,
+**没有**返回每帧概率的函数。但有 `SherpaOnnxVoiceActivityDetectorDetected()`——
+文档明确写 "Returns 1 if speech is currently detected"(实时的"当前是否在说话"布尔值,
+由 Silero 内部计算)。这正好够"门控"用,且**不必自己跑 Silero ONNX**。
+
+因此把 seam 从"返回 Float 置信度"**改为返回 Bool 的 `VADSpeechDetector`**:
+`isSpeech(_ window:[Float]) -> Bool` + `reset()` + `windowSize`。用法:对每个 512 样本窗口
+`AcceptWaveform` → `Clear()`(丢弃完成段队列防泄漏)→ 读 `Detected()`。
+`SileroSpeechDetector` 包 `SherpaOnnxVoiceActivityDetector`(`OpaquePointer`,照搬
+`SherpaOfflinePunctuator` 模式,无需改 bridging header);`EnergySpeechDetector` 用 RMS 阈值兜底。
 
 ## Phase 2(记录,不在本期实现)
 
