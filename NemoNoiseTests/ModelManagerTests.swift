@@ -111,4 +111,15 @@ final class ModelManagerTests: XCTestCase {
         let dir = manager.modelDir(for: .senseVoice)
         XCTAssertTrue(dir.path.hasSuffix("NemoNoise/models/sensevoice"))
     }
+
+    func testSileroVadDescriptorIsRegistered() {
+        let ids = ModelManager.allDescriptors.map(\.id)
+        XCTAssertTrue(ids.contains("silero-vad"))
+    }
+
+    func testSileroVadDescriptorRequiresOnnxFile() {
+        let d = ModelDescriptor.sileroVad
+        XCTAssertEqual(d.subdir, "silero-vad")
+        XCTAssertEqual(d.requiredItems, ["silero_vad.onnx"])
+    }
 }

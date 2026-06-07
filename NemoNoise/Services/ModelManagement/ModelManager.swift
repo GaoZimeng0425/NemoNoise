@@ -106,6 +106,17 @@ extension ModelDescriptor {
             "tokenizer",
         ]
     )
+
+    static let sileroVad = ModelDescriptor(
+        id: "silero-vad",
+        displayName: "Silero VAD",
+        detail: "Voice activity detection · cleaner input, no clipped onsets",
+        downloadSize: "~640 KB",
+        subdir: "silero-vad",
+        files: [
+            (name: "silero_vad.onnx", url: URL(string: "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx")!),
+        ]
+    )
 }
 
 // MARK: - Manager
@@ -120,7 +131,7 @@ final class ModelManager {
     private var downloadTasks: [String: Task<Void, Never>] = [:]
 
     /// All models tracked by this manager.
-    static let allDescriptors: [ModelDescriptor] = [.senseVoice, .paraformer, .punctuation, .qwen3]
+    static let allDescriptors: [ModelDescriptor] = [.senseVoice, .paraformer, .punctuation, .qwen3, .sileroVad]
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
