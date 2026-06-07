@@ -694,6 +694,15 @@ In `applyDictation(result:fallback:punctuator:)`, change the pipeline constructi
 
 (Only that one line — `source:` — changes. `rebuildDictation()` already routes through `applyDictation`, so it inherits the gate automatically.)
 
+- [ ] **Step 2b: Expose Silero VAD for download in Settings**
+
+`SettingsView.engineTab` hardcodes which model rows show. Without a row for Silero VAD the user can never download it and the gate is stuck on the energy fallback. `modelSection(for:)` is generic, so add one always-visible row next to punctuation. In `NemoNoise/UI/Settings/SettingsView.swift`, after `modelSection(for: .punctuation)`:
+
+```swift
+            modelSection(for: .punctuation)
+            modelSection(for: .sileroVad)
+```
+
 - [ ] **Step 3: Build + run the full test suite**
 
 ```bash
