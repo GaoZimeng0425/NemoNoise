@@ -98,7 +98,7 @@ final class PipelineProvider {
                     [PunctuationProcessor(punctuator: $0)]
                 } ?? []
                 let pipeline = TranscriptionPipeline(
-                    source: MicAudioSource(),
+                    source: makeGatedMicSource(),
                     engine: build.engine,
                     postProcessors: postProcessors,
                     sink: OverlayProgressSink(target: recordingController),
@@ -162,6 +162,24 @@ final class PipelineProvider {
             }
             translation = .ready
         }
+    }
+
+    // MARK: - Gated mic source
+
+    /// Builds the dictation audio source wrapped in voice-activity gating.
+    /// Uses Silero when its model is downloaded; otherwise falls back to energy
+    /// gating (still better than no VAD) and logs the degradation.
+    private func makeGatedMicSource() -> any AudioSource {
+        let detector: any VADSpeechDetector
+        if let dir = modelManager.modelPath(for: .sileroVad),
+           let silero = SileroSpeechDetector(modelPath: dir.appendingPathComponent("silero_vad.onnx").path) {
+            detector = silero
+            LogService.info("Dictation VAD: Silero", category: "PipelineProvider")
+        } else {
+            detector = EnergySpeechDetector()
+            LogService.warn("Silero VAD model unavailable; using energy gate", category: "PipelineProvider")
+        }
+        return VADGatedSource(inner: MicAudioSource(), detector: detector)
     }
 
     // MARK: - Punctuator

@@ -53,6 +53,7 @@ struct SettingsView: View {
                 modelSection(for: .qwen3)
             }
             modelSection(for: .punctuation)
+            modelSection(for: .sileroVad)
             privacySection
             aboutSection
         }
