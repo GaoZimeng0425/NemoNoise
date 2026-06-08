@@ -179,7 +179,12 @@ final class PipelineProvider {
             detector = EnergySpeechDetector()
             LogService.warn("Silero VAD model unavailable; using energy gate", category: "PipelineProvider")
         }
-        return VADGatedSource(inner: MicAudioSource(), detector: detector)
+        let micSource = MicAudioSource(onInterruption: { [weak recordingController] reason in
+            Task { @MainActor in
+                recordingController?.handleAudioInterruption(reason)
+            }
+        })
+        return VADGatedSource(inner: micSource, detector: detector)
     }
 
     // MARK: - Punctuator
