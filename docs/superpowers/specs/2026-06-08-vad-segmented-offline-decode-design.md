@@ -126,16 +126,22 @@ enum SegmenterEvent {
   每次结果运行。
 - **录制起止**:`reset()` 在每次 `start()` 清空 segmenter 状态、committed 全文、inner 引擎状态
   (对齐现有引擎 reset 时机)。
-- **isStreaming**:`VADSegmentingEngine.isStreaming = false`(它仍是离线引擎的包装;但通过渐进
-  partial 实现了"边说边出字"的观感)。
+- **isStreaming**:`VADSegmentingEngine.isStreaming = true`(实现时确认必须为 `true`)。虽然 inner
+  是离线引擎,但本装饰器对外表现为"边说边出字"。`OverlayView.shouldShowTranscript` 在
+  `recording && !isStreaming` 时**隐藏**文字区——若报 `false`,我们逐段产出的渐进文字反而不显示。
+  接入分支用的是 `build.engine.isStreaming`(inner 引擎,仍为 `false`),不受影响。
 
 ---
 
 ## 错误处理 / 降级
 
 - **单段解码失败**:`LogService.warn` 记录并**跳过该段**,继续会话——一段坏音频不应终结整次听写。
-- **inner 引擎硬失败**(init 失败等)在装饰器构造期暴露,沿用工厂层既有降级;运行期由
-  `TranscriptionPipeline` 既有的 Apple fallback 兜底(VAD 在引擎层内部,与 pipeline fallback 不冲突)。
+- **inner 引擎硬失败**(init 失败等)在装饰器构造期暴露,沿用工厂层既有降级。
+- **注意——运行期 fallback 不可达**:因为 `decodeSegment` 吞掉每段解码错误(返回 ""),
+  `feedChunk`/`finish` 永不 `throw`,所以 `TranscriptionPipeline` 既有的 Apple fallback
+  (只在 `feedChunk` 抛错时触发)对离线段切引擎**不会触发**,`finalize` 也不再产生
+  `finalizeFailed`。这是"一段坏音频不终结整次听写"的代价:Qwen3 **整体**解码失败时会静默出空文本、
+  无 toast。已接受;若日后要兜底,应在"所有段都为空"时单独上抛/提示(follow-up,见 §8)。
 - **Silero 模型缺失**:同 Phase 1,detector 退化为 `EnergySpeechDetector`(切分仍可工作,精度略降),
   `LogService.warn` 一次。
 - **切分决策永不致命**:最坏情况退化为"整段一次解码"(等价今天行为),不崩不卡。
@@ -189,6 +195,11 @@ enum SegmenterEvent {
 
 - **int8 → fp16 准确率杠杆**:若短段解码后常见字仍乱码,A/B 对比非 int8 的 Qwen3 build
   (下载体积更大,需新增 `ModelManager` 描述符 / 切换 archive URL),量化字错率后再决定是否切换。
+- **整体解码失败兜底**:当一次会话**所有**段都解码为空(Qwen3 整体故障)时,上抛/toast 提示,
+  恢复"静默失败"前的可见反馈(见 §错误处理 的运行期 fallback 说明)。
+- **静默计时 UX**:`VADSegmentingEngine` 只发 `.level`(buffering)/ `.final`(收口),不发 `.partial`,
+  导致 `RecordingController` 的"正在聆听静音"提示在长连续语音中 3s 后误亮(仅视觉,不停录)。如要对齐
+  流式引擎观感,可让段切引擎在 buffering 时也发一次轻量 `.partial`,或调整该提示的触发条件。
 - 增量**注入**(停顿处把已定稿段提前注入目标 App,而非全部等 finalize)。
 - 翻译链路复用 `VADSegmenter`。
 - LiveTranslate 完整切分启发式(自适应阈值 / 谷点回溯 / 短段合并)。
