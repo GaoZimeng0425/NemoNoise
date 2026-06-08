@@ -1,5 +1,6 @@
 import AVFoundation
 import os
+import QuartzCore
 
 struct AudioChunk: Sendable {
     let samples: [Float]
@@ -15,6 +16,20 @@ final class MicAudioSource: AudioSource, Sendable {
     private let analyzer = SpectrumAnalyzer(binCount: 16, sampleRate: 16000)
     private let isCapturing = OSAllocatedUnfairLock<Bool>(initialState: false)
     private let firstChunkLogged = OSAllocatedUnfairLock<Bool>(initialState: false)
+
+    private let onInterruption: (@Sendable (AudioInterruptionReason) -> Void)?
+    private let stallThreshold: CFTimeInterval = 2.0
+    private let stallCheckInterval: CFTimeInterval = 0.5
+    private let watchdog = OSAllocatedUnfairLock<AudioStallWatchdog>(
+        initialState: AudioStallWatchdog(threshold: 2.0, now: 0)
+    )
+    private let interruptionFired = OSAllocatedUnfairLock<Bool>(initialState: false)
+    private let stallTimer = OSAllocatedUnfairLock<DispatchSourceTimer?>(initialState: nil)
+    private let configObserver = OSAllocatedUnfairLock<NSObjectProtocol?>(initialState: nil)
+
+    init(onInterruption: (@Sendable (AudioInterruptionReason) -> Void)? = nil) {
+        self.onInterruption = onInterruption
+    }
 
     func start() async throws -> AsyncStream<AudioChunk> {
         try await requestMicrophoneAccess()
@@ -55,6 +70,10 @@ final class MicAudioSource: AudioSource, Sendable {
             throw error
         }
         isCapturing.withLock { $0 = true }
+        interruptionFired.withLock { $0 = false }
+        watchdog.withLock { $0 = AudioStallWatchdog(threshold: stallThreshold, now: CACurrentMediaTime()) }
+        startStallTimer()
+        observeConfigurationChanges()
         LogService.info("Capture started, converting \(hardwareFormat.sampleRate)Hz -> \(targetSampleRate)Hz", category: "AudioCapture")
         return stream
     }
@@ -79,12 +98,21 @@ final class MicAudioSource: AudioSource, Sendable {
             return was
         }
         guard wasCapturing else { return }
+        stallTimer.withLock { timer in
+            timer?.cancel()
+            timer = nil
+        }
+        configObserver.withLock { token in
+            if let token { NotificationCenter.default.removeObserver(token) }
+            token = nil
+        }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         LogService.info("Capture stopped", category: "AudioCapture")
     }
 
     nonisolated private func processTap(buffer: AVAudioPCMBuffer, resampler: AudioResampler) {
+        watchdog.withLock { $0.recordActivity(at: CACurrentMediaTime()) }
         let isFirst = firstChunkLogged.withLock { current -> Bool in
             let was = current
             current = true
@@ -147,6 +175,53 @@ final class MicAudioSource: AudioSource, Sendable {
         } catch {
             LogService.warn("setVoiceProcessingEnabled(true) failed: \(error.localizedDescription)", category: "AudioCapture")
         }
+    }
+
+    /// Repeating background timer that asks the watchdog whether the raw tap
+    /// has stalled. Fires `.audioStalled` at most once per session.
+    private func startStallTimer() {
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: .now() + stallCheckInterval, repeating: stallCheckInterval)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            let stalled = self.watchdog.withLock { $0.isStalled(at: CACurrentMediaTime()) }
+            if stalled {
+                LogService.warn("Audio stall detected (no raw tap for >\(self.stallThreshold)s)", category: "AudioCapture")
+                self.fireInterruptionOnce(.audioStalled)
+            }
+        }
+        timer.resume()
+        stallTimer.withLock { $0 = timer }
+    }
+
+    /// Observe engine reconfiguration (device switch, pinned-device disconnect,
+    /// route change) while capturing. Scoped to this engine instance.
+    private func observeConfigurationChanges() {
+        let token = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            guard self.isCapturing.withLock({ $0 }) else { return }
+            LogService.warn("AVAudioEngine configuration changed mid-capture", category: "AudioCapture")
+            self.fireInterruptionOnce(.deviceConfigurationChanged)
+        }
+        configObserver.withLock { $0 = token }
+    }
+
+    /// Deliver the interruption to the callback at most once per session, then
+    /// stop the engine. Subsequent triggers (e.g. stall fires right after a
+    /// config change) are ignored.
+    private func fireInterruptionOnce(_ reason: AudioInterruptionReason) {
+        let already = interruptionFired.withLock { fired -> Bool in
+            let was = fired
+            fired = true
+            return was
+        }
+        guard !already else { return }
+        onInterruption?(reason)
+        stopEngine()
     }
 
     private func requestMicrophoneAccess() async throws {
