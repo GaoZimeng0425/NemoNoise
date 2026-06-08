@@ -281,6 +281,46 @@ extension TranscriptionPipelineTests {
         }
     }
 
+    // MARK: - Interruption: text preserved when stream ends before finalize
+
+    /// Reproduces the audio-interruption flow at the pipeline level: the audio
+    /// stream ends early (as it does when MicAudioSource stops its engine on a
+    /// device change / stall), and `finalize()` is called afterwards. The
+    /// already-recognized text must still be preserved — finalize must drain
+    /// `engine.finish()` and must not hang.
+    func testFinalizeAfterEarlyStreamEndPreservesRecognizedText() async throws {
+        let source = MockAudioSource()
+        let engine = MockASREngine()
+        engine.feedChunkResultText = "recognized so far"
+        engine.finishResultText = "recognized so far final"
+
+        let sink = RecordingSink()
+        let pipeline = TranscriptionPipeline(
+            source: source, engine: engine, postProcessors: [], sink: sink, fallback: nil
+        )
+
+        let events = pipeline.start()
+        let consumer = Task { for try await _ in events { /* drain */ } }
+
+        try await Task.sleep(for: .milliseconds(50))
+        source.emit(samples: [0.1])               // a partial is recognized + delivered
+        try await Task.sleep(for: .milliseconds(50))
+
+        // Simulate the interruption: the capture stream ends early, before finalize.
+        source.finishStream()
+        try await Task.sleep(for: .milliseconds(20))
+
+        // finalize() runs the same path RecordingController.stopRecording uses.
+        let final = try await pipeline.finalize()
+        _ = try? await consumer.value
+
+        XCTAssertEqual(final.text, "recognized so far final",
+                       "finalize must drain engine.finish() even when the stream ended early")
+        XCTAssertEqual(engine.finishCallCount, 1, "engine.finish() must be called exactly once")
+        XCTAssertTrue(sink.delivered.contains { $0.text == "recognized so far" },
+                      "streamed partial must have reached the sink before the early stop")
+    }
+
     // MARK: - Translation pipeline force-segment integration
 
     final class TickingClock: @unchecked Sendable {
