@@ -349,6 +349,24 @@ final class RecordingController: OverlayWriter {
         LogService.endSession()
     }
 
+    /// Called (on the MainActor) when `MicAudioSource` detects a mid-recording
+    /// audio interruption. Behavior: stop-and-notify — gracefully finalize the
+    /// current session (keeping recognized text) via `stopRecording()`, and
+    /// show a toast explaining why. No-op unless actively recording.
+    func handleAudioInterruption(_ reason: AudioInterruptionReason) {
+        guard recordingState == .recording else { return }
+        let message: String
+        switch reason {
+        case .deviceConfigurationChanged:
+            message = "输入设备已变化，录音已停止"
+        case .audioStalled:
+            message = "未检测到音频输入，录音已停止"
+        }
+        LogService.warn("Audio interruption (\(reason)) — finalizing session", category: "Recording")
+        ToastWindowController.show(message, style: .warning, duration: 4)
+        stopRecording()
+    }
+
     // MARK: - Overlay + timer + ESC
 
     private func showOverlay() {
