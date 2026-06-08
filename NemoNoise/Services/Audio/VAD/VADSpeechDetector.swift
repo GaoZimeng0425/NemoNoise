@@ -24,6 +24,18 @@ struct VADConfig {
     /// Energy-fallback RMS threshold (used only by EnergySpeechDetector).
     var energyThreshold: Float = 0.02
 
+    // MARK: - Segmentation (VADSegmenter, Phase 2)
+
+    /// Sustained silence after speech that closes a segment (hangover).
+    /// 600 ms keeps natural in-sentence pauses from splitting a segment.
+    var minSilenceMs: Int = 600
+    /// Minimum speech duration for a segment to count; shorter runs are
+    /// treated as noise blips and discarded. ~200 ms.
+    var minSpeechMs: Int = 200
+    /// Hard cap on a single segment with no pause; forces a cut so no
+    /// offline decode ever exceeds the model's short-audio window. 15 s.
+    var maxSegmentMs: Int = 15000
+
     static let `default` = VADConfig()
 }
 
