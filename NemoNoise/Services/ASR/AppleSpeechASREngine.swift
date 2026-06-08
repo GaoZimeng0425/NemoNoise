@@ -32,6 +32,10 @@ struct AppleSpeechFinalQueue {
 }
 
 final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
+    // SFSpeech requests are configured with `addsPunctuation = true`, so the
+    // results already carry punctuation — the CT-Transformer must not re-add it.
+    let emitsPunctuation = true
+
     private let recognizer: SFSpeechRecognizer
 
     private var request: SFSpeechAudioBufferRecognitionRequest?

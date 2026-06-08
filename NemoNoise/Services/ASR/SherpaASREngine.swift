@@ -6,6 +6,9 @@ final class SherpaASREngine: ASREngine, @unchecked Sendable {
     private var lastDecodeCount: Int = 0
 
     let isStreaming = false
+    // SenseVoice runs with use_itn=1 and emits its own punctuation, so the
+    // CT-Transformer must not re-punctuate (it would double/corrupt marks).
+    let emitsPunctuation = true
 
     init(modelDir: URL, language: String = LanguagePreference.current.sherpaCode) throws {
         let modelPath  = modelDir.appendingPathComponent("model.int8.onnx").path
