@@ -27,6 +27,10 @@ final class VADSegmentingEngine: ASREngine, @unchecked Sendable {
 
     let isStreaming = true
 
+    /// Delegates to the wrapped engine: the decorator passes inner text through
+    /// unchanged, so if the inner engine self-punctuates (Qwen3), so does this.
+    var emitsPunctuation: Bool { inner.emitsPunctuation }
+
     init(inner: any ASREngine, detector: any VADSpeechDetector, config: VADConfig = .default) {
         self.inner = inner
         self.detector = detector

@@ -9,6 +9,9 @@ final class Qwen3ASREngine: ASREngine, @unchecked Sendable {
     private var accumulated: [Float] = []
 
     let isStreaming = false
+    // Qwen3-ASR is an LLM-decoder model that emits punctuation itself; running
+    // the CT-Transformer on top would double/corrupt it (`。。`, `？？`).
+    let emitsPunctuation = true
 
     init(modelDir: URL) throws {
         let convFrontend = modelDir.appendingPathComponent("conv_frontend.onnx").path

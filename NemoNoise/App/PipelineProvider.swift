@@ -94,7 +94,10 @@ final class PipelineProvider {
                                        style: .error, duration: 5)
         case .success(let build):
             if let recordingController {
-                let postProcessors: [any PostProcessor] = punctuator.map {
+                // Skip the CT-Transformer when the engine already emits its own
+                // punctuation (Qwen3) — re-punctuating self-punctuated text
+                // doubles/corrupts it (`。。`, `？？`, `。，`).
+                let postProcessors: [any PostProcessor] = (build.engine.emitsPunctuation ? nil : punctuator).map {
                     [PunctuationProcessor(punctuator: $0)]
                 } ?? []
 
