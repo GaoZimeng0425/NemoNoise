@@ -109,4 +109,45 @@ final class VADSegmenterTests: XCTestCase {
         seg.reset()
         XCTAssertNil(seg.flush())
     }
+
+    func testReOnsetAfterDiscardedBlip() {
+        // minSpeech = 3 windows, minSilence = 2 windows
+        var c = cfg(); c.minSpeechMs = 96; c.minSilenceMs = 64
+        let seg = VADSegmenter(config: c)
+
+        // Phase 1: blip (1 speech + 2 silence) — speech count < minSpeech → discard
+        _ = seg.step(window: win(0.5), isSpeech: true)   // speech 1 (onset)
+        _ = seg.step(window: win(0.0), isSpeech: false)  // silence 1
+        XCTAssertEqual(seg.step(window: win(0.0), isSpeech: false), .buffering)  // silence 2 → discard
+
+        // Phase 2: proper segment (3 speech + 2 silence); preBuffer was cleared at first onset
+        _ = seg.step(window: win(0.5), isSpeech: true)   // speech 1 (re-onset, no pre-buffer)
+        _ = seg.step(window: win(0.5), isSpeech: true)   // speech 2
+        _ = seg.step(window: win(0.5), isSpeech: true)   // speech 3
+        _ = seg.step(window: win(0.0), isSpeech: false)  // silence 1
+        guard case .segment(let samples) = seg.step(window: win(0.0), isSpeech: false) else {
+            return XCTFail("expected segment after re-onset")
+        }
+        // 3 speech + 2 silence = 5 windows (no pre-speech; preBuffer was cleared at first onset)
+        XCTAssertEqual(samples.count, 5 * W)
+    }
+
+    func testPreSpeechBufferIsCapped() {
+        // preSpeechWindows = 2; feed 4 non-speech windows, only last 2 should be kept
+        let seg = VADSegmenter(config: cfg())
+        _ = seg.step(window: win(0.1), isSpeech: false)  // pre 1 (will be evicted)
+        _ = seg.step(window: win(0.2), isSpeech: false)  // pre 2 (will be evicted)
+        _ = seg.step(window: win(0.3), isSpeech: false)  // pre 3 (retained as oldest)
+        _ = seg.step(window: win(0.4), isSpeech: false)  // pre 4 (retained as newest)
+        _ = seg.step(window: win(0.9), isSpeech: true)   // onset; prepends [0.3, 0.4]
+        _ = seg.step(window: win(0.0), isSpeech: false)  // silence 1
+        guard case .segment(let s) = seg.step(window: win(0.0), isSpeech: false) else {
+            return XCTFail("expected segment")
+        }
+        // 2 pre-speech + 1 onset + 2 silence = 5 windows
+        XCTAssertEqual(s.count, 5 * W)
+        XCTAssertEqual(Array(s[0 * W ..< 1 * W]), win(0.3))  // first retained pre-speech
+        XCTAssertEqual(Array(s[1 * W ..< 2 * W]), win(0.4))  // second retained pre-speech
+        XCTAssertEqual(Array(s[2 * W ..< 3 * W]), win(0.9))  // onset window
+    }
 }
