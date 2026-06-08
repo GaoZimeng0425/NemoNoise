@@ -20,15 +20,14 @@ final class MicAudioSource: AudioSource, Sendable {
     private let onInterruption: (@Sendable (AudioInterruptionReason) -> Void)?
     private let stallThreshold: CFTimeInterval = 2.0
     private let stallCheckInterval: CFTimeInterval = 0.5
-    private let watchdog = OSAllocatedUnfairLock<AudioStallWatchdog>(
-        initialState: AudioStallWatchdog(threshold: 2.0, now: 0)
-    )
+    private let watchdog: OSAllocatedUnfairLock<AudioStallWatchdog>
     private let interruptionFired = OSAllocatedUnfairLock<Bool>(initialState: false)
     private let stallTimer = OSAllocatedUnfairLock<DispatchSourceTimer?>(initialState: nil)
     private let configObserver = OSAllocatedUnfairLock<NSObjectProtocol?>(initialState: nil)
 
     init(onInterruption: (@Sendable (AudioInterruptionReason) -> Void)? = nil) {
         self.onInterruption = onInterruption
+        self.watchdog = OSAllocatedUnfairLock(initialState: AudioStallWatchdog(threshold: stallThreshold, now: 0))
     }
 
     func start() async throws -> AsyncStream<AudioChunk> {
@@ -69,9 +68,9 @@ final class MicAudioSource: AudioSource, Sendable {
             inputNode.removeTap(onBus: 0)
             throw error
         }
-        isCapturing.withLock { $0 = true }
         interruptionFired.withLock { $0 = false }
         watchdog.withLock { $0 = AudioStallWatchdog(threshold: stallThreshold, now: CACurrentMediaTime()) }
+        isCapturing.withLock { $0 = true }
         startStallTimer()
         observeConfigurationChanges()
         LogService.info("Capture started, converting \(hardwareFormat.sampleRate)Hz -> \(targetSampleRate)Hz", category: "AudioCapture")
@@ -180,6 +179,10 @@ final class MicAudioSource: AudioSource, Sendable {
     /// Repeating background timer that asks the watchdog whether the raw tap
     /// has stalled. Fires `.audioStalled` at most once per session.
     private func startStallTimer() {
+        stallTimer.withLock { timer in
+            timer?.cancel()
+            timer = nil
+        }
         let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
         timer.schedule(deadline: .now() + stallCheckInterval, repeating: stallCheckInterval)
         timer.setEventHandler { [weak self] in
