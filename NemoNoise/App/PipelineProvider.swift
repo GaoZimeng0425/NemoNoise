@@ -97,9 +97,25 @@ final class PipelineProvider {
                 let postProcessors: [any PostProcessor] = punctuator.map {
                     [PunctuationProcessor(punctuator: $0)]
                 } ?? []
+
+                // Offline engines (Qwen3 / SenseVoice) decode in one shot at
+                // finish(), so they get the segmenting decorator that cuts at
+                // pauses and decodes each short segment progressively. Streaming
+                // engines (Paraformer / Apple) keep the Phase-1 gated source —
+                // its silence-injection preserves their own endpoint detection.
+                let source: any AudioSource
+                let engine: any ASREngine
+                if build.engine.isStreaming {
+                    source = VADGatedSource(inner: makeMicSource(), detector: makeDetector())
+                    engine = build.engine
+                } else {
+                    source = makeMicSource()
+                    engine = VADSegmentingEngine(inner: build.engine, detector: makeDetector())
+                }
+
                 let pipeline = TranscriptionPipeline(
-                    source: makeGatedMicSource(),
-                    engine: build.engine,
+                    source: source,
+                    engine: engine,
                     postProcessors: postProcessors,
                     sink: OverlayProgressSink(target: recordingController),
                     fallback: fallback
@@ -164,27 +180,29 @@ final class PipelineProvider {
         }
     }
 
-    // MARK: - Gated mic source
+    // MARK: - Dictation source pieces
 
-    /// Builds the dictation audio source wrapped in voice-activity gating.
-    /// Uses Silero when its model is downloaded; otherwise falls back to energy
-    /// gating (still better than no VAD) and logs the degradation.
-    private func makeGatedMicSource() -> any AudioSource {
-        let detector: any VADSpeechDetector
+    /// Builds the VAD detector: Silero when its model is downloaded, otherwise
+    /// the energy fallback (still better than no VAD), logging the degradation.
+    /// A fresh detector per pipeline build — Silero state is per-session.
+    private func makeDetector() -> any VADSpeechDetector {
         if let dir = modelManager.modelPath(for: .sileroVad),
            let silero = SileroSpeechDetector(modelPath: dir.appendingPathComponent("silero_vad.onnx").path) {
-            detector = silero
             LogService.info("Dictation VAD: Silero", category: "PipelineProvider")
-        } else {
-            detector = EnergySpeechDetector()
-            LogService.warn("Silero VAD model unavailable; using energy gate", category: "PipelineProvider")
+            return silero
         }
-        let micSource = MicAudioSource(onInterruption: { [weak recordingController] reason in
+        LogService.warn("Silero VAD model unavailable; using energy gate", category: "PipelineProvider")
+        return EnergySpeechDetector()
+    }
+
+    /// The raw mic source with the audio-interruption hook wired to the
+    /// recording controller.
+    private func makeMicSource() -> MicAudioSource {
+        MicAudioSource(onInterruption: { [weak recordingController] reason in
             Task { @MainActor in
                 recordingController?.handleAudioInterruption(reason)
             }
         })
-        return VADGatedSource(inner: micSource, detector: detector)
     }
 
     // MARK: - Punctuator
