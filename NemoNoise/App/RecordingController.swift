@@ -270,7 +270,7 @@ final class RecordingController: OverlayWriter {
                 }
 
                 let pieces = self.confirmedSegments.map(\.text).filter { !$0.isEmpty }
-                let dispatchText = pieces.joined(separator: " ")
+                let dispatchText = TranscriptJoin.sentences(pieces)
                 LogService.info("Dispatch text assembled — \(pieces.count) segments, total length=\(dispatchText.count)", category: "Recording")
 
                 let engineLabel = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)

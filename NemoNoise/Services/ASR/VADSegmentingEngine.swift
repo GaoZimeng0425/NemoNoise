@@ -53,7 +53,7 @@ final class VADSegmentingEngine: ASREngine, @unchecked Sendable {
         guard !pieces.isEmpty else {
             return TranscriptionResult(text: "", isFinal: false, emotion: nil)
         }
-        return TranscriptionResult(text: pieces.joined(separator: " "), isFinal: true, emotion: nil)
+        return TranscriptionResult(text: TranscriptJoin.sentences(pieces), isFinal: true, emotion: nil)
     }
 
     func finish() async throws -> TranscriptionResult {

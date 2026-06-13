@@ -155,9 +155,9 @@ struct OverlayView: View {
     /// preserves its italic / secondary tint via Text composition. Head
     /// truncation keeps the tail (most recent words) visible when overflow.
     private var inlineTranscript: some View {
-        let confirmedJoined = controller.confirmedSegments
-            .map { $0.text.replacingOccurrences(of: "\n", with: " ") }
-            .joined(separator: " ")
+        let confirmedJoined = TranscriptJoin.sentences(
+            controller.confirmedSegments.map { $0.text.replacingOccurrences(of: "\n", with: " ") }
+        )
         let partial = controller.partialText.replacingOccurrences(of: "\n", with: " ")
 
         let confirmedPart = Text(confirmedJoined)
