@@ -11,6 +11,9 @@ enum AppDefaults {
         static let echoCancellation = "echoCancellation"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let sentryEnabled = "sentryEnabled"
+        /// JSON-encoded `[CorrectionRule]` the user has added on top of the
+        /// built-in `TextCorrections.presets`. Read by `TextCorrections.active()`.
+        static let textCorrectionRules = "textCorrectionRules"
         /// Legacy hotkey key — read once by `HotkeyMigration` and then deleted.
         static let legacyHotkeyOption = "hotkeyOption"
     }

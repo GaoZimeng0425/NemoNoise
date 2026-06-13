@@ -16,6 +16,9 @@ struct SettingsView: View {
             engineTab
                 .tabItem { Label("Engine", systemImage: "cpu") }
 
+            correctionsTab
+                .tabItem { Label("Corrections", systemImage: "textformat.abc") }
+
             shortcutsTab
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
 
@@ -65,6 +68,12 @@ struct SettingsView: View {
         } message: {
             Text("Sanitized logs saved to:\n\(exportedLogPath)")
         }
+    }
+
+    // MARK: - Corrections tab
+
+    private var correctionsTab: some View {
+        CorrectionsView()
     }
 
     // MARK: - Shortcuts tab

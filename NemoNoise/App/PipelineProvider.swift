@@ -97,9 +97,16 @@ final class PipelineProvider {
                 // Skip the CT-Transformer when the engine already emits its own
                 // punctuation (Qwen3) — re-punctuating self-punctuated text
                 // doubles/corrupts it (`。。`, `？？`, `。，`).
-                let postProcessors: [any PostProcessor] = (build.engine.emitsPunctuation ? nil : punctuator).map {
+                var postProcessors: [any PostProcessor] = (build.engine.emitsPunctuation ? nil : punctuator).map {
                     [PunctuationProcessor(punctuator: $0)]
                 } ?? []
+
+                // Last step: repair common English-term mis-transcriptions
+                // ("u爱" → "UI", lower-cased acronyms, brand casing). Runs after
+                // punctuation so it operates on the final user-visible text. The
+                // provider re-reads the dictionary each utterance, so Settings
+                // edits apply without rebuilding the pipeline.
+                postProcessors.append(TextCorrectionProcessor(provider: { TextCorrections.active() }))
 
                 // Offline engines (Qwen3 / SenseVoice) decode in one shot at
                 // finish(), so they get the segmenting decorator that cuts at
