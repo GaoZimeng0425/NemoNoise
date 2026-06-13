@@ -48,7 +48,7 @@ final class SubtitleOverlayController {
         panel.level = .floating
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = false
         panel.ignoresMouseEvents = true
@@ -64,11 +64,11 @@ final class SubtitleOverlayController {
             ?? NSScreen.screens[0]
 
         panel.layoutIfNeeded()
-        let size = panel.frame.size
         let screenFrame = screen.visibleFrame
-        let targetWidth = min(screenFrame.width * 0.7, 900)
+        let targetWidth = min(screenFrame.width - 80, 640)
+        let targetHeight = min(screenFrame.height * 0.55, 620)
         let x = screenFrame.midX - targetWidth / 2
         let y = screenFrame.minY + 80
-        panel.setFrame(NSRect(x: x, y: y, width: targetWidth, height: size.height), display: true)
+        panel.setFrame(NSRect(x: x, y: y, width: targetWidth, height: targetHeight), display: true)
     }
 }

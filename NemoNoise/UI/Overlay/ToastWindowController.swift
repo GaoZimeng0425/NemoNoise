@@ -37,6 +37,8 @@ final class ToastWindowController {
 
         let hostingView = NSHostingView(rootView: ToastCapsule(message: message, style: style))
         hostingView.sizingOptions = .preferredContentSize
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = .clear
         let fittingSize = hostingView.fittingSize
 
         let p = NSPanel(
@@ -47,7 +49,7 @@ final class ToastWindowController {
         )
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = true
+        p.hasShadow = false
         p.level = .floating
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.contentView = hostingView
@@ -61,9 +63,7 @@ final class ToastWindowController {
         guard let screen else { return }
         let screenRect = screen.visibleFrame
 
-        // Force a fixed panel width so positioning is deterministic regardless
-        // of what NSHostingView.fittingSize reports.
-        let panelWidth: CGFloat = 420
+        let panelWidth = fittingSize.width
         let panelHeight = fittingSize.height
         let x = screenRect.midX - panelWidth / 2
 
@@ -121,23 +121,28 @@ final class ToastWindowController {
 private struct ToastCapsule: View {
     let message: String
     let style: ToastStyle
+    @Namespace private var glassNS
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: style.icon)
-                .font(.callout.weight(.semibold))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(style.color)
+        GlassEffectContainer(spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: style.icon)
+                    .font(.callout.weight(.semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(style.color)
 
-            Text(message)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-                .lineLimit(2)
+                Text(message)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .frame(width: 420, alignment: .leading)
+            .glassEffect(.regular, in: .capsule)
+            .glassEffectID("toast", in: glassNS)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .frame(width: 420, alignment: .leading)
-        .glassEffect(.regular, in: .capsule)
+        .padding(20)
     }
 }
