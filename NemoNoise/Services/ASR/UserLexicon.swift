@@ -7,7 +7,8 @@ import Foundation
 /// on the correction dictionary instead.
 struct LexiconEntry: Codable, Equatable {
     var term: String
-    var weight: Float   // bias strength; engine-specific scaling. Default 2.0.
+    var weight: Float   // bias strength. Reserved for the deferred Paraformer
+                        // hotwords_score phase; Qwen3/Apple biasing ignore it. Default 2.0.
 }
 
 enum UserLexicon {
@@ -30,7 +31,15 @@ enum UserLexicon {
         var seen = Set<String>()
         var out: [String] = []
         for entry in active(defaults: defaults) {
-            let t = entry.term.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Strip commas: the Qwen3 sink joins terms with "," (sherpa's
+            // comma-separated hotword format), so an embedded comma would split
+            // one term into two bogus hotwords. Collapse any resulting runs of
+            // whitespace so "Goodman, Sachs" → "Goodman Sachs", not "Goodman  Sachs".
+            let t = entry.term
+                .replacingOccurrences(of: ",", with: " ")
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
             guard !t.isEmpty, !seen.contains(t) else { continue }
             seen.insert(t)
             out.append(t)

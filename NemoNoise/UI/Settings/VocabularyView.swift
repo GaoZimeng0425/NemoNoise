@@ -46,7 +46,7 @@ struct VocabularyView: View {
             } header: {
                 Text("My vocabulary")
             } footer: {
-                Text("Vocabulary terms bias recognition toward names and jargon. Works with Qwen3 and Apple Speech; SenseVoice relies on the Corrections list instead. Changes apply to your next recording.")
+                Text("Vocabulary terms bias recognition toward names and jargon. Works with Qwen3 and Apple Speech; SenseVoice relies on the Corrections list instead. Changes take effect after you switch engines or relaunch.")
                     .font(.caption)
             }
         }

@@ -29,4 +29,10 @@ final class UserLexiconTests: XCTestCase {
         ], defaults: d)
         XCTAssertEqual(UserLexicon.biasStrings(defaults: d), ["React", "Qwen3"])
     }
+
+    func testBiasStringsStripsCommasToProtectQwen3Format() {
+        let d = makeDefaults()
+        UserLexicon.save([LexiconEntry(term: "Goodman, Sachs", weight: 2)], defaults: d)
+        XCTAssertEqual(UserLexicon.biasStrings(defaults: d), ["Goodman Sachs"])
+    }
 }
