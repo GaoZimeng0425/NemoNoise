@@ -79,8 +79,10 @@ final class MicAudioSource: AudioSource, Sendable {
             c.onTermination = { [weak self] _ in self?.stopEngine() }
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: hardwareFormat) { [weak self] buffer, _ in
-            self?.processTap(buffer: buffer)
+        guard safeInstallTap(on: inputNode, format: hardwareFormat) else {
+            engineBox.withLock { $0 = nil }
+            resamplerBox.withLock { $0 = nil }
+            throw ASRError.audioCaptureFailed("Failed to install audio tap")
         }
 
         do {
@@ -177,6 +179,29 @@ final class MicAudioSource: AudioSource, Sendable {
         let rms = sqrt(samples.reduce(0) { $0 + $1 * $1 } / Float(samples.count))
         let spectrum = analyzer.analyze(samples)
         continuation.value?.yield(AudioChunk(samples: samples, rmsLevel: rms, spectrum: spectrum))
+    }
+
+    /// Installs the processing tap, catching the Obj-C `NSException` that
+    /// `installTap` raises for an invalid/transitional format — which happens
+    /// while a Bluetooth device switches the A2DP↔HFP profile — so it degrades
+    /// gracefully instead of aborting the process. Returns false if the format
+    /// is unusable or the install raised.
+    private func safeInstallTap(on inputNode: AVAudioInputNode, format: AVAudioFormat) -> Bool {
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            LogService.warn("installTap skipped — invalid format \(format.sampleRate)Hz/\(format.channelCount)ch", category: "AudioCapture")
+            return false
+        }
+        do {
+            try catchingObjCException {
+                inputNode.installTap(onBus: 0, bufferSize: self.bufferSize, format: format) { [weak self] buffer, _ in
+                    self?.processTap(buffer: buffer)
+                }
+            }
+            return true
+        } catch {
+            LogService.warn("installTap raised: \((error as NSError).localizedDescription) — skipping tap install", category: "AudioCapture")
+            return false
+        }
     }
 
     /// Reads `AppDefaults.Keys.preferredMicUID` and pins the input audio unit
@@ -296,8 +321,13 @@ final class MicAudioSource: AudioSource, Sendable {
             return
         }
         resamplerBox.withLock { $0 = resampler }
-        inputNode.installTap(onBus: 0, bufferSize: bufferSize, format: format) { [weak self] buffer, _ in
-            self?.processTap(buffer: buffer)
+        guard safeInstallTap(on: inputNode, format: format) else {
+            // The transitional Bluetooth format made installTap raise (or the
+            // format was unusable). Rather than crash, abort this session via
+            // the normal interruption path so it finalizes cleanly.
+            LogService.warn("Reconfigure installTap failed (Bluetooth route transition?) — finalizing session", category: "AudioCapture")
+            fireInterruptionOnce(.deviceConfigurationChanged)
+            return
         }
         if !engine.isRunning {
             do {
