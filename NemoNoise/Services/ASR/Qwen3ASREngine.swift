@@ -24,7 +24,8 @@ final class Qwen3ASREngine: ASREngine, @unchecked Sendable {
             convFrontendPath: convFrontend,
             encoderPath: encoder,
             decoderPath: decoder,
-            tokenizerDir: tokenizer
+            tokenizerDir: tokenizer,
+            hotwords: UserLexicon.biasStrings()
         ) else {
             LogService.error("Qwen3-ASR init failed in \(modelDir.path)", category: "ASR")
             throw ASRError.engineInitFailed

@@ -244,7 +244,8 @@ final class SherpaQwen3Recognizer: @unchecked Sendable {
         convFrontendPath: String,
         encoderPath: String,
         decoderPath: String,
-        tokenizerDir: String
+        tokenizerDir: String,
+        hotwords: [String] = []
     ) {
         var ptr: UnsafePointer<SherpaOnnxOfflineRecognizer>?
 
@@ -253,7 +254,7 @@ final class SherpaQwen3Recognizer: @unchecked Sendable {
                 decoderPath.withCString { cDec in
                     tokenizerDir.withCString { cTok in
                         "".withCString { cTokens in
-                            "".withCString { cHotwords in
+                            hotwords.joined(separator: ",").withCString { cHotwords in
                                 "cpu".withCString { cProvider in
                                     "greedy_search".withCString { cDecoding in
 
