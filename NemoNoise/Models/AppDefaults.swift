@@ -14,6 +14,9 @@ enum AppDefaults {
         /// JSON-encoded `[CorrectionRule]` the user has added on top of the
         /// built-in `TextCorrections.presets`. Read by `TextCorrections.active()`.
         static let textCorrectionRules = "textCorrectionRules"
+        /// JSON-encoded `[LexiconEntry]` for recognition-side biasing.
+        /// Read by `UserLexicon.active()`.
+        static let vocabularyTerms = "vocabularyTerms"
         /// Legacy hotkey key — read once by `HotkeyMigration` and then deleted.
         static let legacyHotkeyOption = "hotkeyOption"
     }
