@@ -175,32 +175,12 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
                 // goes through paste: on NSResponder chain, which these apps
                 // all implement natively.
                 LogService.info("inject — AX-hostile target, bypassing AX paths", category: "TextInjection")
-            } else {
-                // AX path A: replace selected text (caret-aware, preserves rest of field).
-                var axStatus = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
-                if axStatus == .success {
-                    LogService.info("inject — path=AX_selected, len=\(text.count)", category: "TextInjection")
-                    return .injectedAX
-                }
-                LogService.info("inject — AX kAXSelectedText failed (status=\(axStatus.rawValue))", category: "TextInjection")
-
-                // AX path B: kAXValue full-value write — gated on empty field so we
-                // don't clobber a user draft. Many Electron AXTextArea targets reject
-                // kAXSelectedText but accept this path.
-                var currentValue: CFTypeRef?
-                let readStatus = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &currentValue)
-                let fieldIsEmpty = (readStatus == .success) && ((currentValue as? String)?.isEmpty ?? false)
-                if fieldIsEmpty {
-                    axStatus = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFString)
-                    if axStatus == .success {
-                        LogService.info("inject — path=AX_value, len=\(text.count)", category: "TextInjection")
-                        return .injectedAX
-                    }
-                    LogService.info("inject — AX kAXValue failed (status=\(axStatus.rawValue))", category: "TextInjection")
-                } else {
-                    LogService.info("inject — field non-empty (readStatus=\(readStatus.rawValue)), skipping kAXValue replace", category: "TextInjection")
-                }
+            } else if let outcome = tryAXWrite(element, text) {
+                return outcome
             }
+            // tryAXWrite returned nil → the write failed OR acked .success but
+            // was a verified no-op (web content / terminals that aren't in the
+            // hostile list). Fall through to the paste path, which lands there.
         } else {
             LogService.info("inject — no AX element captured, skipping AX paths, going straight to paste", category: "TextInjection")
         }
@@ -287,6 +267,71 @@ final class TextInjector: TextInjecting, @unchecked Sendable {
         // Give the target a moment to handle paste: before any caller continues.
         try? await Task.sleep(for: .milliseconds(50))
         return true
+    }
+
+    /// Attempts the AX write paths against `element`. Returns `.injectedAX`
+    /// ONLY when the write is confirmed to have changed the field. Returns nil
+    /// when the write failed, or acked `.success` but was a verified no-op —
+    /// web content (Safari/Chromium) and terminals expose a focused text
+    /// element that accepts `kAXSelectedText`/`kAXValue` writes with `.success`
+    /// and silently drops them. The caller then falls through to the paste path.
+    private func tryAXWrite(_ element: AXUIElement, _ text: String) -> InjectionOutcome? {
+        // AX path A: replace selected text (caret-aware, preserves rest of field).
+        let beforeA = stringValue(element)
+        var axStatus = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
+        if axStatus == .success {
+            if Self.axWriteChanged(beforeValue: beforeA, afterValue: stringValue(element)) == false {
+                LogService.info("inject — AX kAXSelectedText acked .success but value unchanged (no-op), bypassing AX → paste", category: "TextInjection")
+                return nil
+            }
+            LogService.info("inject — path=AX_selected, len=\(text.count)", category: "TextInjection")
+            return .injectedAX
+        }
+        LogService.info("inject — AX kAXSelectedText failed (status=\(axStatus.rawValue))", category: "TextInjection")
+
+        // AX path B: kAXValue full-value write — gated on empty field so we
+        // don't clobber a user draft. Many Electron AXTextArea targets reject
+        // kAXSelectedText but accept this path.
+        var currentValue: CFTypeRef?
+        let readStatus = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &currentValue)
+        let beforeB = currentValue as? String
+        let fieldIsEmpty = (readStatus == .success) && (beforeB?.isEmpty ?? false)
+        if fieldIsEmpty {
+            axStatus = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, text as CFString)
+            if axStatus == .success {
+                if Self.axWriteChanged(beforeValue: beforeB, afterValue: stringValue(element)) == false {
+                    LogService.info("inject — AX kAXValue acked .success but value unchanged (no-op), bypassing AX → paste", category: "TextInjection")
+                    return nil
+                }
+                LogService.info("inject — path=AX_value, len=\(text.count)", category: "TextInjection")
+                return .injectedAX
+            }
+            LogService.info("inject — AX kAXValue failed (status=\(axStatus.rawValue))", category: "TextInjection")
+        } else {
+            LogService.info("inject — field non-empty (readStatus=\(readStatus.rawValue)), skipping kAXValue replace", category: "TextInjection")
+        }
+        return nil
+    }
+
+    /// Decides whether an AX write that returned `.success` actually modified
+    /// the field, by comparing the field value before and after:
+    ///  - `true`  — value changed → the write landed.
+    ///  - `false` — value identical → silent no-op (web content / terminals).
+    ///  - `nil`   — a value read failed, so the result is unknown; the caller
+    ///    must keep the status quo (trust `.success`) rather than fall through
+    ///    to paste, which would double-insert if the write had in fact landed.
+    static func axWriteChanged(beforeValue: String?, afterValue: String?) -> Bool? {
+        guard let before = beforeValue, let after = afterValue else { return nil }
+        return before != after
+    }
+
+    /// Reads the element's text value (`kAXValue`) as a String, or nil if the
+    /// attribute is absent or unreadable.
+    private func stringValue(_ element: AXUIElement) -> String? {
+        var value: CFTypeRef?
+        let status = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value)
+        guard status == .success else { return nil }
+        return value as? String
     }
 
     private func isSecureField(_ element: AXUIElement) -> Bool {

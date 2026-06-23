@@ -38,4 +38,30 @@ final class TextInjectorTests: XCTestCase {
             XCTFail("expected .failed for 5001-char text, got \(outcome)")
         }
     }
+
+    // MARK: - verify-after-write decision
+
+    func testAXWriteChangedDetectsInsertion() {
+        // Field value grew → the AX write landed.
+        XCTAssertEqual(TextInjector.axWriteChanged(beforeValue: "abc", afterValue: "abchello"), true)
+    }
+
+    func testAXWriteChangedDetectsSelectionReplacement() {
+        // Replacing a selection changes the value even if length differs → landed.
+        XCTAssertEqual(TextInjector.axWriteChanged(beforeValue: "selection", afterValue: "x"), true)
+    }
+
+    func testAXWriteChangedDetectsNoOpOnUnchangedValue() {
+        // AX acked .success but value is identical → silent no-op (Safari/terminal).
+        XCTAssertEqual(TextInjector.axWriteChanged(beforeValue: "", afterValue: ""), false)
+        XCTAssertEqual(TextInjector.axWriteChanged(beforeValue: "foo", afterValue: "foo"), false)
+    }
+
+    func testAXWriteChangedReturnsNilWhenValueUnreadable() {
+        // A failed read on either side is "unknown" — caller must keep status quo
+        // (trust the .success) rather than risk a double insert via paste.
+        XCTAssertNil(TextInjector.axWriteChanged(beforeValue: nil, afterValue: "foo"))
+        XCTAssertNil(TextInjector.axWriteChanged(beforeValue: "foo", afterValue: nil))
+        XCTAssertNil(TextInjector.axWriteChanged(beforeValue: nil, afterValue: nil))
+    }
 }
