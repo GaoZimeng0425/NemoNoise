@@ -19,6 +19,9 @@ struct SettingsView: View {
             correctionsTab
                 .tabItem { Label("Corrections", systemImage: "textformat.abc") }
 
+            vocabularyTab
+                .tabItem { Label("Vocabulary", systemImage: "character.book.closed") }
+
             shortcutsTab
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
 
@@ -74,6 +77,12 @@ struct SettingsView: View {
 
     private var correctionsTab: some View {
         CorrectionsView()
+    }
+
+    // MARK: - Vocabulary tab
+
+    private var vocabularyTab: some View {
+        VocabularyView()
     }
 
     // MARK: - Shortcuts tab
