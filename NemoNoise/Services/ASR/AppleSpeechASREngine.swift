@@ -96,6 +96,7 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
             req.shouldReportPartialResults = true
             req.requiresOnDeviceRecognition = false
             req.addsPunctuation = true
+            req.contextualStrings = UserLexicon.biasStrings()
             request = req
 
             task = recognizer.recognitionTask(with: req) { [weak self] result, error in
