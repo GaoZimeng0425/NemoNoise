@@ -107,6 +107,20 @@ final class MicAudioSource: AudioSource, Sendable {
         }
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        // Tear down voice processing I/O if we enabled it. The engine instance
+        // is reused across recordings (owned by MicAudioSource, built once in
+        // PipelineProvider), so leaving VPIO latched keeps the audio device in
+        // voice-communication mode after we stop — the OS then AGC-amplifies
+        // and noise-suppresses *output*, making music on headphones loud and
+        // muffled long after recording ends. Disable it symmetrically.
+        if engine.inputNode.isVoiceProcessingEnabled {
+            do {
+                try engine.inputNode.setVoiceProcessingEnabled(false)
+                LogService.info("Voice processing disabled", category: "AudioCapture")
+            } catch {
+                LogService.warn("setVoiceProcessingEnabled(false) failed: \(error.localizedDescription)", category: "AudioCapture")
+            }
+        }
         LogService.info("Capture stopped", category: "AudioCapture")
     }
 
@@ -161,11 +175,11 @@ final class MicAudioSource: AudioSource, Sendable {
         }
     }
 
-    /// Apple's voice processing I/O (AEC + noise suppression + AGC). A fresh
-    /// AVAudioEngine starts in non-VPIO state, so we only call the API when
-    /// enabling — calling it with `false` would reinstantiate the audio unit
-    /// for no reason, producing a visible mic-indicator close/reopen cycle on
-    /// every record.
+    /// Apple's voice processing I/O (AEC + noise suppression + AGC). Enabled
+    /// here at start; `stopEngine()` disables it symmetrically. The engine is
+    /// reused across recordings, so VPIO must be torn down on stop — otherwise
+    /// the audio device stays in voice-communication mode and the OS keeps
+    /// processing system output (e.g. headphone music gets loud and muffled).
     private func applyEchoCancellation(to inputNode: AVAudioInputNode) {
         guard UserDefaults.standard.bool(forKey: AppDefaults.Keys.echoCancellation) else { return }
         do {
