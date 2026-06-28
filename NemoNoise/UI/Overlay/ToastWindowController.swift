@@ -65,12 +65,13 @@ final class ToastWindowController {
 
         let panelWidth = fittingSize.width
         let panelHeight = fittingSize.height
+        // Horizontally centered on the active screen.
         let x = screenRect.midX - panelWidth / 2
 
-        // Vertically: 30% from the top of the visible frame — well above the
-        // bottom HUD and clearly in the user's natural reading area, but not
-        // so high it crowds the menubar.
-        let targetY = screenRect.maxY - (screenRect.height * 0.30) - panelHeight / 2
+        // Vertically: centered at 30% of the visible-frame height up from the
+        // bottom — sits in the lower third of the screen, near the user's
+        // focus without crowding the very bottom edge.
+        let targetY = screenRect.minY + (screenRect.height * 0.30) - panelHeight / 2
 
         LogService.info(
             "Toast position — screen=\(screenRect) panelWidth=\(panelWidth) panelHeight=\(panelHeight) x=\(x) y=\(targetY)",
@@ -134,12 +135,12 @@ private struct ToastCapsule: View {
                 Text(message)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.primary)
-                    .multilineTextAlignment(.leading)
+                    .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
-            .frame(width: 420, alignment: .leading)
+            .frame(maxWidth: 420, alignment: .center)
             .glassEffect(.regular, in: .capsule)
             .glassEffectID("toast", in: glassNS)
         }
