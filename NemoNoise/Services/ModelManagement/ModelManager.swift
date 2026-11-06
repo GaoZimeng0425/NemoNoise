@@ -10,7 +10,7 @@ enum ModelDownloadState: Equatable {
 
 // MARK: - Per-model descriptor
 
-struct ModelDescriptor {
+nonisolated struct ModelDescriptor {
     let id: String
     let displayName: String
     let detail: String
@@ -53,7 +53,7 @@ struct ModelDescriptor {
     }
 }
 
-extension ModelDescriptor {
+nonisolated extension ModelDescriptor {
     static let senseVoice = ModelDescriptor(
         id: "sensevoice",
         displayName: "SenseVoiceSmall (int8)",
@@ -139,13 +139,20 @@ final class ModelManager {
         refreshAll()
     }
 
-    func modelDir(for descriptor: ModelDescriptor) -> URL {
+    nonisolated func modelDir(for descriptor: ModelDescriptor) -> URL {
         baseDir.appendingPathComponent(descriptor.subdir, isDirectory: true)
     }
 
     func modelPath(for descriptor: ModelDescriptor) -> URL? {
         guard state(for: descriptor) == .downloaded else { return nil }
         return modelDir(for: descriptor)
+    }
+
+    /// Disk-only counterpart of `modelPath(for:)` for callers off the main
+    /// actor (engines are built on a detached task): applies `refreshAll()`'s
+    /// test directly instead of reading the observable `states`.
+    nonisolated func installedModelDir(for descriptor: ModelDescriptor) -> URL? {
+        allRequiredItemsPresent(descriptor) ? modelDir(for: descriptor) : nil
     }
 
     func state(for descriptor: ModelDescriptor) -> ModelDownloadState {
@@ -181,11 +188,14 @@ final class ModelManager {
     /// manually placed files (e.g. via `Show in Finder` for manual-install models).
     func refreshAll() {
         for d in Self.allDescriptors {
-            let dir = modelDir(for: d)
-            let allPresent = !d.requiredItems.isEmpty && d.requiredItems.allSatisfy {
-                FileManager.default.fileExists(atPath: dir.appendingPathComponent($0).path)
-            }
-            setState(allPresent ? .downloaded : .notDownloaded, for: d)
+            setState(allRequiredItemsPresent(d) ? .downloaded : .notDownloaded, for: d)
+        }
+    }
+
+    nonisolated private func allRequiredItemsPresent(_ descriptor: ModelDescriptor) -> Bool {
+        let dir = modelDir(for: descriptor)
+        return !descriptor.requiredItems.isEmpty && descriptor.requiredItems.allSatisfy {
+            FileManager.default.fileExists(atPath: dir.appendingPathComponent($0).path)
         }
     }
 
@@ -296,7 +306,7 @@ final class ModelManager {
     private func downloadFile(
         from url: URL,
         to destination: URL,
-        onProgress: @escaping (Double) -> Void
+        onProgress: @escaping @MainActor (Double) -> Void
     ) async throws {
         let observer = ProgressObserver()
         let config = URLSessionConfiguration.default
@@ -318,9 +328,12 @@ final class ModelManager {
     }
 }
 
-private final class ProgressObserver: NSObject, URLSessionDownloadDelegate {
+/// `nonisolated`: URLSession calls these on its delegate queue, never the main
+/// actor. `@unchecked Sendable`: both callbacks are assigned before the task is
+/// resumed and only read after that.
+nonisolated private final class ProgressObserver: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     var completion: CheckedContinuation<URL, Error>?
-    var onProgress: ((Double) -> Void)?
+    var onProgress: (@Sendable (Double) -> Void)?
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

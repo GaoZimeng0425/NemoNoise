@@ -8,7 +8,7 @@ import Foundation
 /// We feed one `windowSize` window per call, discard the completed-segment
 /// queue (we don't use it here; clearing prevents unbounded growth), and read
 /// the live flag. Mirrors the OpaquePointer pattern of `SherpaOfflinePunctuator`.
-final class SileroSpeechDetector: VADSpeechDetector, @unchecked Sendable {
+nonisolated final class SileroSpeechDetector: VADSpeechDetector, @unchecked Sendable {
     private let vad: OpaquePointer
     let windowSize: Int
 

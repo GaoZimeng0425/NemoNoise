@@ -230,7 +230,7 @@ final class PipelineProvider {
     /// Called from `Task.detached` — `nonisolated` because the enclosing class
     /// is `@MainActor` but this helper does no MainActor work.
     nonisolated private static func makePunctuator(modelManager: ModelManager) -> SherpaOfflinePunctuator? {
-        guard let dir = modelManager.modelPath(for: .punctuation) else { return nil }
+        guard let dir = modelManager.installedModelDir(for: .punctuation) else { return nil }
         let path = dir.appendingPathComponent("model.onnx").path
         guard let punctuator = SherpaOfflinePunctuator(modelPath: path) else {
             LogService.warn("Failed to load punctuation model at \(path)",

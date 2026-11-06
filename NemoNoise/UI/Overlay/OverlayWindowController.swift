@@ -27,7 +27,8 @@ final class OverlayWindowController: NSObject {
             context.duration = 0.15
             panel?.animator().alphaValue = 0.0
         }, completionHandler: { [weak self] in
-            self?.panel?.orderOut(nil)
+            // AppKit runs animation completion handlers on the main thread.
+            MainActor.assumeIsolated { self?.panel?.orderOut(nil) }
         })
     }
 

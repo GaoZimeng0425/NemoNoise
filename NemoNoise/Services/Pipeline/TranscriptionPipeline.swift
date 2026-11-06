@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Composes audio source + ASR engine + optional post-processors + sink into a
 /// runnable transcription session. Reusable: a single pipeline instance can be
@@ -76,7 +77,7 @@ final class TranscriptionPipeline {
                             // The failing chunk is dropped; subsequent chunks go through the fallback.
                             usingFallback = true
                             engineBox.engine = fallbackEngine!
-                            engineBox.engine.reset()
+                            await engineBox.engine.reset()
                             continuation.yield(.engineFallback(from: originalEngineName))
                         } catch {
                             continuation.finish(throwing: PipelineError.engineFailedFatally(underlying: error))
@@ -148,10 +149,15 @@ final class TranscriptionPipeline {
     private func currentEngine() -> any ASREngine { engineBox.engine }
 }
 
-/// Sendable box to allow engine swapping inside a detached Task.
-private final class EngineBox: @unchecked Sendable {
-    var engine: any ASREngine
-    init(engine: any ASREngine) { self.engine = engine }
+/// Sendable box to allow engine swapping inside a detached Task. Locked because
+/// the pump task swaps in the fallback while the main actor may read it.
+nonisolated private final class EngineBox: Sendable {
+    private let current: OSAllocatedUnfairLock<any ASREngine>
+    init(engine: any ASREngine) { current = OSAllocatedUnfairLock(initialState: engine) }
+    var engine: any ASREngine {
+        get { current.withLock { $0 } }
+        set { current.withLock { $0 = newValue } }
+    }
 }
 
 enum PipelineError: Error {

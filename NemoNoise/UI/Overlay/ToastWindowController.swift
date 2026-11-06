@@ -109,7 +109,8 @@ final class ToastWindowController {
             p.animator().setFrame(slideOut, display: true)
             p.animator().alphaValue = 0
         }, completionHandler: {
-            removePanel()
+            // AppKit runs animation completion handlers on the main thread.
+            MainActor.assumeIsolated { removePanel() }
         })
     }
 

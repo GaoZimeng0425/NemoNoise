@@ -3,14 +3,17 @@ import Foundation
 // Minimal Swift wrapper around the sherpa-onnx C API.
 // Covers offline SenseVoice recognition and online (streaming) Paraformer recognition.
 
-struct SherpaOnnxResult {
+nonisolated struct SherpaOnnxResult {
     let text: String
     let lang: String      // "zh", "en", "ja", "ko", "yue"
     let emotion: String   // "HAPPY", "SAD", "ANGRY", "NEUTRAL", "FEARFUL", "DISGUSTED", "SURPRISED"
     let event: String     // "Speech", "BGM", "Laughter", etc.
 }
 
-final class SherpaOfflineRecognizer: @unchecked Sendable {
+/// `nonisolated` so engines can actually decode on a detached task — with the
+/// module's default main-actor isolation, `decode` would hop back to the main
+/// thread. Each decode uses its own stream, and callers never decode concurrently.
+nonisolated final class SherpaOfflineRecognizer: @unchecked Sendable {
     private let recognizer: UnsafePointer<SherpaOnnxOfflineRecognizer>
 
     /// - Parameters:
@@ -94,7 +97,9 @@ final class SherpaOfflineRecognizer: @unchecked Sendable {
 
 // MARK: - Online (streaming) Paraformer
 
-final class SherpaOnlineRecognizer {
+/// `@unchecked Sendable` like the other wrappers: built off the main actor with
+/// its engine, then used serially by that engine only.
+nonisolated final class SherpaOnlineRecognizer: @unchecked Sendable {
     private let recognizer: UnsafePointer<SherpaOnnxOnlineRecognizer>
     private var stream: UnsafePointer<SherpaOnnxOnlineStream>?
 
@@ -232,7 +237,8 @@ final class SherpaOnlineRecognizer {
 
 // MARK: - Offline Qwen3-ASR (LLM-style decoding)
 
-final class SherpaQwen3Recognizer: @unchecked Sendable {
+/// `nonisolated` for the same reason as `SherpaOfflineRecognizer`.
+nonisolated final class SherpaQwen3Recognizer: @unchecked Sendable {
     private let recognizer: UnsafePointer<SherpaOnnxOfflineRecognizer>
 
     /// - Parameters:
@@ -324,7 +330,7 @@ final class SherpaQwen3Recognizer: @unchecked Sendable {
 
 // MARK: - Offline punctuation (CT-Transformer, zh+en bilingual)
 
-final class SherpaOfflinePunctuator: @unchecked Sendable {
+nonisolated final class SherpaOfflinePunctuator: @unchecked Sendable {
     private let ptr: OpaquePointer
 
     /// - Parameter modelPath: Path to `model.onnx` from

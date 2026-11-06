@@ -37,7 +37,8 @@ final class MicAudioSource: AudioSource, Sendable {
     private let watchdog: OSAllocatedUnfairLock<AudioStallWatchdog>
     private let interruptionFired = OSAllocatedUnfairLock<Bool>(initialState: false)
     private let stallTimer = OSAllocatedUnfairLock<DispatchSourceTimer?>(initialState: nil)
-    private let configObserver = OSAllocatedUnfairLock<NSObjectProtocol?>(initialState: nil)
+    /// Registered and removed on the main actor only.
+    private var configObserver: NSObjectProtocol?
 
     init(onInterruption: (@Sendable (AudioInterruptionReason) -> Void)? = nil) {
         self.onInterruption = onInterruption
@@ -76,7 +77,7 @@ final class MicAudioSource: AudioSource, Sendable {
 
         let stream = AsyncStream<AudioChunk> { [continuation] c in
             continuation.value = c
-            c.onTermination = { [weak self] _ in self?.stopEngine() }
+            c.onTermination = { [weak self] _ in self?.stopEngineOnMain() }
         }
 
         guard safeInstallTap(on: inputNode, format: hardwareFormat) else {
@@ -109,7 +110,7 @@ final class MicAudioSource: AudioSource, Sendable {
         stopEngine()
     }
 
-    deinit {
+    isolated deinit {
         stopEngine()
     }
 
@@ -127,10 +128,8 @@ final class MicAudioSource: AudioSource, Sendable {
             timer?.cancel()
             timer = nil
         }
-        configObserver.withLock { token in
-            if let token { NotificationCenter.default.removeObserver(token) }
-            token = nil
-        }
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+        configObserver = nil
         // Pull the engine out of the box and drop our reference. Once the last
         // strong ref dies the engine deallocates and fully releases the input
         // device, so Bluetooth headsets switch back from HFP to A2DP right
@@ -193,7 +192,10 @@ final class MicAudioSource: AudioSource, Sendable {
         }
         do {
             try catchingObjCException {
-                inputNode.installTap(onBus: 0, bufferSize: self.bufferSize, format: format) { [weak self] buffer, _ in
+                // `@Sendable` is load-bearing: the tap block is NS_SWIFT_NONSENDABLE,
+                // so without it the closure inherits main-actor isolation and
+                // Swift 6 traps the first time the render thread calls it.
+                inputNode.installTap(onBus: 0, bufferSize: self.bufferSize, format: format) { @Sendable [weak self] buffer, _ in
                     self?.processTap(buffer: buffer)
                 }
             }
@@ -258,12 +260,14 @@ final class MicAudioSource: AudioSource, Sendable {
         }
         let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
         timer.schedule(deadline: .now() + stallCheckInterval, repeating: stallCheckInterval)
-        timer.setEventHandler { [weak self] in
+        // Runs on a global queue: only the lock-protected check happens here;
+        // the teardown hops to the main actor (see `fireInterruptionOnMain`).
+        timer.setEventHandler { @Sendable [weak self] in
             guard let self else { return }
             let stalled = self.watchdog.withLock { $0.isStalled(at: CACurrentMediaTime()) }
             if stalled {
                 LogService.warn("Audio stall detected (no raw tap for >\(self.stallThreshold)s)", category: "AudioCapture")
-                self.fireInterruptionOnce(.audioStalled)
+                self.fireInterruptionOnMain(.audioStalled)
             }
         }
         timer.resume()
@@ -284,11 +288,24 @@ final class MicAudioSource: AudioSource, Sendable {
             object: engine,
             queue: nil
         ) { [weak self] _ in
-            guard let self else { return }
-            guard self.isCapturing.withLock({ $0 }) else { return }
+            // Posted on an internal CoreAudio queue, where the engine must not
+            // be torn down (AVAudioEngine.h: it can deadlock). Note when it
+            // fired, then handle it on the main actor with every other
+            // AVAudioEngine mutation.
+            self?.handleConfigurationChangeOnMain(postedAt: CACurrentMediaTime())
+        }
+        configObserver = token
+    }
 
-            let elapsed = CACurrentMediaTime() - self.captureStartedAt.withLock { $0 }
-            if elapsed < self.configSettlingWindow {
+    /// Main-actor half of the configuration-change observer. Dropped if the
+    /// session it was posted for has already ended or been replaced.
+    nonisolated private func handleConfigurationChangeOnMain(postedAt: CFTimeInterval) {
+        let session = captureStartedAt.withLock { $0 }
+        Task { @MainActor in
+            guard self.isCapturing.withLock({ $0 }),
+                  self.captureStartedAt.withLock({ $0 }) == session else { return }
+
+            if postedAt - session < self.configSettlingWindow {
                 let already = self.settlingReconfigured.withLock { done -> Bool in
                     let was = done
                     done = true
@@ -303,7 +320,6 @@ final class MicAudioSource: AudioSource, Sendable {
             LogService.warn("AVAudioEngine configuration changed mid-capture", category: "AudioCapture")
             self.fireInterruptionOnce(.deviceConfigurationChanged)
         }
-        configObserver.withLock { $0 = token }
     }
 
     /// Rebuild the tap and resampler for the input's new hardware format after
@@ -351,6 +367,27 @@ final class MicAudioSource: AudioSource, Sendable {
         guard !already else { return }
         onInterruption?(reason)
         stopEngine()
+    }
+
+    /// Interruption detected off the main actor (the stall timer): tear down on
+    /// the main actor, unless its session has already ended or been replaced.
+    nonisolated private func fireInterruptionOnMain(_ reason: AudioInterruptionReason) {
+        let session = captureStartedAt.withLock { $0 }
+        Task { @MainActor in
+            guard self.isCapturing.withLock({ $0 }),
+                  self.captureStartedAt.withLock({ $0 }) == session else { return }
+            self.fireInterruptionOnce(reason)
+        }
+    }
+
+    /// `AsyncStream.onTermination` can fire on the consumer's thread; run the
+    /// teardown on the main actor unless a newer session has started since.
+    nonisolated private func stopEngineOnMain() {
+        let session = captureStartedAt.withLock { $0 }
+        Task { @MainActor in
+            guard self.captureStartedAt.withLock({ $0 }) == session else { return }
+            self.stopEngine()
+        }
     }
 
     private func requestMicrophoneAccess() async throws {

@@ -1,7 +1,7 @@
 import CocoaLumberjackSwift
 import os
 
-final class LogService {
+nonisolated final class LogService {
     nonisolated(unsafe) static let shared = LogService()
     private let fileLogger: DDFileLogger
     private static let sessionLock = OSAllocatedUnfairLock<String?>(initialState: nil)

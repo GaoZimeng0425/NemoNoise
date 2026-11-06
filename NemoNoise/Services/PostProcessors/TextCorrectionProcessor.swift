@@ -1,7 +1,7 @@
 import Foundation
 
 /// One find→replace entry in the correction dictionary.
-struct CorrectionRule: Codable, Equatable {
+nonisolated struct CorrectionRule: Codable, Equatable {
     let from: String
     let to: String
 }
@@ -14,7 +14,7 @@ struct CorrectionRule: Codable, Equatable {
 /// ("u爱" for "UI") or by emitting an acronym in the wrong case ("ui" for "UI").
 /// Exact mis-transcriptions are model-dependent, so treat the presets as a seed
 /// and extend them via user rules as new errors show up.
-enum TextCorrections {
+nonisolated enum TextCorrections {
     static let presets: [CorrectionRule] = [
         // 1) CJK homophones of spelled-out terms (the reported failure mode).
         CorrectionRule(from: "u爱", to: "UI"),

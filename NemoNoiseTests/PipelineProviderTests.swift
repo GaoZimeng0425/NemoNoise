@@ -18,7 +18,9 @@ final class PipelineProviderTests: XCTestCase {
         func makeFallback() -> (any ASREngine)? { fallbackResult }
     }
 
-    final class StubEngine: ASREngine, @unchecked Sendable {
+    /// `nonisolated` so `StubFactory` (nonisolated, like `ASREngineFactoring`)
+    /// can create one in its property defaults.
+    nonisolated final class StubEngine: ASREngine, @unchecked Sendable {
         let isStreaming = true
         func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
             TranscriptionResult(text: "", isFinal: false, emotion: nil)

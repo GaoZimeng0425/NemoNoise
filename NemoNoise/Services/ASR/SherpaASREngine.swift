@@ -10,7 +10,7 @@ final class SherpaASREngine: ASREngine, @unchecked Sendable {
     // CT-Transformer must not re-punctuate (it would double/corrupt marks).
     let emitsPunctuation = true
 
-    init(modelDir: URL, language: String = LanguagePreference.current.sherpaCode) throws {
+    nonisolated init(modelDir: URL, language: String = LanguagePreference.current.sherpaCode) throws {
         let modelPath  = modelDir.appendingPathComponent("model.int8.onnx").path
         let tokensPath = modelDir.appendingPathComponent("tokens.txt").path
         let start = ContinuousClock.now

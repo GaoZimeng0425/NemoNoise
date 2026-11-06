@@ -2,7 +2,7 @@ import Foundation
 
 /// Centralised string keys used with `UserDefaults` / `@AppStorage`.
 /// Add new keys here so they are discoverable and don't drift via typos.
-enum AppDefaults {
+nonisolated enum AppDefaults {
     enum Keys {
         static let engineType = "engineType"
         static let recordingMode = "recordingMode"

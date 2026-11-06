@@ -1,18 +1,20 @@
 import Foundation
 import Speech
 
-struct EngineBuild: Sendable {
+nonisolated struct EngineBuild: Sendable {
     let engine: any ASREngine
     let fallbackReason: String?
 }
 
-protocol ASREngineFactoring: Sendable {
+/// `nonisolated`: `PipelineProvider` builds engines on a detached task so model
+/// loading stays off the main thread.
+nonisolated protocol ASREngineFactoring: Sendable {
     func makePrimary() throws -> EngineBuild
     func makeTranslation() throws -> EngineBuild
     func makeFallback() -> (any ASREngine)?
 }
 
-final class ASREngineFactory: ASREngineFactoring {
+nonisolated final class ASREngineFactory: ASREngineFactoring {
     private let modelManager: ModelManager
 
     init(modelManager: ModelManager) {
@@ -27,21 +29,21 @@ final class ASREngineFactory: ASREngineFactoring {
 
         switch choice {
         case "sensevoice":
-            if let dir = modelManager.modelPath(for: .senseVoice) {
+            if let dir = modelManager.installedModelDir(for: .senseVoice) {
                 let engine = try SherpaASREngine(modelDir: dir)
                 return EngineBuild(engine: engine, fallbackReason: nil)
             }
             LogService.warn("SenseVoice model not found, falling back to Apple", category: "ASREngineFactory")
             fallbackReason = "SenseVoice model not installed — using Apple Speech. Open Settings to download."
         case "paraformer":
-            if let dir = modelManager.modelPath(for: .paraformer) {
+            if let dir = modelManager.installedModelDir(for: .paraformer) {
                 let engine = try ParaformerStreamingEngine(modelDir: dir)
                 return EngineBuild(engine: engine, fallbackReason: nil)
             }
             LogService.warn("Paraformer model not found, falling back to Apple", category: "ASREngineFactory")
             fallbackReason = "Paraformer model not installed — using Apple Speech. Open Settings to download."
         case "qwen3":
-            if let dir = modelManager.modelPath(for: .qwen3) {
+            if let dir = modelManager.installedModelDir(for: .qwen3) {
                 let engine = try Qwen3ASREngine(modelDir: dir)
                 return EngineBuild(engine: engine, fallbackReason: nil)
             }
@@ -58,7 +60,7 @@ final class ASREngineFactory: ASREngineFactoring {
     }
 
     func makeTranslation() throws -> EngineBuild {
-        if let dir = modelManager.modelPath(for: .paraformer),
+        if let dir = modelManager.installedModelDir(for: .paraformer),
            let paraformer = try? ParaformerStreamingEngine(modelDir: dir) {
             LogService.info("Translation engine: Paraformer", category: "ASREngineFactory")
             return EngineBuild(engine: paraformer, fallbackReason: nil)

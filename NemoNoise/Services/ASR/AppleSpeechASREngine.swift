@@ -36,7 +36,9 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
     // results already carry punctuation — the CT-Transformer must not re-add it.
     let emitsPunctuation = true
 
-    private let recognizer: SFSpeechRecognizer
+    // Assigned once in the nonisolated init (engines are built off the main
+    // actor); only used from this engine's own methods after that.
+    nonisolated(unsafe) private let recognizer: SFSpeechRecognizer
 
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
@@ -58,7 +60,7 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
     }
     private let stateLock = OSAllocatedUnfairLock(initialState: State())
 
-    init(locale: String? = nil) throws {
+    nonisolated init(locale: String? = nil) throws {
         let pref = LanguagePreference.current
         let start = ContinuousClock.now
         let resolved: SFSpeechRecognizer?
@@ -139,6 +141,7 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
                 }
                 if let result {
                     let cumulative = result.bestTranscription.formattedString
+                    let isFinal = result.isFinal
                     // Always update latestCumulative + partialText. The
                     // isFinal flag from Apple is unreliable as a segment
                     // boundary — Apple emits isFinal repeatedly with
@@ -149,7 +152,7 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
                     let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
                         state.latestCumulative = cumulative
                         state.partialText = cumulative
-                        if result.isFinal, state.endAudioCalled, let c = state.finishContinuation {
+                        if isFinal, state.endAudioCalled, let c = state.finishContinuation {
                             state.finishContinuation = nil
                             return c
                         }
@@ -250,7 +253,10 @@ final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
 
     private func requestPermission() async -> Bool {
         await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
+            // The handler runs on an arbitrary queue (SFSpeechRecognizer.h);
+            // `@Sendable` keeps it from inheriting main-actor isolation, which
+            // Swift 6 would assert at runtime.
+            SFSpeechRecognizer.requestAuthorization { @Sendable status in
                 continuation.resume(returning: status == .authorized)
             }
         }

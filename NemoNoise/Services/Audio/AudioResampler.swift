@@ -5,8 +5,9 @@ import AVFoundation
 /// Owns a single `AVAudioConverter` for a fixed source-sample-rate / target pair.
 /// Each call to `resample` performs one-shot conversion of a complete chunk.
 /// Marked `@unchecked Sendable` because `AVAudioConverter` is safe under serial
-/// use (one tap thread / one `SCStream` queue per instance).
-final class AudioResampler: @unchecked Sendable {
+/// use (one tap thread / one `SCStream` queue per instance), and `nonisolated`
+/// because those are exactly the threads it runs on.
+nonisolated final class AudioResampler: @unchecked Sendable {
     let sourceRate: Double
     let targetRate: Double
     private let sourceFormat: AVAudioFormat
