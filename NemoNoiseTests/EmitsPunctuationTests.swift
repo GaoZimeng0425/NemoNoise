@@ -23,9 +23,9 @@ private final class StubDetector: VADSpeechDetector {
     func reset() {}
 }
 
-final class EmitsPunctuationTests: XCTestCase {
+nonisolated final class EmitsPunctuationTests: XCTestCase {
     /// Engines that don't override the flag default to "needs punctuation".
-    func testDefaultIsFalse() {
+    @MainActor func testDefaultIsFalse() {
         // MockASREngine (in ASREngineMockTests) does not override emitsPunctuation.
         XCTAssertFalse(MockASREngine().emitsPunctuation)
     }
@@ -33,7 +33,7 @@ final class EmitsPunctuationTests: XCTestCase {
     /// The segmenting decorator must report its inner engine's capability, so
     /// PipelineProvider can decide whether to attach the CT-Transformer based on
     /// the wrapped offline engine.
-    func testVADSegmentingEngineDelegatesToInner() {
+    @MainActor func testVADSegmentingEngineDelegatesToInner() {
         let wrapsSelfPunctuating = VADSegmentingEngine(inner: PunctCapabilitySpy(emits: true), detector: StubDetector())
         XCTAssertTrue(wrapsSelfPunctuating.emitsPunctuation)
 

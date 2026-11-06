@@ -1,16 +1,16 @@
 import XCTest
 @testable import NemoNoise
 
-final class AudioInputDeviceCatalogTests: XCTestCase {
+nonisolated final class AudioInputDeviceCatalogTests: XCTestCase {
 
-    func testAvailableInputDevicesIsNonEmpty() {
+    @MainActor func testAvailableInputDevicesIsNonEmpty() {
         // Sanity check: every Mac running these tests has at least one input
         // device (built-in mic, or a CI runner's virtual audio device).
         let devices = AudioInputDeviceCatalog.availableInputDevices()
         XCTAssertFalse(devices.isEmpty, "Expected at least one input device on a Mac")
     }
 
-    func testEveryDeviceHasNonEmptyUIDAndName() {
+    @MainActor func testEveryDeviceHasNonEmptyUIDAndName() {
         let devices = AudioInputDeviceCatalog.availableInputDevices()
         for device in devices {
             XCTAssertFalse(device.uid.isEmpty, "Device UID should not be empty")
@@ -18,12 +18,12 @@ final class AudioInputDeviceCatalogTests: XCTestCase {
         }
     }
 
-    func testDeviceIDForUnknownUIDReturnsNil() {
+    @MainActor func testDeviceIDForUnknownUIDReturnsNil() {
         let id = AudioInputDeviceCatalog.deviceID(forUID: "NEMONOISE_TEST_NOT_A_REAL_DEVICE_UID")
         XCTAssertNil(id)
     }
 
-    func testRoundTripFirstDeviceUID() {
+    @MainActor func testRoundTripFirstDeviceUID() {
         guard let first = AudioInputDeviceCatalog.availableInputDevices().first else {
             XCTFail("No input devices to round-trip")
             return

@@ -1,57 +1,58 @@
 import XCTest
+import os
 @testable import NemoNoise
 
-final class TextInjectorSinkTests: XCTestCase {
+nonisolated final class TextInjectorSinkTests: XCTestCase {
 
-    func testSuccessfulInjectionDoesNotTriggerFallback() async {
+    @MainActor func testSuccessfulInjectionDoesNotTriggerFallback() async {
         let injector = StubInjector(outcome: .injectedAX)
-        var failureCalled = false
+        let failureCalled = OSAllocatedUnfairLock(initialState: false)
         let sink = TextInjectorSink(
             injector: injector,
             clipboardFallback: TextInjectorSinkRecordingClipboard(),
-            onInjectionFailed: { failureCalled = true }
+            onInjectionFailed: { failureCalled.withLock { $0 = true } }
         )
 
         await sink.deliver(TranscriptionResult(text: "hi", isFinal: true, emotion: nil), isFinal: true)
 
         XCTAssertEqual(injector.injectCalls, ["hi"])
-        XCTAssertFalse(failureCalled)
+        XCTAssertFalse(failureCalled.withLock { $0 })
     }
 
-    func testFailedInjectionFallsBackToClipboardAndFiresCallback() async {
+    @MainActor func testFailedInjectionFallsBackToClipboardAndFiresCallback() async {
         let injector = StubInjector(outcome: .failed(reason: "test"))
         let clipboard = TextInjectorSinkRecordingClipboard()
-        var failureCalled = false
+        let failureCalled = OSAllocatedUnfairLock(initialState: false)
         let sink = TextInjectorSink(
             injector: injector,
             clipboardFallback: clipboard,
-            onInjectionFailed: { failureCalled = true }
+            onInjectionFailed: { failureCalled.withLock { $0 = true } }
         )
 
         await sink.deliver(TranscriptionResult(text: "fallback me", isFinal: true, emotion: nil), isFinal: true)
 
         XCTAssertEqual(injector.injectCalls, ["fallback me"])
         XCTAssertEqual(clipboard.delivered, ["fallback me"])
-        XCTAssertTrue(failureCalled)
+        XCTAssertTrue(failureCalled.withLock { $0 })
     }
 
-    func testSecureFieldOutcomeAlsoFallsBack() async {
+    @MainActor func testSecureFieldOutcomeAlsoFallsBack() async {
         let injector = StubInjector(outcome: .skippedSecureField)
         let clipboard = TextInjectorSinkRecordingClipboard()
-        var failureCalled = false
+        let failureCalled = OSAllocatedUnfairLock(initialState: false)
         let sink = TextInjectorSink(
             injector: injector,
             clipboardFallback: clipboard,
-            onInjectionFailed: { failureCalled = true }
+            onInjectionFailed: { failureCalled.withLock { $0 = true } }
         )
 
         await sink.deliver(TranscriptionResult(text: "pwd", isFinal: true, emotion: nil), isFinal: true)
 
         XCTAssertEqual(clipboard.delivered, ["pwd"])
-        XCTAssertTrue(failureCalled)
+        XCTAssertTrue(failureCalled.withLock { $0 })
     }
 
-    func testIgnoresPartialAndEmpty() async {
+    @MainActor func testIgnoresPartialAndEmpty() async {
         let injector = StubInjector(outcome: .injectedAX)
         let sink = TextInjectorSink(
             injector: injector,

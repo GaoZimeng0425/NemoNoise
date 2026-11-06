@@ -30,10 +30,9 @@ final class ControlledTranslationService: TranslationService, @unchecked Sendabl
     }
 }
 
-@MainActor
-final class AsyncTranslateProcessorTests: XCTestCase {
+nonisolated final class AsyncTranslateProcessorTests: XCTestCase {
 
-    func testPartialIsPassthrough() async throws {
+    @MainActor func testPartialIsPassthrough() async throws {
         let service = ControlledTranslationService()
         let writer = StubSubtitleWriter()
         let p = AsyncTranslateProcessor(service: service, writer: writer)
@@ -46,7 +45,7 @@ final class AsyncTranslateProcessorTests: XCTestCase {
         XCTAssertFalse(writer.isTranslating)
     }
 
-    func testFinalWithoutSeqIsPassthrough() async throws {
+    @MainActor func testFinalWithoutSeqIsPassthrough() async throws {
         let service = ControlledTranslationService()
         let writer = StubSubtitleWriter()
         let p = AsyncTranslateProcessor(service: service, writer: writer)
@@ -58,7 +57,7 @@ final class AsyncTranslateProcessorTests: XCTestCase {
         XCTAssertTrue(service.observedCalls.isEmpty)
     }
 
-    func testFinalReturnsEnglishImmediatelyAndSetsIsTranslating() async throws {
+    @MainActor func testFinalReturnsEnglishImmediatelyAndSetsIsTranslating() async throws {
         let service = ControlledTranslationService()
         service.nextResponse = .success("你好")
         let writer = StubSubtitleWriter()
@@ -82,7 +81,7 @@ final class AsyncTranslateProcessorTests: XCTestCase {
         XCTAssertEqual(writer.applyCalls.map(\.seq), [1])
     }
 
-    func testFailureClearsIsTranslatingAndDoesNotWriteChinese() async throws {
+    @MainActor func testFailureClearsIsTranslatingAndDoesNotWriteChinese() async throws {
         let service = ControlledTranslationService()
         service.nextResponse = .failure(NSError(domain: "t", code: 0))
         let writer = StubSubtitleWriter()
@@ -100,7 +99,7 @@ final class AsyncTranslateProcessorTests: XCTestCase {
         XCTAssertTrue(writer.applyCalls.isEmpty)
     }
 
-    func testStaleSeqIsDroppedBySink() async throws {
+    @MainActor func testStaleSeqIsDroppedBySink() async throws {
         let service = ControlledTranslationService()
         service.nextResponse = .success("你好 A")
         let writer = StubSubtitleWriter()
@@ -118,7 +117,7 @@ final class AsyncTranslateProcessorTests: XCTestCase {
         XCTAssertEqual(writer.chineseText, "", "writer dropped because seq != displayedSeq")
     }
 
-    func testResetInflightClearsCounterAndIsTranslating() async throws {
+    @MainActor func testResetInflightClearsCounterAndIsTranslating() async throws {
         let service = ControlledTranslationService()
         // Configure a slow translation so the task is still in-flight when we reset.
         service.nextResponse = .success("你好")

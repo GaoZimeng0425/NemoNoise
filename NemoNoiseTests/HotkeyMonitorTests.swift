@@ -1,9 +1,9 @@
 import XCTest
 @testable import NemoNoise
 
-final class HotkeyMonitorTests: XCTestCase {
+nonisolated final class HotkeyMonitorTests: XCTestCase {
 
-    func testOnKeyDownCallbackType() {
+    @MainActor func testOnKeyDownCallbackType() {
         let monitor = HotkeyMonitor()
         var fired = false
         monitor.onKeyDown = { fired = true }
@@ -11,7 +11,7 @@ final class HotkeyMonitorTests: XCTestCase {
         XCTAssertTrue(fired)
     }
 
-    func testOnKeyUpCallbackType() {
+    @MainActor func testOnKeyUpCallbackType() {
         let monitor = HotkeyMonitor()
         var fired = false
         monitor.onKeyUp = { fired = true }
@@ -19,7 +19,7 @@ final class HotkeyMonitorTests: XCTestCase {
         XCTAssertTrue(fired)
     }
 
-    func testStopCancelsEventStream() {
+    @MainActor func testStopCancelsEventStream() {
         let monitor = HotkeyMonitor()
         monitor.start()
         monitor.stop()

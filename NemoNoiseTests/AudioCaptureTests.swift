@@ -1,27 +1,27 @@
 import XCTest
 @testable import NemoNoise
 
-final class AudioCaptureTests: XCTestCase {
+nonisolated final class AudioCaptureTests: XCTestCase {
 
-    func testStopWithoutStartDoesNotCrash() {
+    @MainActor func testStopWithoutStartDoesNotCrash() {
         let capture = MicAudioSource()
         capture.stop()
     }
 
-    func testMultipleStopsAreSafe() {
+    @MainActor func testMultipleStopsAreSafe() {
         let capture = MicAudioSource()
         capture.stop()
         capture.stop()
         capture.stop()
     }
 
-    func testAudioChunkCreation() {
+    @MainActor func testAudioChunkCreation() {
         let chunk = AudioChunk(samples: [0.1, 0.2, 0.3], rmsLevel: 0.5, spectrum: [])
         XCTAssertEqual(chunk.samples, [0.1, 0.2, 0.3])
         XCTAssertEqual(chunk.rmsLevel, 0.5)
     }
 
-    func testAudioChunkWithEmptySamples() {
+    @MainActor func testAudioChunkWithEmptySamples() {
         let chunk = AudioChunk(samples: [], rmsLevel: 0.0, spectrum: [])
         XCTAssertTrue(chunk.samples.isEmpty)
         XCTAssertEqual(chunk.rmsLevel, 0.0)

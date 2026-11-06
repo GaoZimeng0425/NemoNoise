@@ -1,10 +1,9 @@
 import XCTest
 @testable import NemoNoise
 
-@MainActor
-final class TranscriptionPipelineTests: XCTestCase {
+nonisolated final class TranscriptionPipelineTests: XCTestCase {
 
-    func testPipelineYieldsPartialOnChunkAndFinalOnFinalize() async throws {
+    @MainActor func testPipelineYieldsPartialOnChunkAndFinalOnFinalize() async throws {
         let source = MockAudioSource()
         let engine = MockASREngine()
         engine.feedChunkResultText = "partial-text"
@@ -62,7 +61,7 @@ extension TranscriptionPipelineTests {
 
     // MARK: - Engine fallback
 
-    func testFallbackEngineTakesOverWhenPrimaryThrows() async throws {
+    @MainActor func testFallbackEngineTakesOverWhenPrimaryThrows() async throws {
         let source = MockAudioSource()
         let primary = MockASREngine()
         primary.feedChunkShouldThrow = NSError(domain: "primary", code: 1)
@@ -113,7 +112,7 @@ extension TranscriptionPipelineTests {
 
     // MARK: - No fallback → fatal
 
-    func testEngineFailureWithoutFallbackThrowsFatal() async throws {
+    @MainActor func testEngineFailureWithoutFallbackThrowsFatal() async throws {
         let source = MockAudioSource()
         let engine = MockASREngine()
         engine.feedChunkShouldThrow = NSError(domain: "engine", code: 42)
@@ -153,7 +152,7 @@ extension TranscriptionPipelineTests {
 
     // MARK: - Reuse
 
-    func testPipelineCanBeStartedAgainAfterFinalize() async throws {
+    @MainActor func testPipelineCanBeStartedAgainAfterFinalize() async throws {
         let source = MockAudioSource()
         let engine = MockASREngine()
         let pipeline = TranscriptionPipeline(
@@ -174,7 +173,7 @@ extension TranscriptionPipelineTests {
 
     // MARK: - Stop without finalize
 
-    func testStopDoesNotCallFinish() async throws {
+    @MainActor func testStopDoesNotCallFinish() async throws {
         let source = MockAudioSource()
         let engine = MockASREngine()
         let pipeline = TranscriptionPipeline(
@@ -191,7 +190,7 @@ extension TranscriptionPipelineTests {
 
     // MARK: - Mid-stream isFinal propagation
 
-    func testEngineMidStreamFinalYieldsFinalEvent() async throws {
+    @MainActor func testEngineMidStreamFinalYieldsFinalEvent() async throws {
         let source = MockAudioSource()
         let engine = MockASREngine()
         engine.feedChunkScript = [
@@ -224,7 +223,7 @@ extension TranscriptionPipelineTests {
         }, "engine's mid-stream isFinal=true must surface as PipelineEvent.final, got: \(collected)")
     }
 
-    func testEngineMidStreamFinalDeliveredToSinkWithIsFinalTrue() async throws {
+    @MainActor func testEngineMidStreamFinalDeliveredToSinkWithIsFinalTrue() async throws {
         let source = MockAudioSource()
         let engine = MockASREngine()
         engine.feedChunkScript = [
@@ -255,7 +254,7 @@ extension TranscriptionPipelineTests {
 
     // MARK: - Source failure
 
-    func testSourceStartFailureSurfacesAsSourceUnavailable() async throws {
+    @MainActor func testSourceStartFailureSurfacesAsSourceUnavailable() async throws {
         let source = MockAudioSource()
         source.throwOnStart = NSError(domain: "mic-denied", code: 1)
         let engine = MockASREngine()
@@ -288,7 +287,7 @@ extension TranscriptionPipelineTests {
     /// device change / stall), and `finalize()` is called afterwards. The
     /// already-recognized text must still be preserved — finalize must drain
     /// `engine.finish()` and must not hang.
-    func testFinalizeAfterEarlyStreamEndPreservesRecognizedText() async throws {
+    @MainActor func testFinalizeAfterEarlyStreamEndPreservesRecognizedText() async throws {
         let source = MockAudioSource()
         let engine = MockASREngine()
         engine.feedChunkResultText = "recognized so far"
@@ -323,7 +322,9 @@ extension TranscriptionPipelineTests {
 
     // MARK: - Translation pipeline force-segment integration
 
-    final class TickingClock: @unchecked Sendable {
+    /// `nonisolated`: its `read` closure is called from the pipeline's
+    /// `@Sendable` clock, off the main actor.
+    nonisolated final class TickingClock: @unchecked Sendable {
         private let lock = NSLock()
         private var _current: Date = Date(timeIntervalSinceReferenceDate: 0)
         func readNow() -> Date {

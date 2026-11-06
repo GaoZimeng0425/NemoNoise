@@ -17,9 +17,8 @@ final class StubSubtitleTarget: SubtitleWriter {
     }
 }
 
-@MainActor
-final class SubtitleOverlaySinkTests: XCTestCase {
-    func testPartialUpdatesPartialText() async {
+nonisolated final class SubtitleOverlaySinkTests: XCTestCase {
+    @MainActor func testPartialUpdatesPartialText() async {
         let target = StubSubtitleTarget()
         let sink = SubtitleOverlaySink(target: target)
         await sink.deliver(TranscriptionResult(text: "hello partial", isFinal: false, emotion: nil), isFinal: false)
@@ -27,7 +26,7 @@ final class SubtitleOverlaySinkTests: XCTestCase {
         XCTAssertEqual(target.englishText, "")
     }
 
-    func testFinalClearsPartialAndSetsEnglish() async {
+    @MainActor func testFinalClearsPartialAndSetsEnglish() async {
         let target = StubSubtitleTarget()
         target.partialText = "stale"
         let sink = SubtitleOverlaySink(target: target)
@@ -36,7 +35,7 @@ final class SubtitleOverlaySinkTests: XCTestCase {
         XCTAssertEqual(target.partialText, "")
     }
 
-    func testEmptyTextIsIgnored() async {
+    @MainActor func testEmptyTextIsIgnored() async {
         let target = StubSubtitleTarget()
         target.englishText = "kept"
         let sink = SubtitleOverlaySink(target: target)
@@ -44,7 +43,7 @@ final class SubtitleOverlaySinkTests: XCTestCase {
         XCTAssertEqual(target.englishText, "kept")
     }
 
-    func testBilingualFinalSetsBothLanguages() async {
+    @MainActor func testBilingualFinalSetsBothLanguages() async {
         let target = StubSubtitleTarget()
         target.partialText = "in-flight"
         let sink = SubtitleOverlaySink(target: target)
@@ -60,7 +59,7 @@ final class SubtitleOverlaySinkTests: XCTestCase {
         XCTAssertEqual(target.partialText, "", "partial must be cleared on bilingual final")
     }
 
-    func testUnTranslatedFinalLeavesChineseUntouched() async {
+    @MainActor func testUnTranslatedFinalLeavesChineseUntouched() async {
         let target = StubSubtitleTarget()
         target.chineseText = "stale-chinese"
         let sink = SubtitleOverlaySink(target: target)
@@ -76,7 +75,7 @@ final class SubtitleOverlaySinkTests: XCTestCase {
                        "translation-failed finals must not overwrite previously good chinese")
     }
 
-    func testSeqTaggedFinalSetsEnglishAndDisplayedSeqAndClearsChinese() async {
+    @MainActor func testSeqTaggedFinalSetsEnglishAndDisplayedSeqAndClearsChinese() async {
         let target = StubSubtitleTarget()
         target.chineseText = "stale-chinese"   // simulates prior sentence's translation
         let sink = SubtitleOverlaySink(target: target)
@@ -91,7 +90,7 @@ final class SubtitleOverlaySinkTests: XCTestCase {
         XCTAssertEqual(target.displayedSeq, 7)
     }
 
-    func testSeqlessFinalKeepsLegacyBehavior() async {
+    @MainActor func testSeqlessFinalKeepsLegacyBehavior() async {
         let target = StubSubtitleTarget()
         target.chineseText = "kept"
         let sink = SubtitleOverlaySink(target: target)

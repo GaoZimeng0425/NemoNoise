@@ -38,11 +38,11 @@ private final class OfflineDecodeSpy: ASREngine, @unchecked Sendable {
 
 private struct DummyError: Error {}
 
-final class VADSegmentingEngineTests: XCTestCase {
+nonisolated final class VADSegmentingEngineTests: XCTestCase {
     private let W = 512
 
     /// minSilence = 2 windows, minSpeech = 1 window, no pre-speech for clean counts.
-    private func cfg() -> VADConfig {
+    @MainActor private func cfg() -> VADConfig {
         var c = VADConfig()
         c.windowSize = 512
         c.preSpeechWindows = 0
@@ -54,9 +54,9 @@ final class VADSegmentingEngineTests: XCTestCase {
 
     /// n consecutive 512-sample windows (sample values are irrelevant — the
     /// detector is scripted, not analyzing audio).
-    private func samples(_ n: Int) -> [Float] { [Float](repeating: 0.5, count: n * 512) }
+    @MainActor private func samples(_ n: Int) -> [Float] { [Float](repeating: 0.5, count: n * 512) }
 
-    func testIsStreamingReportsTrue() {
+    @MainActor func testIsStreamingReportsTrue() {
         // Reports true so the overlay shows the progressive text it now emits,
         // even though the inner engine is offline.
         let engine = VADSegmentingEngine(
@@ -67,7 +67,7 @@ final class VADSegmentingEngineTests: XCTestCase {
         XCTAssertTrue(engine.isStreaming)
     }
 
-    func testBufferingReturnsEmptyPartialAndNoDecode() async throws {
+    @MainActor func testBufferingReturnsEmptyPartialAndNoDecode() async throws {
         let spy = OfflineDecodeSpy()
         let engine = VADSegmentingEngine(inner: spy, detector: ScriptedDetector([false]), config: cfg())
         let r = try await engine.feedChunk(samples(1), sampleRate: 16000)
@@ -76,7 +76,7 @@ final class VADSegmentingEngineTests: XCTestCase {
         XCTAssertEqual(spy.fedSegments.count, 0)
     }
 
-    func testSegmentCommitDecodesAndEmitsFinal() async throws {
+    @MainActor func testSegmentCommitDecodesAndEmitsFinal() async throws {
         let spy = OfflineDecodeSpy()
         spy.finishTexts = ["你好"]
         // speech, silence, silence -> closes one segment (3 windows)
@@ -91,7 +91,7 @@ final class VADSegmentingEngineTests: XCTestCase {
         XCTAssertEqual(spy.fedSegments[0].count, 3 * W)   // onset + 2 silence, no pre-speech
     }
 
-    func testTwoSegmentsAcrossChunksEmitProgressively() async throws {
+    @MainActor func testTwoSegmentsAcrossChunksEmitProgressively() async throws {
         let spy = OfflineDecodeSpy()
         spy.finishTexts = ["A", "B"]
         let detector = ScriptedDetector([true, false, false, true, false, false])
@@ -107,7 +107,7 @@ final class VADSegmentingEngineTests: XCTestCase {
         XCTAssertEqual(spy.fedSegments.count, 2)
     }
 
-    func testMultipleSegmentsInOneChunkAreJoined() async throws {
+    @MainActor func testMultipleSegmentsInOneChunkAreJoined() async throws {
         let spy = OfflineDecodeSpy()
         spy.finishTexts = ["A", "B"]
         let detector = ScriptedDetector([true, false, false, true, false, false])
@@ -118,7 +118,7 @@ final class VADSegmentingEngineTests: XCTestCase {
         XCTAssertTrue(r.isFinal)
     }
 
-    func testFinishFlushesTrailingSegment() async throws {
+    @MainActor func testFinishFlushesTrailingSegment() async throws {
         let spy = OfflineDecodeSpy()
         spy.finishTexts = ["tail"]
         let detector = ScriptedDetector([true, true])   // open segment, no endpoint
@@ -133,7 +133,7 @@ final class VADSegmentingEngineTests: XCTestCase {
         XCTAssertEqual(spy.fedSegments[0].count, 2 * W)
     }
 
-    func testSegmentDecodeFailureIsSwallowed() async throws {
+    @MainActor func testSegmentDecodeFailureIsSwallowed() async throws {
         let spy = OfflineDecodeSpy()
         spy.finishError = DummyError()
         let detector = ScriptedDetector([true, false, false])
@@ -145,7 +145,7 @@ final class VADSegmentingEngineTests: XCTestCase {
         XCTAssertFalse(r.isFinal)
     }
 
-    func testResetClearsSegmenterAndInner() async throws {
+    @MainActor func testResetClearsSegmenterAndInner() async throws {
         let spy = OfflineDecodeSpy()
         let detector = ScriptedDetector([true, true])
         let engine = VADSegmentingEngine(inner: spy, detector: detector, config: cfg())

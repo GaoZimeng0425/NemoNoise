@@ -16,9 +16,11 @@ final class StubASREngine: ASREngine, @unchecked Sendable {
     func markBoundary() { markBoundaryCalls += 1 }
 }
 
-final class SentenceSegmenterTests: XCTestCase {
+nonisolated final class SentenceSegmenterTests: XCTestCase {
 
-    private final class FakeClock: @unchecked Sendable {
+    /// `nonisolated`: its `read` closure is called from the segmenter's
+    /// `@Sendable` clock, off the main actor.
+    nonisolated private final class FakeClock: @unchecked Sendable {
         private let lock = NSLock()
         private var _current: Date = Date(timeIntervalSinceReferenceDate: 0)
         var current: Date {
