@@ -133,10 +133,18 @@ final class ModelManager {
     /// All models tracked by this manager.
     static let allDescriptors: [ModelDescriptor] = [.senseVoice, .paraformer, .punctuation, .qwen3, .sileroVad]
 
-    init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        baseDir = appSupport.appendingPathComponent("NemoNoise/models", isDirectory: true)
+    /// - Parameter baseDir: where models live. Tests pass a temporary directory
+    ///   so state changes and `deleteModel` never touch the user's models.
+    init(baseDir: URL = ModelManager.defaultBaseDir) {
+        self.baseDir = baseDir
         refreshAll()
+    }
+
+    /// `~/Library/Application Support/NemoNoise/models` (inside the app's
+    /// container when sandboxed).
+    nonisolated static var defaultBaseDir: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("NemoNoise/models", isDirectory: true)
     }
 
     nonisolated func modelDir(for descriptor: ModelDescriptor) -> URL {

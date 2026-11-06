@@ -1,8 +1,7 @@
 import XCTest
 @testable import NemoNoise
 
-@MainActor
-final class PipelineProviderTests: XCTestCase {
+nonisolated final class PipelineProviderTests: XCTestCase {
 
     // MARK: - Stubs
 
@@ -31,7 +30,7 @@ final class PipelineProviderTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeProvider(factory: StubFactory = StubFactory())
+    @MainActor private func makeProvider(factory: StubFactory = StubFactory())
         -> (PipelineProvider, RecordingController, TranslationController)
     {
         let mm = ModelManager()
@@ -49,7 +48,7 @@ final class PipelineProviderTests: XCTestCase {
     }
 
     /// Poll readiness until it leaves `.loading` or timeout.
-    private func waitUntilReady(_ provider: PipelineProvider, timeout: TimeInterval = 5) async throws {
+    @MainActor private func waitUntilReady(_ provider: PipelineProvider, timeout: TimeInterval = 5) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while provider.dictation == .loading || provider.translation == .loading {
             if Date() >= deadline { XCTFail("Provider did not leave .loading within \(timeout)s"); return }
@@ -59,13 +58,13 @@ final class PipelineProviderTests: XCTestCase {
 
     // MARK: - Tests
 
-    func testInitialStateIsLoading() {
+    @MainActor func testInitialStateIsLoading() {
         let (provider, _, _) = makeProvider()
         XCTAssertEqual(provider.dictation, .loading)
         XCTAssertEqual(provider.translation, .loading)
     }
 
-    func testBootstrapTransitionsToReady() async throws {
+    @MainActor func testBootstrapTransitionsToReady() async throws {
         let (provider, _, _) = makeProvider()
         provider.bootstrap()
         try await waitUntilReady(provider)
@@ -73,7 +72,7 @@ final class PipelineProviderTests: XCTestCase {
         XCTAssertEqual(provider.translation, .ready)
     }
 
-    func testTranslationFailureLeavesDictationReady() async throws {
+    @MainActor func testTranslationFailureLeavesDictationReady() async throws {
         let factory = StubFactory()
         struct Boom: Error {}
         factory.translationResult = .failure(Boom())
@@ -86,7 +85,7 @@ final class PipelineProviderTests: XCTestCase {
         }
     }
 
-    func testDictationFailureSurfacesAsFailed() async throws {
+    @MainActor func testDictationFailureSurfacesAsFailed() async throws {
         let factory = StubFactory()
         struct Boom: Error {}
         factory.primaryResult = .failure(Boom())
@@ -98,7 +97,7 @@ final class PipelineProviderTests: XCTestCase {
         }
     }
 
-    func testRebuildDictationReachesReadyAgain() async throws {
+    @MainActor func testRebuildDictationReachesReadyAgain() async throws {
         let (provider, _, _) = makeProvider()
         provider.bootstrap()
         try await waitUntilReady(provider)
@@ -109,9 +108,10 @@ final class PipelineProviderTests: XCTestCase {
         XCTAssertEqual(provider.dictation, .ready)
     }
 
-    func testApplyDictation_setsLabelFromUserChoice() async throws {
+    @MainActor func testApplyDictation_setsLabelFromUserChoice() async throws {
+        let savedDefaults = UserDefaultsSnapshot([AppDefaults.Keys.engineType])
+        defer { savedDefaults.restore() }
         UserDefaults.standard.set("sensevoice", forKey: AppDefaults.Keys.engineType)
-        defer { UserDefaults.standard.removeObject(forKey: AppDefaults.Keys.engineType) }
 
         let (provider, recording, _) = makeProvider()
         provider.bootstrap()
@@ -120,9 +120,10 @@ final class PipelineProviderTests: XCTestCase {
         XCTAssertEqual(recording.currentEngineLabel, "SenseVoice")
     }
 
-    func testApplyDictation_labelFallsBackToAppleWhenBuildHasFallbackReason() async throws {
+    @MainActor func testApplyDictation_labelFallsBackToAppleWhenBuildHasFallbackReason() async throws {
+        let savedDefaults = UserDefaultsSnapshot([AppDefaults.Keys.engineType])
+        defer { savedDefaults.restore() }
         UserDefaults.standard.set("sensevoice", forKey: AppDefaults.Keys.engineType)
-        defer { UserDefaults.standard.removeObject(forKey: AppDefaults.Keys.engineType) }
 
         let factory = StubFactory()
         factory.primaryResult = .success(.init(engine: StubEngine(), fallbackReason: "model missing"))

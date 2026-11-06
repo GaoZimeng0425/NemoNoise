@@ -1,21 +1,22 @@
 import XCTest
 @testable import NemoNoise
 
-final class ModelManagerTests: XCTestCase {
+nonisolated final class ModelManagerTests: XCTestCase {
 
-    private var manager: ModelManager!
-
-    override func setUp() {
-        manager = ModelManager()
-    }
-
-    override func tearDown() {
-        manager = nil
+    /// A manager rooted in a fresh, never-created temp directory: these tests
+    /// mutate state and call `deleteModel`, which must not reach the user's
+    /// downloaded models in Application Support.
+    @MainActor private func makeManager() -> ModelManager {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NemoNoiseTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("NemoNoise/models", isDirectory: true)
+        return ModelManager(baseDir: base)
     }
 
     // MARK: - State property mapping
 
-    func testStateForSenseVoice() {
+    @MainActor func testStateForSenseVoice() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.senseVoice.id] = .downloading(progress: 0.5)
         if case .downloading(let progress) = manager.state(for: .senseVoice) {
             XCTAssertEqual(progress, 0.5, accuracy: 0.01)
@@ -24,12 +25,14 @@ final class ModelManagerTests: XCTestCase {
         }
     }
 
-    func testStateForParaformer() {
+    @MainActor func testStateForParaformer() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.paraformer.id] = .downloaded
         XCTAssertEqual(manager.state(for: .paraformer), .downloaded)
     }
 
-    func testStateForUnknownReturnsNotDownloaded() {
+    @MainActor func testStateForUnknownReturnsNotDownloaded() {
+        let manager = makeManager()
         let unknown = ModelDescriptor(
             id: "unknown", displayName: "", detail: "", downloadSize: "",
             subdir: "", files: []
@@ -39,55 +42,64 @@ final class ModelManagerTests: XCTestCase {
 
     // MARK: - modelPath
 
-    func testModelPathReturnsNilWhenNotDownloaded() {
+    @MainActor func testModelPathReturnsNilWhenNotDownloaded() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.senseVoice.id] = .notDownloaded
         XCTAssertNil(manager.modelPath(for: .senseVoice))
     }
 
-    func testModelPathReturnsNilWhenDownloading() {
+    @MainActor func testModelPathReturnsNilWhenDownloading() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.paraformer.id] = .downloading(progress: 0.7)
         XCTAssertNil(manager.modelPath(for: .paraformer))
     }
 
-    func testModelPathReturnsDirWhenDownloaded() {
+    @MainActor func testModelPathReturnsDirWhenDownloaded() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.senseVoice.id] = .downloaded
         let path = manager.modelPath(for: .senseVoice)
         XCTAssertNotNil(path)
         XCTAssertTrue(path!.path.hasSuffix("sensevoice"))
     }
 
-    func testModelPathReturnsNilWhenError() {
+    @MainActor func testModelPathReturnsNilWhenError() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.senseVoice.id] = .error("test error")
         XCTAssertNil(manager.modelPath(for: .senseVoice))
     }
 
     // MARK: - State machine transitions
 
-    func testCancelDownloadResetsToNotDownloaded() {
+    @MainActor func testCancelDownloadResetsToNotDownloaded() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.senseVoice.id] = .downloading(progress: 0.5)
         manager.cancelDownload(.senseVoice)
         XCTAssertEqual(manager.state(for: .senseVoice), .notDownloaded)
     }
 
-    func testCancelDownloadFromNotDownloadedIsNoOp() {
+    @MainActor func testCancelDownloadFromNotDownloadedIsNoOp() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.senseVoice.id] = .notDownloaded
         manager.cancelDownload(.senseVoice)
         XCTAssertEqual(manager.state(for: .senseVoice), .notDownloaded)
     }
 
-    func testDeleteModelResetsToNotDownloaded() {
+    @MainActor func testDeleteModelResetsToNotDownloaded() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.paraformer.id] = .downloaded
         manager.deleteModel(.paraformer)
         XCTAssertEqual(manager.state(for: .paraformer), .notDownloaded)
     }
 
-    func testStartDownloadDoesNotStartIfNotNotDownloaded() {
+    @MainActor func testStartDownloadDoesNotStartIfNotNotDownloaded() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.senseVoice.id] = .downloaded
         manager.startDownload(.senseVoice)
         XCTAssertEqual(manager.state(for: .senseVoice), .downloaded)
     }
 
-    func testStartDownloadDoesNotStartIfDownloading() {
+    @MainActor func testStartDownloadDoesNotStartIfDownloading() {
+        let manager = makeManager()
         manager.states[ModelDescriptor.paraformer.id] = .downloading(progress: 0.3)
         manager.startDownload(.paraformer)
         if case .downloading = manager.state(for: .paraformer) {
@@ -99,25 +111,26 @@ final class ModelManagerTests: XCTestCase {
 
     // MARK: - ModelDescriptor
 
-    func testSenseVoiceDescriptorId() {
+    @MainActor func testSenseVoiceDescriptorId() {
         XCTAssertEqual(ModelDescriptor.senseVoice.id, "sensevoice")
     }
 
-    func testParaformerDescriptorId() {
+    @MainActor func testParaformerDescriptorId() {
         XCTAssertEqual(ModelDescriptor.paraformer.id, "paraformer")
     }
 
-    func testModelDirForDescriptor() {
+    @MainActor func testModelDirForDescriptor() {
+        let manager = makeManager()
         let dir = manager.modelDir(for: .senseVoice)
         XCTAssertTrue(dir.path.hasSuffix("NemoNoise/models/sensevoice"))
     }
 
-    func testSileroVadDescriptorIsRegistered() {
+    @MainActor func testSileroVadDescriptorIsRegistered() {
         let ids = ModelManager.allDescriptors.map(\.id)
         XCTAssertTrue(ids.contains("silero-vad"))
     }
 
-    func testSileroVadDescriptorRequiresOnnxFile() {
+    @MainActor func testSileroVadDescriptorRequiresOnnxFile() {
         let d = ModelDescriptor.sileroVad
         XCTAssertEqual(d.subdir, "silero-vad")
         XCTAssertEqual(d.requiredItems, ["silero_vad.onnx"])

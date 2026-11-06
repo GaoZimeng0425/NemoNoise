@@ -2,19 +2,25 @@ import XCTest
 @testable import NemoNoise
 import KeyboardShortcuts
 
-final class HotkeyShortcutsTests: XCTestCase {
+nonisolated final class HotkeyShortcutsTests: XCTestCase {
 
-    override func setUp() {
+    /// The test host shares the app's bundle id, so the recording shortcut and
+    /// the legacy `hotkeyOption` key are the user's real settings. Start each
+    /// test from a cleared shortcut and put the user's values back afterwards.
+    @MainActor private func isolateHotkeySettings() -> () -> Void {
+        let savedShortcut = KeyboardShortcuts.getShortcut(for: .toggleRecording)
+        let savedLegacy = UserDefaultsSnapshot(["hotkeyOption"])
         KeyboardShortcuts.setShortcut(nil, for: .toggleRecording)
+        return {
+            KeyboardShortcuts.setShortcut(savedShortcut, for: .toggleRecording)
+            savedLegacy.restore()
+        }
     }
 
-    override func tearDown() {
-        KeyboardShortcuts.setShortcut(nil, for: .toggleRecording)
-    }
-
-    func testMigrateFromOptionSetsShortcut() {
+    @MainActor func testMigrateFromOptionSetsShortcut() {
+        let restoreSettings = isolateHotkeySettings()
+        defer { restoreSettings() }
         UserDefaults.standard.set("option", forKey: "hotkeyOption")
-        defer { UserDefaults.standard.removeObject(forKey: "hotkeyOption") }
 
         HotkeyMigration.run()
 
@@ -26,9 +32,10 @@ final class HotkeyShortcutsTests: XCTestCase {
         XCTAssertNil(UserDefaults.standard.string(forKey: "hotkeyOption"))
     }
 
-    func testMigrateFromRightCommandSetsShortcut() {
+    @MainActor func testMigrateFromRightCommandSetsShortcut() {
+        let restoreSettings = isolateHotkeySettings()
+        defer { restoreSettings() }
         UserDefaults.standard.set("rightCommand", forKey: "hotkeyOption")
-        defer { UserDefaults.standard.removeObject(forKey: "hotkeyOption") }
 
         HotkeyMigration.run()
 
@@ -40,7 +47,9 @@ final class HotkeyShortcutsTests: XCTestCase {
         XCTAssertNil(UserDefaults.standard.string(forKey: "hotkeyOption"))
     }
 
-    func testMigrateSkipsIfNoOldSetting() {
+    @MainActor func testMigrateSkipsIfNoOldSetting() {
+        let restoreSettings = isolateHotkeySettings()
+        defer { restoreSettings() }
         UserDefaults.standard.removeObject(forKey: "hotkeyOption")
 
         HotkeyMigration.run()
@@ -48,12 +57,11 @@ final class HotkeyShortcutsTests: XCTestCase {
         XCTAssertNil(UserDefaults.standard.string(forKey: "hotkeyOption"))
     }
 
-    func testMigrateSkipsIfNewShortcutAlreadySet() {
+    @MainActor func testMigrateSkipsIfNewShortcutAlreadySet() {
+        let restoreSettings = isolateHotkeySettings()
+        defer { restoreSettings() }
         UserDefaults.standard.set("option", forKey: "hotkeyOption")
         KeyboardShortcuts.setShortcut(.init(.k, modifiers: .command), for: .toggleRecording)
-        defer {
-            UserDefaults.standard.removeObject(forKey: "hotkeyOption")
-        }
 
         HotkeyMigration.run()
 
