@@ -1,5 +1,5 @@
 {
-  "originHash" : "8727eb7347f66ecc7a758613e7aa7699ddcdb95c9a7bb35020871a4018045c94",
+  "originHash" : "33f0185e523d75acea50807858466da0c63af1181d285187142a8d7193209c79",
   "pins" : [
     {
       "identity" : "cocoalumberjack",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/getsentry/sentry-cocoa.git",
       "state" : {
-        "revision" : "cf44aa8cb4147f39e698c1f28be0b6b2c89f79d2",
-        "version" : "8.58.2"
+        "revision" : "dad229c665bfd043c5d80ac7aa77717cbd19a1c3",
+        "version" : "8.58.3"
       }
     },
     {
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sparkle-project/Sparkle.git",
       "state" : {
-        "revision" : "066e75a8b3e99962685d6a90cdd5293ebffd9261",
-        "version" : "2.9.1"
+        "revision" : "d46d456107feacc80711b21847b82b07bd9fb46e",
+        "version" : "2.9.3"
       }
     },
     {
@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log",
       "state" : {
-        "revision" : "5073617dac96330a486245e4c0179cb0a6fd2256",
-        "version" : "1.12.0"
+        "revision" : "a878e7f8f46cfc0e1125e565b5c08e7d5272dc9a",
+        "version" : "1.14.0"
       }
     }
   ],
