@@ -37,8 +37,13 @@ final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked
             self?.continuationBox.value = continuation
             continuation.onTermination = { @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
-                    try? await self?.stream?.stopCapture()
-                    self?.stream = nil
+                    guard let self else { return }
+                    // Take the stream out synchronously BEFORE awaiting: reading
+                    // self.stream after stopCapture() returns could instead clear
+                    // a newer session's reference (stop/restart race).
+                    let stream = self.stream
+                    self.stream = nil
+                    try? await stream?.stopCapture()
                 }
             }
         }
@@ -51,9 +56,14 @@ final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked
 
     func stop() {
         continuationBox.value?.finish()
-        Task { [weak self] in
-            try? await self?.stream?.stopCapture()
-            self?.stream = nil
+        // Extract the current stream on the main actor and hand the Task an
+        // owned reference — never read self.stream inside the Task after
+        // stopCapture() returns, or a quick restart stores a NEW stream here
+        // and this stale teardown nulls it.
+        let stream = self.stream
+        self.stream = nil
+        Task {
+            try? await stream?.stopCapture()
         }
         LogService.info("System audio capture stopped", category: "SystemAudioCapture")
     }

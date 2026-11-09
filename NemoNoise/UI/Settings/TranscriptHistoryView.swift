@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation
 
 struct TranscriptHistoryView: View {
     @Bindable var store: TranscriptHistoryStore
@@ -57,10 +58,31 @@ struct TranscriptHistoryView: View {
                     copy(record.text)
                 } onDelete: {
                     store.remove(id: record.id)
+                } onPlay: {
+                    playAudio(for: record)
+                } onReRecognize: {
+                    Task { await store.reRecognize(record) }
                 }
             }
         }
         .listStyle(.inset)
+        .onDisappear {
+            player?.stop()
+            player = nil
+        }
+    }
+
+    @State private var player: AVAudioPlayer?
+
+    private func playAudio(for record: TranscriptRecord) {
+        guard let url = store.audioURL(for: record) else { return }
+        if player?.isPlaying == true {
+            player?.stop()
+            player = nil
+            return
+        }
+        player = try? AVAudioPlayer(contentsOf: url)
+        player?.play()
     }
 
     private func copy(_ text: String) {
@@ -74,6 +96,8 @@ private struct TranscriptRow: View {
     let record: TranscriptRecord
     let onCopy: () -> Void
     let onDelete: () -> Void
+    let onPlay: () -> Void
+    let onReRecognize: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -91,7 +115,18 @@ private struct TranscriptRow: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
+                if let duration = record.durationSeconds {
+                    Text(String(format: "· %.1fs", duration))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
                 Spacer()
+                if record.audioFileName != nil {
+                    Button(action: onPlay) {
+                        Image(systemName: "play.circle")
+                    }
+                    Button("Re-recognize", action: onReRecognize)
+                }
                 Button("Copy", action: onCopy)
                     .buttonStyle(.bordered)
                     .controlSize(.small)

@@ -220,29 +220,58 @@ final class ModelManager {
     }
 
     private func download(_ descriptor: ModelDescriptor) async {
-        let dir = modelDir(for: descriptor)
+        let finalDir = modelDir(for: descriptor)
+        // Stage into a temp directory and swap into place only on success. The
+        // previous flow deleted the model dir up front and deleted it AGAIN on
+        // failure/cancel — a failed re-download destroyed a working install
+        // (that is how the ASR models were lost around 2026-06-25).
+        // Staged beside the destination (same volume) so the final swap is a
+        // rename, never a cross-volume copy that can fail halfway.
+        let stagingDir = finalDir.deletingLastPathComponent()
+            .appendingPathComponent(".staging-\(descriptor.id)-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: stagingDir) }
         do {
-            // Clean any partial files from a previous failed download
-            if FileManager.default.fileExists(atPath: dir.path) {
-                try FileManager.default.removeItem(at: dir)
-            }
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
 
             if let archiveURL = descriptor.archiveURL {
-                try await downloadAndExtract(descriptor: descriptor, archiveURL: archiveURL, dir: dir)
+                try await downloadAndExtract(descriptor: descriptor, archiveURL: archiveURL, dir: stagingDir)
             } else {
-                try await downloadIndividualFiles(descriptor: descriptor, dir: dir)
+                try await downloadIndividualFiles(descriptor: descriptor, dir: stagingDir)
             }
 
+            try Self.installStaged(stagingDir, at: finalDir, requiredItems: descriptor.requiredItems)
+
             setState(.downloaded, for: descriptor)
-            LogService.info("\(descriptor.displayName) downloaded to \(dir.path)", category: "ModelManager")
+            LogService.info("\(descriptor.displayName) downloaded to \(finalDir.path)", category: "ModelManager")
         } catch is CancellationError {
-            setState(.notDownloaded, for: descriptor)
-            try? FileManager.default.removeItem(at: dir)
+            // Whatever existed before the download attempt is intact.
+            setState(allRequiredItemsPresent(descriptor) ? .downloaded : .notDownloaded, for: descriptor)
         } catch {
-            setState(.error(error.localizedDescription), for: descriptor)
-            try? FileManager.default.removeItem(at: dir)
+            // Old install (if any) survived — recompute state from disk so a
+            // still-usable model doesn't show as gone.
+            setState(allRequiredItemsPresent(descriptor) ? .downloaded : .error(error.localizedDescription),
+                     for: descriptor)
             LogService.error("Download failed: \(error)", category: "ModelManager")
+        }
+    }
+
+    /// Swap a fully staged download into place. Refuses a staging directory
+    /// missing any required item, and never deletes the old install first:
+    /// `replaceItemAt` swaps, so a failure leaves the working model as it was
+    /// (deleting then moving lost a working install whenever the move failed).
+    nonisolated static func installStaged(_ staged: URL, at finalDir: URL, requiredItems: [String]) throws {
+        let fm = FileManager.default
+        let missing = requiredItems.filter { !fm.fileExists(atPath: staged.appendingPathComponent($0).path) }
+        guard missing.isEmpty else {
+            throw NSError(domain: "ModelManager", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Download incomplete — missing \(missing.joined(separator: ", "))"
+            ])
+        }
+        if fm.fileExists(atPath: finalDir.path) {
+            _ = try fm.replaceItemAt(finalDir, withItemAt: staged)
+        } else {
+            try fm.createDirectory(at: finalDir.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.moveItem(at: staged, to: finalDir)
         }
     }
 

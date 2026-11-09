@@ -37,6 +37,12 @@ struct VADConfig {
     var maxSegmentMs: Int = 15000
 
     static let `default` = VADConfig()
+
+    /// Meeting mode: longer hangover and a much longer hard cut than dictation
+    /// — hour-long sessions shouldn't shred into dictation-sized 15 s pieces,
+    /// but segments must still stay bounded for the offline decode window and
+    /// for the live panel to update at a readable cadence.
+    static let meeting = VADConfig(minSilenceMs: 800, maxSegmentMs: 30_000)
 }
 
 /// Model-free fallback: flags a window as speech when its RMS exceeds a

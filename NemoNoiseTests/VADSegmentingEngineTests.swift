@@ -156,4 +156,43 @@ nonisolated final class VADSegmentingEngineTests: XCTestCase {
         let final = try await engine.finish()
         XCTAssertEqual(final.text, "")
     }
+    // MARK: - When the segment was spoken
+
+    /// A segment is contiguous audio ending at the window that closed it, so
+    /// its start is known exactly — not when the decode happened to finish.
+    @MainActor func testSegmentFinalCarriesItsAudioStart() async throws {
+        let spy = OfflineDecodeSpy()
+        spy.finishTexts = ["你好"]
+        // 3 silence, speech, speech, silence, silence -> segment opens at window 3
+        let detector = ScriptedDetector([false, false, false, true, true, false, false])
+        let engine = VADSegmentingEngine(inner: spy, detector: detector, config: cfg())
+
+        let r = try await engine.feedChunk(samples(7), sampleRate: 16000)
+        XCTAssertTrue(r.isFinal)
+        XCTAssertEqual(r.audioStart ?? -1, Double(3 * W) / 16000, accuracy: 1e-9)
+    }
+
+    @MainActor func testSegmentStartCountsAudioFromEarlierChunks() async throws {
+        let spy = OfflineDecodeSpy()
+        spy.finishTexts = ["A", "B"]
+        let detector = ScriptedDetector([true, false, false, false, true, false, false])
+        let engine = VADSegmentingEngine(inner: spy, detector: detector, config: cfg())
+
+        _ = try await engine.feedChunk(samples(4), sampleRate: 16000)
+        let r2 = try await engine.feedChunk(samples(3), sampleRate: 16000)
+        XCTAssertEqual(r2.text, "B")
+        XCTAssertEqual(r2.audioStart ?? -1, Double(4 * W) / 16000, accuracy: 1e-9)
+    }
+
+    @MainActor func testFlushedSegmentCarriesItsAudioStart() async throws {
+        let spy = OfflineDecodeSpy()
+        spy.finishTexts = ["尾巴"]
+        let detector = ScriptedDetector([false, false, true, true])
+        let engine = VADSegmentingEngine(inner: spy, detector: detector, config: cfg())
+
+        _ = try await engine.feedChunk(samples(4), sampleRate: 16000)
+        let final = try await engine.finish()
+        XCTAssertEqual(final.text, "尾巴")
+        XCTAssertEqual(final.audioStart ?? -1, Double(2 * W) / 16000, accuracy: 1e-9)
+    }
 }

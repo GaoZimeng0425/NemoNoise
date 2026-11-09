@@ -91,6 +91,7 @@ struct OverlayView: View {
     }
 
     private var statusColor: Color {
+        if controller.isEscCancelArmed { return .orange }
         switch controller.recordingState {
         case .ready: return .secondary
         case .recording: return .red
@@ -120,6 +121,7 @@ struct OverlayView: View {
     }
     
     private var statusText: String {
+        if controller.isEscCancelArmed { return "Press Esc again to cancel" }
         switch controller.recordingState {
         case .ready: return "Ready"
         case .recording: return "Recording"

@@ -15,15 +15,21 @@ final class TranslationController: SubtitleWriter {
     let translationService: AppleTranslationService = AppleTranslationService()
     private var subtitleController: SubtitleOverlayController?
     private var pipelineTask: Task<Void, Never>?
-    private var pipeline: TranscriptionPipeline?
+    /// Builds a fresh per-activation pipeline around the provider's resident
+    /// engines (nil while they load). Set by `PipelineProvider`.
+    private var pipelineFactory: (() -> TranscriptionPipeline?)?
+    /// The pipeline of the currently-active translation session.
+    private var activePipeline: TranscriptionPipeline?
     private var mutex: RecordingMutex?
     private var translateProcessor: AsyncTranslateProcessor?
 
     private static let translationShortcut = KeyboardShortcuts.Name("translationMode")
 
     /// Called by NemoNoiseApp after both controllers and their pipelines are constructed.
-    func bind(pipeline: TranscriptionPipeline, mutex: RecordingMutex, translateProcessor: AsyncTranslateProcessor? = nil) {
-        self.pipeline = pipeline
+    func bind(pipelineFactory: @escaping () -> TranscriptionPipeline?,
+              mutex: RecordingMutex,
+              translateProcessor: AsyncTranslateProcessor? = nil) {
+        self.pipelineFactory = pipelineFactory
         self.mutex = mutex
         self.translateProcessor = translateProcessor
     }
@@ -37,14 +43,19 @@ final class TranslationController: SubtitleWriter {
     }
 
     private func startTranslation() {
-        guard translationState == .idle, let pipeline, let mutex else { return }
+        guard translationState == .idle, let mutex,
+              let pipeline = pipelineFactory?() else { return }
+        activePipeline = pipeline
 
         guard CGPreflightScreenCaptureAccess() else {
             ScreenRecordingAlert.present()
             return
         }
 
-        guard mutex.tryAcquire(.translation) else { return }
+        guard mutex.tryAcquire(.translation) else {
+            ToastWindowController.show("Audio is in use by another mode", style: .info, duration: 2)
+            return
+        }
 
         _ = LogService.startSession()
         LogService.info("Translation mode starting", category: "Translation")
@@ -75,7 +86,12 @@ final class TranslationController: SubtitleWriter {
                 }
             } catch {
                 LogService.error("Translation pipeline error: \(error.localizedDescription)", category: "Translation")
-                self.pipeline?.stop()
+                await pipeline.stop()
+                // Stopped (or stopped and restarted) during the await: that
+                // path already released the mutex, and `activePipeline` may
+                // now be a newer session — leave it alone.
+                guard self.activePipeline === pipeline else { return }
+                self.activePipeline = nil
                 self.mutex?.release(.translation)
                 self.translationState = .error(error.localizedDescription)
                 self.hideSubtitle()
@@ -98,6 +114,8 @@ final class TranslationController: SubtitleWriter {
         LogService.endSession()
         // Finalize then release mutex in the same task so dictation cannot start
         // until the audio source has fully drained.
+        let pipeline = activePipeline
+        activePipeline = nil
         Task { [pipeline, mutex] in
             _ = try? await pipeline?.finalize()
             await MainActor.run { mutex?.release(.translation) }

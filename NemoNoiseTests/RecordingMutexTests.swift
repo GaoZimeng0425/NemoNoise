@@ -47,4 +47,25 @@ nonisolated final class RecordingMutexTests: XCTestCase {
         mutex.release(.dictation)
         XCTAssertTrue(mutex.tryAcquire(.translation))
     }
+
+    // MARK: - Three-way exclusion (meeting mode)
+
+    @MainActor func testMeetingBlocksBothOtherModes() {
+        let mutex = RecordingMutex()
+        XCTAssertTrue(mutex.tryAcquire(.meeting))
+        XCTAssertFalse(mutex.tryAcquire(.dictation))
+        XCTAssertFalse(mutex.tryAcquire(.translation))
+        XCTAssertEqual(mutex.current, .meeting)
+    }
+
+    @MainActor func testMeetingBlockedWhileEitherOtherModeHolds() {
+        let mutex = RecordingMutex()
+        _ = mutex.tryAcquire(.translation)
+        XCTAssertFalse(mutex.tryAcquire(.meeting))
+        mutex.release(.translation)
+        _ = mutex.tryAcquire(.dictation)
+        XCTAssertFalse(mutex.tryAcquire(.meeting))
+        mutex.release(.dictation)
+        XCTAssertTrue(mutex.tryAcquire(.meeting))
+    }
 }

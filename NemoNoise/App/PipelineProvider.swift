@@ -16,32 +16,160 @@ final class PipelineProvider {
 
     private(set) var dictation: Readiness = .loading
     private(set) var translation: Readiness = .loading
+    /// Meeting pipelines build lazily on first use, so engine memory is only
+    /// paid when a meeting actually runs. Stays `.loading` until then.
+    private(set) var meeting: Readiness = .loading
 
     private let factory: any ASREngineFactoring
     private let modelManager: ModelManager
     private let mutex: RecordingMutex
     private weak var recordingController: RecordingController?
     private weak var translationController: TranslationController?
+    private weak var meetingController: MeetingController?
+    private var meetingBuilt = false
 
     /// Cached so engine swaps from Settings don't re-pay the punctuator load.
     /// `nil` means the punctuation model is absent or failed to load —
     /// silent degradation, not retried on rebuild.
     private var cachedPunctuator: SherpaOfflinePunctuator?
+    /// Launch-time SpeechAnalyzer asset warm-up; tests replace it with a
+    /// no-op (the asset IPC is slow and network-dependent there).
+    var appleAssetPrewarm: @Sendable () async -> Void = {
+        // en-US backs the translation fallback, the current locale the
+        // dictation fallback.
+        Task { await AppleSpeechASREngine.prewarm(locale: "en-US") }
+        Task { await AppleSpeechASREngine.prewarm() }
+    }
+
+    /// The resident dictation engine build — the expensive part (ONNX model
+    /// in memory) that stays loaded across sessions. A Settings change
+    /// rebuilds this in the background and swaps the reference; a session
+    /// that is already recording keeps the old engine until it ends.
+    private var dictationBuild: EngineBuild?
+    private var dictationFallback: (any ASREngine)?
+    private var dictationEngineLabel = "Apple"
+    /// Resident translation engine build + shared translate processor.
+    private var translationBuild: EngineBuild?
+    private var translationTranslateProcessor: AsyncTranslateProcessor?
+    /// Resident meeting engine builds — assembled into fresh pipelines on
+    /// each meeting start.
+    private var meetingBuilds: Optional<(me: EngineBuild,
+                                         meFallback: (any ASREngine)?,
+                                         them: EngineBuild,
+                                         punctuator: SherpaOfflinePunctuator?)> = nil
+    /// Set when engines were unloaded by memory pressure; the next session
+    /// factory call rebuilds them lazily instead of failing silently.
+    private var enginesUnloadedByPressure = false
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
+    /// Silero VAD detector — loading the ONNX model per session would be
+    /// wasteful; one instance is shared (sessions are mutually exclusive and
+    /// each `VADGatedSource.start()` resets it).
+    private var cachedDetector: (any VADSpeechDetector)?
 
     init(factory: any ASREngineFactoring,
          modelManager: ModelManager,
          mutex: RecordingMutex,
          recording: RecordingController,
-         translation: TranslationController) {
+         translation: TranslationController,
+         meeting: MeetingController) {
         self.factory = factory
         self.modelManager = modelManager
         self.mutex = mutex
         self.recordingController = recording
         self.translationController = translation
+        self.meetingController = meeting
 
         // Controllers stay ignorant of PipelineProvider. The rebuild request
         // arrives via an opaque closure that PipelineProvider installs here.
         recording.pipelineRebuildHandler = { [weak self] in self?.rebuildDictation() }
+        meeting.preparePipelines = { [weak self] in self?.buildMeetingIfNeeded() }
+        observeMemoryPressure()
+    }
+
+    /// VoiceInk pattern: with resident models up to ~1 GB, a system memory
+    /// squeeze would otherwise get the whole menu-bar app Jetsam-killed.
+    /// On pressure, drop every engine (idle check first — a live session's
+    /// pipelines hold their own engine references and finish unaffected);
+    /// engines rebuild lazily on the next session, or as soon as pressure
+    /// returns to normal.
+    private func observeMemoryPressure() {
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.normal, .warning, .critical],
+            queue: .main
+        )
+        source.setEventHandler { [weak self, weak source] in
+            guard let self else { return }
+            // The source fires on level *changes* only: a fixed-delay reload
+            // could put ~1 GB back while memory is still tight with no event
+            // left to unload it again. Rebuild when the squeeze is over.
+            if source?.data.contains(.normal) == true {
+                self.rebuildAfterPressureIfNeeded()
+                return
+            }
+            let dictationIdle = (self.recordingController?.recordingState ?? .ready) == .ready
+            let translationIdle = !(self.translationController?.isActive ?? false)
+            let meetingIdle = !(self.meetingController?.isActive ?? false)
+            guard dictationIdle, translationIdle, meetingIdle else { return }
+
+            // Unloading is only worth it when something heavy is resident.
+            // With no local ASR models the pool is Silero + punctuator plus
+            // Apple engines (a few MB total) — dropping it frees nothing but
+            // churns the "engines warming up" state (observed live: repeated
+            // pressure events left the menubar on "Preparing engines…" all
+            // morning with nothing actually freed).
+            // Nothing built (failed / already unloaded) holds no memory.
+            func isLight(_ build: EngineBuild?) -> Bool {
+                build.map { $0.engine is AppleSpeechASREngine } ?? true
+            }
+            let onlyLightEngines = isLight(self.dictationBuild)
+                && isLight(self.translationBuild)
+                && (self.meetingBuilds.map { isLight($0.me) && isLight($0.them) } ?? true)
+            guard !onlyLightEngines else {
+                LogService.info("Memory pressure — only lightweight engines resident, keeping them", category: "PipelineProvider")
+                return
+            }
+
+            LogService.warn("Memory pressure — unloading resident engines", category: "PipelineProvider")
+            self.enginesUnloadedByPressure = true
+            self.dictationBuild = nil
+            self.dictationFallback = nil
+            self.translationBuild = nil
+            self.translationTranslateProcessor = nil
+            self.meetingBuilds = nil
+            self.meetingBuilt = false
+            self.meetingController?.unbind()
+            self.dictation = .loading
+            self.translation = .loading
+            self.meeting = .loading
+
+            // Recovery: the `.normal` branch above rebuilds when the squeeze
+            // passes (without it the menubar sat on "engines warming up…"
+            // after an overnight pressure event); a session started before
+            // that rebuilds through the lazy path and clears the flag.
+        }
+        source.resume()
+        memoryPressureSource = source
+    }
+
+    /// Lazy pressure recovery: rebuild dictation + translation engines once.
+    /// Meeting rebuilds through its own `preparePipelines` path.
+    private func rebuildAfterPressureIfNeeded() {
+        guard enginesUnloadedByPressure else { return }
+        enginesUnloadedByPressure = false
+        LogService.info("Rebuilding engines after memory-pressure unload", category: "PipelineProvider")
+        let factory = self.factory
+        let punctuator = self.cachedPunctuator
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let primaryResult = Result<EngineBuild, Error> { try factory.makePrimary() }
+            await Self.warmUp(primaryResult)
+            let translationResult = Result<EngineBuild, Error> { try factory.makeTranslation() }
+            let fallback = factory.makeFallback()
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.applyDictation(result: primaryResult, fallback: fallback, punctuator: punctuator)
+                self.applyTranslation(result: translationResult, punctuator: punctuator)
+            }
+        }
     }
 
     /// Called once from `NemoNoiseApp`. Loads engines on a background thread,
@@ -50,9 +178,16 @@ final class PipelineProvider {
         let factory = self.factory
         let modelManager = self.modelManager
         Task.detached(priority: .userInitiated) { [weak self] in
+            // Warm the SpeechAnalyzer assets (dictation fallback + translation
+            // fallback) before anything needs them — the first session then
+            // skips the slow asset IPC/download entirely. Injectable so tests
+            // can stub it out (asset IPC is slow/unavailable there).
+            await self?.appleAssetPrewarm()
+
             let punctuator = Self.makePunctuator(modelManager: modelManager)
 
             let primaryResult = Result<EngineBuild, Error> { try factory.makePrimary() }
+            await Self.warmUp(primaryResult)
             let fallback = factory.makeFallback()
             let translationResult = Result<EngineBuild, Error> { try factory.makeTranslation() }
 
@@ -62,18 +197,29 @@ final class PipelineProvider {
                 self.applyDictation(result: primaryResult, fallback: fallback, punctuator: punctuator)
                 self.applyTranslation(result: translationResult, punctuator: punctuator)
                 self.translationController?.startHotkeyMonitoring()
+                // With no local models every meeting engine is an Apple engine
+                // and the build is nearly free — do it eagerly so the FIRST
+                // "Start Meeting" click just works (no preparing toast, no
+                // second click). Heavy local models keep the lazy path.
+                if self.meetingEnginesAreLightweight() {
+                    LogService.info("Meeting engines are lightweight — building eagerly", category: "PipelineProvider")
+                    self.buildMeetingIfNeeded()
+                }
             }
         }
     }
 
-    /// Rebuild dictation when the user changes engine choice in Settings.
-    /// Reuses the cached punctuator and Apple Speech fallback.
+    /// Rebuild dictation engines when the user changes engine choice in
+    /// Settings. Builds in the background and swaps the resident build when
+    /// ready — a recording that is live simply keeps the old engine until it
+    /// ends; the next session picks up the new one. No parking, no guards.
     func rebuildDictation() {
         dictation = .loading
         let factory = self.factory
         let punctuator = self.cachedPunctuator
         Task.detached(priority: .userInitiated) { [weak self] in
             let primaryResult = Result<EngineBuild, Error> { try factory.makePrimary() }
+            await Self.warmUp(primaryResult)
             let fallback = factory.makeFallback()
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -89,61 +235,31 @@ final class PipelineProvider {
                                 punctuator: SherpaOfflinePunctuator?) {
         switch result {
         case .failure(let error):
+            dictationBuild = nil
             dictation = .failed(error.localizedDescription)
             ToastWindowController.show("Dictation engine unavailable: \(error.localizedDescription)",
                                        style: .error, duration: 5)
         case .success(let build):
+            dictationBuild = build
+            dictationFallback = fallback
+            let label: String
+            if build.fallbackReason != nil {
+                label = "Apple"
+            } else {
+                let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
+                             ?? AppDefaults.Defaults.engineType
+                label = Self.engineDisplayName(for: choice)
+            }
+            dictationEngineLabel = label
+
             if let recordingController {
-                // Skip the CT-Transformer when the engine already emits its own
-                // punctuation (Qwen3) — re-punctuating self-punctuated text
-                // doubles/corrupts it (`。。`, `？？`, `。，`).
-                var postProcessors: [any PostProcessor] = (build.engine.emitsPunctuation ? nil : punctuator).map {
-                    [PunctuationProcessor(punctuator: $0)]
-                } ?? []
-
-                // Last step: repair common English-term mis-transcriptions
-                // ("u爱" → "UI", lower-cased acronyms, brand casing). Runs after
-                // punctuation so it operates on the final user-visible text. The
-                // provider re-reads the dictionary each utterance, so Settings
-                // edits apply without rebuilding the pipeline.
-                postProcessors.append(TextCorrectionProcessor(provider: { TextCorrections.active() }))
-
-                // Offline engines (Qwen3 / SenseVoice) decode in one shot at
-                // finish(), so they get the segmenting decorator that cuts at
-                // pauses and decodes each short segment progressively. Streaming
-                // engines (Paraformer / Apple) keep the Phase-1 gated source —
-                // its silence-injection preserves their own endpoint detection.
-                let source: any AudioSource
-                let engine: any ASREngine
-                if build.engine.isStreaming {
-                    source = VADGatedSource(inner: makeMicSource(), detector: makeDetector())
-                    engine = build.engine
-                } else {
-                    source = makeMicSource()
-                    engine = VADSegmentingEngine(inner: build.engine, detector: makeDetector())
-                }
-
-                let pipeline = TranscriptionPipeline(
-                    source: source,
-                    engine: engine,
-                    postProcessors: postProcessors,
-                    sink: OverlayProgressSink(target: recordingController),
-                    fallback: fallback
+                recordingController.bind(
+                    pipelineFactory: { [weak self] in self?.newDictationPipeline() },
+                    engineLabel: { [weak self] in self?.dictationEngineLabel ?? "Apple" },
+                    mutex: mutex
                 )
-                recordingController.bind(pipeline: pipeline, mutex: mutex)
-                let label: String
-                if build.fallbackReason != nil {
-                    label = "Apple"
-                } else {
-                    let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
-                                 ?? AppDefaults.Defaults.engineType
-                    label = Self.engineDisplayName(for: choice)
-                }
                 recordingController.currentEngineLabel = label
             }
-            // Set readiness even if recordingController weak-ref is nil — in
-            // production the controller outlives the provider, so this branch
-            // only matters in tests that discard their controller references.
             dictation = .ready
             if let reason = build.fallbackReason {
                 ToastWindowController.show(reason, style: .warning, duration: 5)
@@ -151,43 +267,295 @@ final class PipelineProvider {
         }
     }
 
+    /// A cheap per-session pipeline shell around the resident dictation
+    /// engines: fresh audio source + gate each recording, shared engine.
+    /// Called by the controller on every hotkey press.
+    private func newDictationPipeline() -> TranscriptionPipeline? {
+        guard let build = dictationBuild, let recordingController else {
+            rebuildAfterPressureIfNeeded()
+            return nil
+        }
+
+        // Skip the CT-Transformer when the engine already emits its own
+        // punctuation (Qwen3) — re-punctuating self-punctuated text
+        // doubles/corrupts it (`。。`, `？？`, `。，`).
+        var postProcessors: [any PostProcessor] = Self.punctuator(for: build.engine, from: cachedPunctuator).map {
+            [PunctuationProcessor(punctuator: $0)]
+        } ?? []
+        // Repair common English-term mis-transcriptions ("u爱" → "UI"). Runs
+        // after punctuation so it operates on the final user-visible text.
+        postProcessors.append(TextCorrectionProcessor(provider: { TextCorrections.active() }))
+        postProcessors.append(HeardTextProcessor())
+
+        let detector = sharedDetector()
+        // SpeechAnalyzer handles silence itself — feeding it zero-substituted
+        // windows disturbs its endpointing and timeline, so it gets the raw
+        // mic (yap/muesli feed it unprocessed audio). Offline engines
+        // (Qwen3 / SenseVoice) decode in one shot at finish(), so they get
+        // the segmenting decorator. Paraformer (streaming, ours) keeps the
+        // gated source — its silence-injection preserves its own endpointing.
+        let source: any AudioSource
+        let engine: any ASREngine
+        if build.engine is AppleSpeechASREngine {
+            source = makeMicSource()
+            engine = build.engine
+        } else if build.engine.isStreaming {
+            source = VADGatedSource(inner: makeMicSource(), detector: detector)
+            engine = build.engine
+        } else {
+            source = makeMicSource()
+            engine = VADSegmentingEngine(inner: build.engine, detector: detector)
+        }
+
+        return TranscriptionPipeline(
+            source: source,
+            engine: engine,
+            postProcessors: postProcessors,
+            sink: OverlayProgressSink(target: recordingController),
+            fallback: dictationFallback
+        )
+    }
+
+    /// One detector instance shared across sessions (the ONNX model load is
+    /// not free). Safe: sessions are mutually exclusive via the mutex and
+    /// `VADGatedSource.start()` resets it each session.
+    private func sharedDetector() -> any VADSpeechDetector {
+        if let cachedDetector { return cachedDetector }
+        let detector = makeDetector()
+        cachedDetector = detector
+        return detector
+    }
+
+    /// muesli pattern: the first decode pays one-time setup (graph compile /
+    /// allocation), which lands as a stutter on the user's first utterance.
+    /// Feed a second of silence while still loading. Runs inside the build
+    /// task BEFORE the engine is published: warming a published engine raced
+    /// a session that started meanwhile on the same engine (a reset wiping
+    /// its segment; concurrent sherpa stream access). Skipped for
+    /// SpeechAnalyzer (system-managed; the launch-time asset prewarm covers it).
+    nonisolated private static func warmUp(_ result: Result<EngineBuild, Error>) async {
+        guard case .success(let build) = result, !(build.engine is AppleSpeechASREngine) else { return }
+        let engine = build.engine
+        _ = try? await engine.feedChunk([Float](repeating: 0, count: 16_000), sampleRate: 16_000)
+        _ = try? await engine.finish()
+        await MainActor.run { engine.reset() }
+    }
+
     private func applyTranslation(result: Result<EngineBuild, Error>,
                                   punctuator: SherpaOfflinePunctuator?) {
         switch result {
         case .failure(let error):
+            translationBuild = nil
             translation = .failed(error.localizedDescription)
             // Don't toast — translation is opt-in; surface in popover only.
             LogService.warn("Translation engine init failed: \(error.localizedDescription)",
                             category: "PipelineProvider")
         case .success(let build):
+            translationBuild = build
             if let translationController {
-                var postProcessors: [any PostProcessor] = []
-                postProcessors.append(
-                    SentenceSegmenter(engine: build.engine)
-                )
-                if let punctuator {
-                    postProcessors.append(PunctuationProcessor(punctuator: punctuator))
-                }
                 let translateProcessor = AsyncTranslateProcessor(
                     service: translationController.translationService,
                     writer: translationController
                 )
-                postProcessors.append(translateProcessor)
-                let pipeline = TranscriptionPipeline(
-                    source: SystemAudioSource(),
-                    engine: build.engine,
-                    postProcessors: postProcessors,
-                    sink: SubtitleOverlaySink(target: translationController),
-                    fallback: nil
-                )
+                // Kept alive by the provider — the per-activation pipelines
+                // below all share it.
+                translationTranslateProcessor = translateProcessor
                 translationController.bind(
-                    pipeline: pipeline,
+                    pipelineFactory: { [weak self] in self?.newTranslationPipeline() },
                     mutex: mutex,
                     translateProcessor: translateProcessor
                 )
             }
             translation = .ready
         }
+    }
+
+    /// A fresh per-activation translation pipeline (cheap shell; the engine
+    /// and the translate processor are resident).
+    private func newTranslationPipeline() -> TranscriptionPipeline? {
+        guard let build = translationBuild, let translationController else {
+            rebuildAfterPressureIfNeeded()
+            return nil
+        }
+        var postProcessors: [any PostProcessor] = [
+            SentenceSegmenter(engine: build.engine)
+        ]
+        if let punctuator = Self.punctuator(for: build.engine, from: cachedPunctuator) {
+            postProcessors.append(PunctuationProcessor(punctuator: punctuator))
+        }
+        postProcessors.append(HeardTextProcessor())
+        if let translationTranslateProcessor {
+            postProcessors.append(translationTranslateProcessor)
+        }
+        return TranscriptionPipeline(
+            source: SystemAudioSource(),
+            engine: build.engine,
+            postProcessors: postProcessors,
+            sink: SubtitleOverlaySink(target: translationController),
+            fallback: nil
+        )
+    }
+
+    // MARK: - Meeting assembly (lazy)
+
+    /// True when every meeting engine would be an Apple engine (no local
+    /// models installed) — the meeting build is then nearly free and can be
+    /// done eagerly at launch instead of lazily on first use.
+    private func meetingEnginesAreLightweight() -> Bool {
+        let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
+                         ?? AppDefaults.Defaults.engineType
+        let primaryLight: Bool
+        switch choice {
+        case "sensevoice": primaryLight = modelManager.installedModelDir(for: .senseVoice) == nil
+        case "paraformer": primaryLight = modelManager.installedModelDir(for: .paraformer) == nil
+        case "qwen3":      primaryLight = modelManager.installedModelDir(for: .qwen3) == nil
+        default:           primaryLight = true  // apple
+        }
+        // Them uses Paraformer when installed, otherwise Apple.
+        let themLight = modelManager.installedModelDir(for: .paraformer) == nil
+        return primaryLight && themLight
+    }
+
+    /// Builds the meeting pipelines on first use. Known MVP limitation: a
+    /// Settings engine change does NOT rebuild these — the meeting keeps the
+    /// engines it was built with until the app restarts.
+    func buildMeetingIfNeeded() {
+        guard !meetingBuilt else { return }
+        meetingBuilt = true
+        meeting = .loading
+        let factory = self.factory
+        let punctuator = self.cachedPunctuator
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let meResult = Result<EngineBuild, Error> { try factory.makePrimary() }
+            let meFallback = factory.makeFallback()
+            let themResult = Result<EngineBuild, Error> { try factory.makeMeetingThem() }
+            await MainActor.run { [weak self] in
+                self?.applyMeeting(meResult: meResult,
+                                   meFallback: meFallback,
+                                   themResult: themResult,
+                                   punctuator: punctuator)
+            }
+        }
+    }
+
+    private func applyMeeting(meResult: Result<EngineBuild, Error>,
+                              meFallback: (any ASREngine)?,
+                              themResult: Result<EngineBuild, Error>,
+                              punctuator: SherpaOfflinePunctuator?) {
+        guard let meetingController else {
+            meetingBuilt = false
+            meeting = .failed("Meeting controller unavailable")
+            return
+        }
+        // Me track: the user's dictation engine with dictation-style assembly,
+        // but the meeting VAD preset (longer hangover, 30 s hard cut).
+        guard case .success(let meBuild) = meResult else {
+            meetingBuilt = false
+            if case .failure(let error) = meResult {
+                meeting = .failed(error.localizedDescription)
+                ToastWindowController.show("Meeting mic engine unavailable: \(error.localizedDescription)",
+                                           style: .error, duration: 5)
+            }
+            return
+        }
+        // Them track: streaming engine over system audio (process tap, SCK
+        // fallback inside), sentence-segmented with meeting tuning.
+        guard case .success(let themBuild) = themResult else {
+            meetingBuilt = false
+            if case .failure(let error) = themResult {
+                meeting = .failed(error.localizedDescription)
+                ToastWindowController.show("Meeting system-audio engine unavailable: \(error.localizedDescription)",
+                                           style: .error, duration: 5)
+            }
+            return
+        }
+
+        meetingBuilds = (me: meBuild, meFallback: meFallback, them: themBuild, punctuator: punctuator)
+
+        let meLabel: String
+        if meBuild.fallbackReason != nil {
+            meLabel = "Apple"
+        } else {
+            let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
+                         ?? AppDefaults.Defaults.engineType
+            meLabel = Self.engineDisplayName(for: choice)
+        }
+        let themLabel = themBuild.engine is ParaformerStreamingEngine ? "Paraformer" : "Apple"
+
+        meetingController.bind(
+            pipelineFactory: { [weak self] in self?.newMeetingPipelines() },
+            mutex: mutex,
+            meEngineLabel: meLabel,
+            themEngineLabel: themLabel
+        )
+        meeting = .ready
+    }
+
+    /// Fresh per-meeting pipelines (cheap shells: new mic source, process
+    /// tap, sinks; engines stay resident). Called on each meeting start.
+    private func newMeetingPipelines() -> (mic: TranscriptionPipeline, system: TranscriptionPipeline)? {
+        guard let builds = meetingBuilds, let meetingController else { return nil }
+        let detector = sharedDetector()
+
+        let micSource = MicAudioSource(onInterruption: { [weak meetingController] reason in
+            Task { @MainActor in meetingController?.handleMicInterruption(reason) }
+        })
+
+        var meProcessors: [any PostProcessor] = Self.punctuator(for: builds.me.engine, from: builds.punctuator).map {
+            [PunctuationProcessor(punctuator: $0)]
+        } ?? []
+        meProcessors.append(TextCorrectionProcessor(provider: { TextCorrections.active() }))
+        meProcessors.append(HeardTextProcessor())
+
+        // Me track: the user's dictation engine with dictation-style assembly,
+        // but the meeting VAD preset (longer hangover, 30 s hard cut).
+        // SpeechAnalyzer bypasses gating for the same reason as dictation.
+        let meSource: any AudioSource
+        let meEngine: any ASREngine
+        if builds.me.engine is AppleSpeechASREngine {
+            meSource = micSource
+            meEngine = builds.me.engine
+        } else if builds.me.engine.isStreaming {
+            meSource = VADGatedSource(inner: micSource, detector: detector)
+            meEngine = builds.me.engine
+        } else {
+            meSource = micSource
+            meEngine = VADSegmentingEngine(inner: builds.me.engine, detector: detector, config: .meeting)
+        }
+
+        let micPipeline = TranscriptionPipeline(
+            source: meSource,
+            engine: meEngine,
+            postProcessors: meProcessors,
+            sink: MeetingSink(track: .me, target: meetingController, storeBox: meetingController.storeBox),
+            fallback: builds.meFallback
+        )
+
+        // Them track: streaming engine over system audio (process tap, SCK
+        // fallback inside), sentence-segmented with meeting tuning.
+        var themProcessors: [any PostProcessor] = [
+            SentenceSegmenter(engine: builds.them.engine, silenceThreshold: 0.8, maxSegmentDuration: 12.0)
+        ]
+        if let punctuator = Self.punctuator(for: builds.them.engine, from: builds.punctuator) {
+            themProcessors.append(PunctuationProcessor(punctuator: punctuator))
+        }
+        themProcessors.append(HeardTextProcessor())
+        let systemPipeline = TranscriptionPipeline(
+            source: ProcessTapAudioSource(),
+            engine: builds.them.engine,
+            postProcessors: themProcessors,
+            sink: MeetingSink(track: .them, target: meetingController, storeBox: meetingController.storeBox),
+            fallback: nil
+        )
+        return (mic: micPipeline, system: systemPipeline)
+    }
+
+    /// The CT-Transformer punctuator to attach for `engine`, if any: none
+    /// when the engine punctuates its own output (Apple, Qwen3) —
+    /// re-punctuating doubles the marks (`。。`, `，，`). Every assembly site
+    /// goes through here; generic so the rule is testable without a model.
+    static func punctuator<P>(for engine: any ASREngine, from loaded: P?) -> P? {
+        engine.emitsPunctuation ? nil : loaded
     }
 
     // MARK: - Dictation source pieces

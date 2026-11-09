@@ -11,6 +11,15 @@ protocol ASREngine: AnyObject, Sendable {
     /// Default false: raw-token engines (Paraformer, SenseVoice) need punctuation added.
     var emitsPunctuation: Bool { get }
 
+    /// Whether this engine commits its own sentences: each `isFinal` result
+    /// from `feedChunk` is one finished utterance, and partials are a
+    /// revisable hypothesis of the current utterance only (Apple
+    /// SpeechAnalyzer). `SentenceSegmenter` must not cut such partials — the
+    /// engine rewrites them, and its own final would repeat the cut text.
+    /// Default false: the engine's partial is a growing prefix the pipeline
+    /// may segment (Paraformer).
+    var emitsSentenceFinals: Bool { get }
+
     /// Feed one audio chunk during recording. Returns a partial result (may be empty).
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult
 
@@ -29,5 +38,6 @@ protocol ASREngine: AnyObject, Sendable {
 extension ASREngine {
     var isStreaming: Bool { true }
     var emitsPunctuation: Bool { false }
+    var emitsSentenceFinals: Bool { false }
     func markBoundary() {}
 }

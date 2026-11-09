@@ -10,10 +10,12 @@ nonisolated final class PipelineProviderTests: XCTestCase {
     final class StubFactory: ASREngineFactoring, @unchecked Sendable {
         var primaryResult: Result<EngineBuild, Error> = .success(.init(engine: StubEngine(), fallbackReason: nil))
         var translationResult: Result<EngineBuild, Error> = .success(.init(engine: StubEngine(), fallbackReason: nil))
+        var meetingThemResult: Result<EngineBuild, Error> = .success(.init(engine: StubEngine(), fallbackReason: nil))
         var fallbackResult: (any ASREngine)? = nil
 
         func makePrimary() throws -> EngineBuild { try primaryResult.get() }
         func makeTranslation() throws -> EngineBuild { try translationResult.get() }
+        func makeMeetingThem() throws -> EngineBuild { try meetingThemResult.get() }
         func makeFallback() -> (any ASREngine)? { fallbackResult }
     }
 
@@ -31,20 +33,23 @@ nonisolated final class PipelineProviderTests: XCTestCase {
     // MARK: - Helpers
 
     @MainActor private func makeProvider(factory: StubFactory = StubFactory())
-        -> (PipelineProvider, RecordingController, TranslationController)
+        -> (PipelineProvider, RecordingController, TranslationController, MeetingController)
     {
         let mm = ModelManager()
         let mutex = RecordingMutex()
         let recording = RecordingController()
         let translation = TranslationController()
+        let meeting = MeetingController()
         let provider = PipelineProvider(
             factory: factory,
             modelManager: mm,
             mutex: mutex,
             recording: recording,
-            translation: translation
+            translation: translation,
+            meeting: meeting
         )
-        return (provider, recording, translation)
+        provider.appleAssetPrewarm = {}
+        return (provider, recording, translation, meeting)
     }
 
     /// Poll readiness until it leaves `.loading` or timeout.
@@ -59,13 +64,13 @@ nonisolated final class PipelineProviderTests: XCTestCase {
     // MARK: - Tests
 
     @MainActor func testInitialStateIsLoading() {
-        let (provider, _, _) = makeProvider()
+        let (provider, _, _, _) = makeProvider()
         XCTAssertEqual(provider.dictation, .loading)
         XCTAssertEqual(provider.translation, .loading)
     }
 
     @MainActor func testBootstrapTransitionsToReady() async throws {
-        let (provider, _, _) = makeProvider()
+        let (provider, _, _, _) = makeProvider()
         provider.bootstrap()
         try await waitUntilReady(provider)
         XCTAssertEqual(provider.dictation, .ready)
@@ -76,7 +81,7 @@ nonisolated final class PipelineProviderTests: XCTestCase {
         let factory = StubFactory()
         struct Boom: Error {}
         factory.translationResult = .failure(Boom())
-        let (provider, _, _) = makeProvider(factory: factory)
+        let (provider, _, _, _) = makeProvider(factory: factory)
         provider.bootstrap()
         try await waitUntilReady(provider)
         XCTAssertEqual(provider.dictation, .ready)
@@ -89,7 +94,7 @@ nonisolated final class PipelineProviderTests: XCTestCase {
         let factory = StubFactory()
         struct Boom: Error {}
         factory.primaryResult = .failure(Boom())
-        let (provider, _, _) = makeProvider(factory: factory)
+        let (provider, _, _, _) = makeProvider(factory: factory)
         provider.bootstrap()
         try await waitUntilReady(provider)
         if case .failed = provider.dictation { /* ok */ } else {
@@ -98,7 +103,7 @@ nonisolated final class PipelineProviderTests: XCTestCase {
     }
 
     @MainActor func testRebuildDictationReachesReadyAgain() async throws {
-        let (provider, _, _) = makeProvider()
+        let (provider, _, _, _) = makeProvider()
         provider.bootstrap()
         try await waitUntilReady(provider)
 
@@ -108,12 +113,38 @@ nonisolated final class PipelineProviderTests: XCTestCase {
         XCTAssertEqual(provider.dictation, .ready)
     }
 
+    /// Engine-pool semantics: a rebuild that lands while a recording is live
+    /// still completes (nothing is parked) — the running session keeps the old
+    /// engine; the NEXT session picks up the new one via the factory.
+    @MainActor func testRebuildDuringRecordingSwapsPoolNotSession() async throws {
+        let savedDefaults = UserDefaultsSnapshot([AppDefaults.Keys.engineType])
+        defer { savedDefaults.restore() }
+        UserDefaults.standard.set("apple", forKey: AppDefaults.Keys.engineType)
+
+        let (provider, recording, _, _) = makeProvider()
+        provider.bootstrap()
+        try await waitUntilReady(provider)
+        XCTAssertEqual(recording.currentEngineLabel, "Apple")
+
+        // A recording is live when the rebuild lands.
+        recording.recordingState = .recording
+        UserDefaults.standard.set("sensevoice", forKey: AppDefaults.Keys.engineType)
+        provider.rebuildDictation()
+
+        // The build completes immediately — no parking, no .loading stall.
+        try await waitUntilReady(provider)
+        XCTAssertEqual(provider.dictation, .ready)
+
+        // The next session factory serves the new build (label follows).
+        XCTAssertEqual(recording.currentEngineLabel, "SenseVoice")
+    }
+
     @MainActor func testApplyDictation_setsLabelFromUserChoice() async throws {
         let savedDefaults = UserDefaultsSnapshot([AppDefaults.Keys.engineType])
         defer { savedDefaults.restore() }
         UserDefaults.standard.set("sensevoice", forKey: AppDefaults.Keys.engineType)
 
-        let (provider, recording, _) = makeProvider()
+        let (provider, recording, _, _) = makeProvider()
         provider.bootstrap()
         try await waitUntilReady(provider)
 
@@ -127,10 +158,32 @@ nonisolated final class PipelineProviderTests: XCTestCase {
 
         let factory = StubFactory()
         factory.primaryResult = .success(.init(engine: StubEngine(), fallbackReason: "model missing"))
-        let (provider, recording, _) = makeProvider(factory: factory)
+        let (provider, recording, _, _) = makeProvider(factory: factory)
         provider.bootstrap()
         try await waitUntilReady(provider)
 
         XCTAssertEqual(recording.currentEngineLabel, "Apple")
+    }
+
+    // MARK: - Meeting assembly (lazy)
+
+    /// Meeting pipelines build lazily: bootstrap leaves them unbuilt, and the
+    /// first `buildMeetingIfNeeded` binds both tracks and flips `.ready`.
+    @MainActor func testMeetingBuildsEagerlyWhenLightweightAndBindsBothTracks() async throws {
+        let (provider, _, _, meeting) = makeProvider()
+        provider.bootstrap()
+        try await waitUntilReady(provider)
+
+        // No local models installed (test ModelManager points at an empty
+        // dir) → every meeting engine is Apple-stub light → bootstrap builds
+        // them so the first "Start Meeting" click just works.
+        let deadline = Date().addingTimeInterval(5)
+        while provider.meeting == .loading {
+            if Date() >= deadline { XCTFail("eager meeting build did not finish within 5s"); return }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertEqual(provider.meeting, .ready)
+        XCTAssertTrue(meeting.pipelinesReady, "both meeting pipelines must be bound by bootstrap")
+        XCTAssertEqual(meeting.themEngineLabel, "Apple", "StubEngine is not Paraformer → Apple label")
     }
 }

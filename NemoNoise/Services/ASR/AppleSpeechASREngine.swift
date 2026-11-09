@@ -2,10 +2,15 @@ import Speech
 import AVFoundation
 import os
 
-/// FIFO queue of mid-stream final results emitted by SFSpeech. Extracted as a
-/// value type so the queueing logic is unit-testable without an SFSpeech IO
-/// dependency.
-struct AppleSpeechFinalQueue {
+/// Locales whose assets have already been verified/installed in this
+/// process. The AssetInventory queries are slow IPC round-trips and were
+/// re-run on every session begin, which made each recording start sluggish.
+private let speechAssetsReady = OSAllocatedUnfairLock<Set<String>>(initialState: [])
+
+/// FIFO queue of mid-stream final results emitted by the transcriber.
+/// Extracted as a value type so the queueing logic is unit-testable without a
+/// Speech IO dependency.
+nonisolated struct AppleSpeechFinalQueue {
     private var pending: [TranscriptionResult] = []
 
     mutating func enqueue(_ result: TranscriptionResult) {
@@ -17,221 +22,351 @@ struct AppleSpeechFinalQueue {
         return pending.removeFirst()
     }
 
-    /// Drain every queued final into one concatenated result (text joined by
-    /// a single space, emotion of the first non-nil). Returns nil if empty.
+    /// Drain every queued final into one concatenated result (joined by
+    /// `TranscriptJoin` — no stray space between CJK sentences; emotion of
+    /// the first non-nil). Returns nil if empty.
     mutating func drainConcatenated() -> TranscriptionResult? {
         guard !pending.isEmpty else { return nil }
-        let pieces = pending.map(\.text).filter { !$0.isEmpty }
-        let combined = pieces.joined(separator: " ")
+        let combined = TranscriptJoin.sentences(pending.map(\.text))
         let emotion = pending.compactMap(\.emotion).first
+        let audioStart = pending.compactMap(\.audioStart).first
         pending.removeAll()
-        return TranscriptionResult(text: combined, isFinal: true, emotion: emotion)
+        return TranscriptionResult(text: combined, isFinal: true, emotion: emotion, audioStart: audioStart)
     }
 
     var isEmpty: Bool { pending.isEmpty }
 }
 
+/// What the engine has heard, in the shape the pipeline consumes: each
+/// utterance the transcriber commits is reported once as its own `isFinal`
+/// result (the segment boundary sinks rely on), and the partial is only the
+/// utterance still being refined. Pure value type — the results loop feeds it,
+/// `feedChunk` / `finish` read it.
+nonisolated struct AppleSpeechTranscript {
+    private var commits = AppleSpeechFinalQueue()
+    private var volatile = ""
+    private var volatileStart: TimeInterval?
+    private var volatileEnd: TimeInterval?
+
+    /// `audioStart` / `audioEnd`: the result's range on the session audio
+    /// timeline.
+    mutating func apply(text: String, isFinal: Bool,
+                        audioStart: TimeInterval? = nil, audioEnd: TimeInterval? = nil) {
+        if isFinal {
+            // The final pass can drop phrases the last draft had heard — but
+            // the draft often already runs past the range being finalized
+            // ("ABCDEF" while "ABC" commits); keeping it then would commit
+            // "DEF" twice. Only a draft within the final's range may replace
+            // it; with either end unknown, trust the final.
+            let draftWithinFinal: Bool = {
+                guard let draftEnd = volatileEnd, let finalEnd = audioEnd else { return false }
+                return draftEnd <= finalEnd + 0.05
+            }()
+            let kept = draftWithinFinal ? HeardText.fuller(final: text, draft: volatile) : text
+            if kept != text {
+                LogService.info("Final dropped words the draft had — kept the draft (\(text.count) → \(kept.count) chars)",
+                                category: "AppleSpeechASREngine")
+            }
+            if !kept.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                commits.enqueue(TranscriptionResult(text: kept, isFinal: true, emotion: nil,
+                                                    audioStart: audioStart ?? volatileStart))
+            }
+            volatile = ""
+            volatileStart = nil
+            volatileEnd = nil
+        } else {
+            volatile = text
+            volatileStart = audioStart
+            volatileEnd = audioEnd
+        }
+    }
+
+    /// Per-chunk report: utterances committed since the last report as one
+    /// final, otherwise the current utterance as a partial.
+    mutating func takeChunkResult() -> TranscriptionResult {
+        if let committed = commits.drainConcatenated() { return committed }
+        return TranscriptionResult(text: volatile, isFinal: false, emotion: nil)
+    }
+
+    /// End-of-session report: whatever was not yet reported, plus the
+    /// unfinished utterance.
+    mutating func takeFinishResult() -> TranscriptionResult {
+        let committed = commits.drainConcatenated()
+        let text = TranscriptJoin.sentences([committed?.text ?? "", volatile])
+        let audioStart = committed?.audioStart ?? (volatile.isEmpty ? nil : volatileStart)
+        volatile = ""
+        volatileStart = nil
+        volatileEnd = nil
+        return TranscriptionResult(text: text, isFinal: true, emotion: nil, audioStart: audioStart)
+    }
+}
+
+/// Apple Speech engine backed by the macOS 26 `SpeechAnalyzer` framework —
+/// fully on-device, no cloud, no request throttling (the old
+/// `SFSpeechRecognizer` path hit kAFAssistantErrorDomain limits when users
+/// burst short dictations).
+///
+/// Usage pattern mirrors the framework's streaming design: audio chunks are
+/// yielded into an `AnalyzerInput` stream, `SpeechTranscriber.results`
+/// delivers volatile partials per utterance plus `isFinal` commits, and
+/// `finish()` ends the input and awaits the analyzer's end-of-input
+/// finalization.
 final class AppleSpeechASREngine: ASREngine, @unchecked Sendable {
-    // SFSpeech requests are configured with `addsPunctuation = true`, so the
-    // results already carry punctuation — the CT-Transformer must not re-add it.
+    // The transcriber emits punctuation natively — the CT-Transformer must
+    // not re-add it.
     let emitsPunctuation = true
+    // Each transcriber `isFinal` is surfaced as one sentence (see
+    // `AppleSpeechTranscript`).
+    let emitsSentenceFinals = true
 
-    // Assigned once in the nonisolated init (engines are built off the main
-    // actor); only used from this engine's own methods after that.
-    nonisolated(unsafe) private let recognizer: SFSpeechRecognizer
-
-    private var request: SFSpeechAudioBufferRecognitionRequest?
-    private var task: SFSpeechRecognitionTask?
+    private let localeID: String
+    /// Locale tag for logs and assembly labels (e.g. "zh-CN"). `nonisolated`:
+    /// reads only the immutable `localeID`, and the factory (nonisolated)
+    /// logs it at build time.
+    nonisolated var localeLabel: String { localeID }
 
     private struct State {
-        /// Apple's latest cumulative transcription, updated on every callback
-        /// (partial or isFinal). The source of truth for what was recognised.
-        var latestCumulative: String = ""
-        /// Mirror exposed to the UI as partialText. Same content as
-        /// latestCumulative; kept separate to make the contract explicit.
-        var partialText: String = ""
-        var finishContinuation: CheckedContinuation<TranscriptionResult, Error>?
+        var analyzer: SpeechAnalyzer?
+        var transcriber: SpeechTranscriber?
+        var input: AsyncStream<AnalyzerInput>.Continuation?
+        var resultTask: Task<Void, Never>?
+        var converter: AVAudioConverter?
+        var targetFormat: AVAudioFormat?
+        var sourceSampleRate: Double = 0
+        /// Committed utterances not yet reported, plus the one being refined.
+        var transcript = AppleSpeechTranscript()
         var pendingError: Error?
-        /// True once finish() called request.endAudio(). Mid-stream isFinal
-        /// events from Apple BEFORE this point are unreliable (it keeps
-        /// refining/replacing them); we only trust isFinal events AFTER this
-        /// point as the true end-of-recording final.
-        var endAudioCalled: Bool = false
     }
     private let stateLock = OSAllocatedUnfairLock(initialState: State())
 
     nonisolated init(locale: String? = nil) throws {
         let pref = LanguagePreference.current
-        let start = ContinuousClock.now
-        let resolved: SFSpeechRecognizer?
-
-        if let localeId = locale ?? pref.localeIdentifier {
-            resolved = SFSpeechRecognizer(locale: Locale(identifier: localeId))
-                ?? SFSpeechRecognizer(locale: .current)
-                ?? SFSpeechRecognizer()
-        } else {
-            resolved = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
-                ?? SFSpeechRecognizer(locale: .current)
-                ?? SFSpeechRecognizer()
-        }
-
-        guard let resolved else {
-            LogService.error("SFSpeechRecognizer unavailable for locale: \(pref.localeIdentifier ?? "nil")", category: "ASR")
-            throw ASRError.engineUnavailable
-        }
-        recognizer = resolved
-        let elapsed = ContinuousClock.now - start
-        LogService.info("locale: \(recognizer.locale.identifier), init duration: \(elapsed.description)", category: "AppleSpeechASREngine")
+        localeID = locale ?? pref.localeIdentifier ?? "zh-CN"
     }
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
-        guard recognizer.isAvailable else {
-            throw ASRError.audioCaptureFailed("Speech recognizer not available")
+        if stateLock.withLock({ $0.analyzer == nil }) {
+            try await begin(sampleRate: sampleRate)
         }
-
-        if request == nil {
-            guard await requestPermission() else {
-                throw ASRError.audioCaptureFailed("Speech recognition permission denied")
-            }
-
-            let req = SFSpeechAudioBufferRecognitionRequest()
-            req.shouldReportPartialResults = true
-            req.requiresOnDeviceRecognition = false
-            req.addsPunctuation = true
-            req.contextualStrings = UserLexicon.biasStrings()
-            request = req
-
-            task = recognizer.recognitionTask(with: req) { [weak self] result, error in
-                guard let self else { return }
-                if let error {
-                    let ns = error as NSError
-                    // "No speech detected" is normal when the user holds the
-                    // hotkey but doesn't talk. Don't surface it as an error —
-                    // resolve as an empty final result so the UI just closes.
-                    let isNoSpeech = ns.code == 1110
-                        || ns.localizedDescription.localizedCaseInsensitiveContains("no speech")
-                    if isNoSpeech {
-                        let empty = TranscriptionResult(text: "", isFinal: true, emotion: nil)
-                        // If finish() is already waiting, resolve it. Otherwise
-                        // do nothing — when finish() arrives, the 500 ms timeout
-                        // fallback will fire and return latestCumulative (which
-                        // is "" since nothing was recognised), same result.
-                        let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
-                            let cont = state.finishContinuation
-                            state.finishContinuation = nil
-                            return cont
-                        }
-                        cont?.resume(returning: empty)
-                        return
-                    }
-                    let mapped: Error
-                    if ns.localizedDescription.contains("Siri and Dictation are disabled") {
-                        mapped = AppleSpeechError.siriDisabled
-                    } else {
-                        mapped = error
-                    }
-                    let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
-                        state.pendingError = mapped
-                        let cont = state.finishContinuation
-                        state.finishContinuation = nil
-                        return cont
-                    }
-                    cont?.resume(throwing: mapped)
-                    return
-                }
-                if let result {
-                    let cumulative = result.bestTranscription.formattedString
-                    let isFinal = result.isFinal
-                    // Always update latestCumulative + partialText. The
-                    // isFinal flag from Apple is unreliable as a segment
-                    // boundary — Apple emits isFinal repeatedly with
-                    // refinements that REPLACE earlier "finals". Treat
-                    // mid-stream isFinal as just-another-update; only when
-                    // endAudioCalled is true do we trust an isFinal as the
-                    // true end-of-recording signal.
-                    let cont = self.stateLock.withLock { state -> CheckedContinuation<TranscriptionResult, Error>? in
-                        state.latestCumulative = cumulative
-                        state.partialText = cumulative
-                        if isFinal, state.endAudioCalled, let c = state.finishContinuation {
-                            state.finishContinuation = nil
-                            return c
-                        }
-                        return nil
-                    }
-                    if let cont {
-                        cont.resume(returning: TranscriptionResult(text: cumulative, isFinal: true, emotion: nil))
-                    }
-                }
-            }
-        }
-
-        if let buffer = makePCMBuffer(from: samples, sampleRate: sampleRate) {
-            request?.append(buffer)
-        }
-
-        let partial = stateLock.withLock { $0.partialText }
-        return TranscriptionResult(text: partial, isFinal: false, emotion: nil)
-    }
-
-    func finish() async throws -> TranscriptionResult {
-        request?.endAudio()
-
-        let snapshot = stateLock.withLock { state -> Error? in
-            if let err = state.pendingError {
-                state.pendingError = nil
-                return err
-            }
-            state.endAudioCalled = true
-            return nil
-        }
-        if let error = snapshot {
-            LogService.error("Recognition failed: \(error.localizedDescription)", category: "AppleSpeechASREngine")
+        if let error = stateLock.withLock({ $0.pendingError }) {
             throw error
         }
 
-        if task != nil {
-            return try await withCheckedThrowingContinuation { continuation in
-                let resolved = self.stateLock.withLock { state -> (TranscriptionResult?, Error?) in
-                    if let error = state.pendingError {
-                        state.pendingError = nil
-                        return (nil, error)
-                    }
-                    state.finishContinuation = continuation
-                    return (nil, nil)
-                }
-                if let error = resolved.1 {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                if let final = resolved.0 {
-                    continuation.resume(returning: final)
-                    return
-                }
-                // Timeout fallback: if Apple doesn't emit a post-endAudio
-                // isFinal within 500 ms, use whatever latestCumulative we have.
-                // Apple usually emits within ~100 ms of endAudio(); 500 ms gives
-                // headroom for longer buffered audio.
-                Task { [weak self] in
-                    try? await Task.sleep(for: .milliseconds(500))
-                    guard let self else { return }
-                    let (cont, latest) = self.stateLock.withLock { state -> (CheckedContinuation<TranscriptionResult, Error>?, String) in
-                        let c = state.finishContinuation
-                        state.finishContinuation = nil
-                        return (c, state.latestCumulative)
-                    }
-                    cont?.resume(returning: TranscriptionResult(text: latest, isFinal: true, emotion: nil))
-                }
+        guard let buffer = makePCMBuffer(from: samples, sampleRate: sampleRate),
+              let inputBuffer = convert(buffer) else {
+            return partialResult()
+        }
+        let continuation = stateLock.withLock { $0.input }
+        continuation?.yield(AnalyzerInput(buffer: inputBuffer))
+        return partialResult()
+    }
+
+    func finish() async throws -> TranscriptionResult {
+        stateLock.withLock { $0.input?.finish() }
+
+        if let analyzer = stateLock.withLock({ $0.analyzer }) {
+            try? await analyzer.finalizeAndFinishThroughEndOfInput()
+        }
+
+        // Wait for the results stream to commit the final utterance (bounded
+        // — a fixed 100 ms sleep truncated the tail of the last sentence).
+        let resultTask = stateLock.withLock { $0.resultTask }
+        if let resultTask {
+            await withTaskGroup(of: Bool.self) { group in
+                group.addTask { _ = await resultTask.value; return true }
+                group.addTask { try? await Task.sleep(for: .seconds(2)); return false }
+                _ = await group.next()
+                group.cancelAll()
             }
         }
 
-        return TranscriptionResult(text: "", isFinal: true, emotion: nil)
+        let result = stateLock.withLock { $0.transcript.takeFinishResult() }
+        let error = stateLock.withLock { $0.pendingError }
+        teardown()
+        if let error {
+            LogService.error("Recognition failed: \(error.localizedDescription)", category: "AppleSpeechASREngine")
+            throw error
+        }
+        return result
     }
 
     func reset() {
-        task?.cancel()
-        task = nil
-        request = nil
-        stateLock.withLock { state in state = State() }
+        teardown()
+    }
+
+    private func teardown() {
+        stateLock.withLock { state in
+            state.resultTask?.cancel()
+            state.resultTask = nil
+            state.input?.finish()
+            state.input = nil
+            state.analyzer = nil
+            state.transcriber = nil
+            state.converter = nil
+            state.targetFormat = nil
+            state.transcript = AppleSpeechTranscript()
+            state.pendingError = nil
+        }
+    }
+
+    private func partialResult() -> TranscriptionResult {
+        stateLock.withLock { $0.transcript.takeChunkResult() }
+    }
+
+    /// One-time session setup on the first chunk: permission, transcriber +
+    /// analyzer, language assets, hotword context, and the results loop.
+    private func begin(sampleRate: Int) async throws {
+        guard await requestPermission() else {
+            throw ASRError.audioCaptureFailed("Speech recognition permission denied")
+        }
+
+        let locale = Locale(identifier: localeID)
+        let wanted = locale.identifier(.bcp47)
+        let supported = await SpeechTranscriber.supportedLocales.map { $0.identifier(.bcp47) }
+        guard supported.contains(wanted) else {
+            LogService.error("SpeechAnalyzer has no locale \(wanted) (supported: \(supported.sorted().joined(separator: ", ")))", category: "AppleSpeechASREngine")
+            throw ASRError.engineUnavailable
+        }
+
+        let transcriber = SpeechTranscriber(
+            locale: locale,
+            transcriptionOptions: [],
+            // No `.fastResults`: tried on meeting + translation tracks
+            // (2026-11-09, device). The user felt no latency gain, Chinese
+            // lost nearly all commas, the period of a committed sentence
+            // leaked to the next line's start, and short read-aloud phrases
+            // came out wrong ("帮个忙" → "万个忙", "领域还在" → "两翼小虫").
+            reportingOptions: [.volatileResults],
+            attributeOptions: [.audioTimeRange]
+        )
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+
+        // Bias recognition toward the user's dictionary so names and jargon
+        // come out right when spoken.
+        let bias = UserLexicon.biasStrings()
+        if !bias.isEmpty {
+            let context = AnalysisContext()
+            context.contextualStrings[.general] = bias
+            try? await analyzer.setContext(context)
+        }
+
+        try await ensureAssets(for: transcriber, bcp47: wanted)
+
+        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else {
+            throw ASRError.engineUnavailable
+        }
+
+        let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
+
+        let resultTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                for try await result in transcriber.results {
+                    let text = String(result.text.characters)
+                    // The analyzer's timeline starts at the first buffer fed —
+                    // the session's first chunk.
+                    let start = result.range.start
+                    let end = result.range.end
+                    let audioStart = start.isNumeric ? start.seconds : nil
+                    let audioEnd = end.isNumeric ? end.seconds : nil
+                    self.stateLock.withLock {
+                        $0.transcript.apply(text: text, isFinal: result.isFinal,
+                                            audioStart: audioStart, audioEnd: audioEnd)
+                    }
+                }
+            } catch {
+                LogService.warn("SpeechAnalyzer result error: \(error.localizedDescription)", category: "AppleSpeechASREngine")
+                self.stateLock.withLock { $0.pendingError = error }
+            }
+        }
+
+        try await analyzer.start(inputSequence: stream)
+
+        // Chunks arrive as mono Float at the source rate; convert when the
+        // analyzer wants a different format.
+        let sourceFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: Double(sampleRate),
+            channels: 1,
+            interleaved: false
+        )
+        let converter: AVAudioConverter? = {
+            guard let sourceFormat, !format.isEqual(sourceFormat) else { return nil }
+            return AVAudioConverter(from: sourceFormat, to: format)
+        }()
+
+        stateLock.withLock { state in
+            state.analyzer = analyzer
+            state.transcriber = transcriber
+            state.input = continuation
+            state.resultTask = resultTask
+            state.converter = converter
+            state.targetFormat = format
+            state.sourceSampleRate = Double(sampleRate)
+        }
+        LogService.info("SpeechAnalyzer session started — locale=\(wanted), format=\(format)", category: "AppleSpeechASREngine")
+    }
+
+    /// Warm the SpeechAnalyzer stack at launch: resolve locale support and
+    /// make sure the on-device assets are installed and reserved, so the
+    /// first dictation session isn't held up by asset queries/downloads.
+    /// Errors are swallowed — prewarm is best-effort; the session-time path
+    /// still enforces them.
+    static func prewarm(locale: String? = nil) async {
+        let id = locale ?? LanguagePreference.current.localeIdentifier ?? "zh-CN"
+        let bcp47 = Locale(identifier: id).identifier(.bcp47)
+        guard speechAssetsReady.withLock({ !$0.contains(bcp47) }) else { return }
+
+        let supported = await SpeechTranscriber.supportedLocales.map { $0.identifier(.bcp47) }
+        guard supported.contains(bcp47) else { return }
+        let transcriber = SpeechTranscriber(
+            locale: Locale(identifier: id),
+            transcriptionOptions: [],
+            reportingOptions: [.volatileResults],
+            attributeOptions: [.audioTimeRange]
+        )
+        try? await installAssets(for: transcriber, localeID: id, bcp47: bcp47)
+    }
+
+    /// Download/prepare the on-device language assets for the locale (first
+    /// use only) and keep the locale reserved so it isn't evicted.
+    private func ensureAssets(for transcriber: SpeechTranscriber, bcp47: String) async throws {
+        if speechAssetsReady.withLock({ $0.contains(bcp47) }) { return }
+        try await Self.installAssets(for: transcriber, localeID: localeID, bcp47: bcp47)
+    }
+
+    private static func installAssets(for transcriber: SpeechTranscriber, localeID: String, bcp47: String) async throws {
+        let installed = await SpeechTranscriber.installedLocales.map { $0.identifier(.bcp47) }
+        if !installed.contains(bcp47) {
+            LogService.info("SpeechAnalyzer assets missing for \(bcp47) — downloading", category: "AppleSpeechASREngine")
+            guard let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) else {
+                throw ASRError.engineUnavailable
+            }
+            try await request.downloadAndInstall()
+        }
+        let reserved = await AssetInventory.reservedLocales
+        if !reserved.contains(where: { $0.identifier(.bcp47) == bcp47 }) {
+            try? await AssetInventory.reserve(locale: Locale(identifier: localeID))
+        }
+        speechAssetsReady.withLock { $0.insert(bcp47) }
+    }
+
+    private func convert(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let targetFormat = stateLock.withLock({ $0.targetFormat }) else { return nil }
+        guard let converter = stateLock.withLock({ $0.converter }) else {
+            return buffer
+        }
+        let capacity = AVAudioFrameCount(
+            ceil(Double(buffer.frameLength) * targetFormat.sampleRate / buffer.format.sampleRate)
+        ) + 32
+        guard let out = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity) else { return nil }
+        do {
+            try converter.convert(to: out, from: buffer)
+        } catch {
+            return nil
+        }
+        guard out.frameLength > 0 else { return nil }
+        return out
     }
 
     private func makePCMBuffer(from samples: [Float], sampleRate: Int) -> AVAudioPCMBuffer? {

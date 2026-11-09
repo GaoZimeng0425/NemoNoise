@@ -1,13 +1,14 @@
 import Foundation
 
-/// Mutual exclusion between dictation and translation modes. Either may hold
-/// the mutex at any time; the other is blocked from starting until the holder
-/// releases.
+/// Mutual exclusion between dictation, translation, and meeting modes. Any one
+/// may hold the mutex at a time; the others are blocked from starting until
+/// the holder releases.
 @MainActor
 final class RecordingMutex {
     enum Owner: Equatable {
         case dictation
         case translation
+        case meeting
     }
 
     private(set) var current: Owner?

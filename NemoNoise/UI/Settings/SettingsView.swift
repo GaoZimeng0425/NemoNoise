@@ -1,6 +1,12 @@
 import SwiftUI
+import AVFoundation
 import KeyboardShortcuts
+import ServiceManagement
+import Speech
 
+/// System-Settings-style window: sidebar tabs (`.sidebarAdaptable`), one pane
+/// per concern. General / Models / Permissions / Shortcuts / Corrections /
+/// Vocabulary / History.
 struct SettingsView: View {
     @Environment(RecordingController.self) private var controller
     @Environment(PermissionService.self) private var permissions
@@ -13,23 +19,23 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            engineTab
-                .tabItem { Label("Engine", systemImage: "cpu") }
+            Tab("General", systemImage: "gearshape") { generalTab }
 
-            correctionsTab
-                .tabItem { Label("Corrections", systemImage: "textformat.abc") }
+            Tab("Models", systemImage: "arrow.down.circle") { modelsTab }
 
-            vocabularyTab
-                .tabItem { Label("Vocabulary", systemImage: "character.book.closed") }
+            Tab("Permissions", systemImage: "lock.shield") { permissionsTab }
 
-            shortcutsTab
-                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+            Tab("Shortcuts", systemImage: "keyboard") { shortcutsTab }
 
-            historyTab
-                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
+            Tab("Corrections", systemImage: "textformat.abc") { correctionsTab }
+
+            Tab("Vocabulary", systemImage: "character.book.closed") { vocabularyTab }
+
+            Tab("History", systemImage: "clock.arrow.circlepath") { historyTab }
         }
+        .tabViewStyle(.sidebarAdaptable)
         .formStyle(.grouped)
-        .frame(width: 480, height: 480)
+        .frame(minWidth: 640, minHeight: 460)
         .onAppear {
             availableMics = AudioInputDeviceCatalog.availableInputDevices()
             // LSUIElement apps default to .accessory policy which suppresses
@@ -43,23 +49,14 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Engine tab
+    // MARK: - General tab
 
-    private var engineTab: some View {
+    private var generalTab: some View {
         Form {
             engineSection
             audioInputSection
-            if engineType == "paraformer" {
-                modelSection(for: .paraformer)
-            }
-            if engineType == "sensevoice" {
-                modelSection(for: .senseVoice)
-            }
-            if engineType == "qwen3" {
-                modelSection(for: .qwen3)
-            }
-            modelSection(for: .punctuation)
-            modelSection(for: .sileroVad)
+            transcriptSection
+            startupSection
             privacySection
             aboutSection
         }
@@ -73,6 +70,175 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Models tab
+
+    /// All models, always visible — independent of the selected engine, so a
+    /// missing model (failed download, manual cleanup) can be re-fetched
+    /// without switching engines first.
+    private var modelsTab: some View {
+        Form {
+            Section {
+                Text("Models download to ~/Library/Application Support/NemoNoise/models. Downloads install atomically — a failed download never touches an existing model.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(ModelManager.allDescriptors, id: \.id) { descriptor in
+                modelSection(for: descriptor)
+            }
+        }
+    }
+
+    // MARK: - Permissions tab
+
+    private var permissionsTab: some View {
+        Form {
+            Section("Required for dictation") {
+                permissionRow(
+                    icon: "mic.fill",
+                    name: "Microphone",
+                    detail: "Dictation and the meeting Me track",
+                    status: micStatus
+                ) { PermissionService.openPrivacySettings(.microphone) }
+
+                permissionRow(
+                    icon: "waveform.bubble",
+                    name: "Speech Recognition",
+                    detail: "Apple Speech engine (system and on-device)",
+                    status: speechStatus
+                ) { PermissionService.openPrivacySettings(.speechRecognition) }
+            }
+
+            Section("Feature permissions") {
+                permissionRow(
+                    icon: "cursorarrow.click.badge.clock",
+                    name: "Accessibility",
+                    detail: "Global hotkey and inserting text into the focused app",
+                    granted: permissions.isAXTrusted
+                ) { PermissionService.openPrivacySettings(.accessibility) }
+
+                permissionRow(
+                    icon: "display.trianglebadge.exclamationmark",
+                    name: "Screen Recording",
+                    detail: "Translation mode and the meeting fallback capture",
+                    granted: permissions.hasScreenRecording
+                ) { PermissionService.openPrivacySettings(.screenRecording) }
+
+                // System Audio Recording (macOS 15+) has no status or preflight
+                // API — the one-time prompt fires on the first meeting, and a
+                // declined tap just delivers silence.
+                HStack {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("System Audio Recording").font(.subheadline)
+                        Text("Meeting Them track (process tap). The consent prompt appears on the first meeting start; if it was denied, re-enable it in the Privacy list.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button("Open Settings…") {
+                        PermissionService.openPrivacySettings(.privacyList)
+                    }
+                    .controlSize(.small)
+                }
+            }
+
+            Section {
+                Text("Permission changes made in System Settings take a moment to be reflected here.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var micStatus: PermissionStatus {
+        switch permissions.micStatus {
+        case .authorized: return .granted
+        case .notDetermined: return .notRequested
+        case .denied, .restricted: return .denied
+        @unknown default: return .notRequested
+        }
+    }
+
+    private var speechStatus: PermissionStatus {
+        switch permissions.speechStatus {
+        case .authorized: return .granted
+        case .notDetermined: return .notRequested
+        case .denied, .restricted: return .denied
+        @unknown default: return .notRequested
+        }
+    }
+
+    private enum PermissionStatus {
+        case granted
+        case notRequested
+        case denied
+
+        var label: String {
+            switch self {
+            case .granted: return "Authorized"
+            case .notRequested: return "Not requested"
+            case .denied: return "Denied"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .granted: return .green
+            case .notRequested: return .secondary
+            case .denied: return .red
+            }
+        }
+    }
+
+    private func permissionRow(icon: String,
+                               name: String,
+                               detail: String,
+                               status: PermissionStatus,
+                               open: @escaping () -> Void) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).font(.subheadline)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Label(status.label, systemImage: status == .granted ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .font(.caption)
+                .foregroundStyle(status.color)
+                .labelStyle(.titleAndIcon)
+            Button("Open Settings…", action: open)
+                .controlSize(.small)
+        }
+    }
+
+    private func permissionRow(icon: String,
+                               name: String,
+                               detail: String,
+                               granted: Bool,
+                               open: @escaping () -> Void) -> some View {
+        permissionRow(icon: icon,
+                      name: name,
+                      detail: detail,
+                      status: granted ? .granted : .denied,
+                      open: open)
+    }
+
+    // MARK: - Shortcuts tab
+
+    private var shortcutsTab: some View {
+        Form {
+            shortcutsSection
+        }
+    }
+
     // MARK: - Corrections tab
 
     private var correctionsTab: some View {
@@ -83,14 +249,6 @@ struct SettingsView: View {
 
     private var vocabularyTab: some View {
         VocabularyView()
-    }
-
-    // MARK: - Shortcuts tab
-
-    private var shortcutsTab: some View {
-        Form {
-            shortcutsSection
-        }
     }
 
     // MARK: - History tab
@@ -172,11 +330,17 @@ struct SettingsView: View {
 
     private var shortcutsSection: some View {
         Section("Shortcuts") {
-            KeyboardShortcuts.Recorder("Activation Key:", name: .toggleRecording) { _ in
-                NotificationCenter.default.post(name: .recordingShortcutDidChange, object: nil)
+            LabeledContent("Activation Key:") {
+                ShortcutRecorderField(name: .toggleRecording) { _ in
+                    NotificationCenter.default.post(name: .recordingShortcutDidChange, object: nil)
+                }
+                .frame(width: 180)
             }
 
-            KeyboardShortcuts.Recorder("Translation Key:", name: .translationMode)
+            LabeledContent("Translation Key:") {
+                ShortcutRecorderField(name: .translationMode)
+                    .frame(width: 180)
+            }
             Text("Toggle real-time translation mode. Captures system audio and displays bilingual subtitles.")
                 .font(.caption).foregroundStyle(.secondary)
 
@@ -190,24 +354,57 @@ struct SettingsView: View {
             }
 
             if !permissions.isAXTrusted {
-                Label("Accessibility permission required for global hotkey", systemImage: "exclamationmark.triangle.fill")
+                Label("Accessibility permission required for global hotkey — see Permissions", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .font(.caption)
-                Button("Open System Settings") {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                }
-                .font(.caption)
             }
+        }
+    }
 
-            if !permissions.hasScreenRecording {
-                Label("Screen recording permission required for translation mode", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .font(.caption)
-                Button("Open System Settings") {
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+    // MARK: Transcript cleanup
+
+    @AppStorage(AppDefaults.Keys.llmTranscriptCleanup) private var llmTranscriptCleanup = false
+
+    private var transcriptSection: some View {
+        Section("Transcript") {
+            Toggle("Clean Up Transcripts (Apple Intelligence)", isOn: $llmTranscriptCleanup)
+            Text("Removes filler words and fixes obvious recognition errors before inserting text. History keeps the original transcript. If Apple Intelligence is unavailable or a result looks unreliable, the original text is inserted.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Startup
+
+    @State private var loginItemApproved = true
+
+    private var startupSection: some View {
+        Section("Startup") {
+            // Bound to the SYSTEM's registration state (SMAppService), not a
+            // local preference — the two can drift when the user toggles it
+            // in System Settings (FluidVoice's "prefers macOS state" rule).
+            Toggle("Launch at Login", isOn: Binding(
+                get: { SMAppService.mainApp.status == .enabled },
+                set: { enabled in
+                    do {
+                        if enabled {
+                            try SMAppService.mainApp.register()
+                        } else {
+                            try SMAppService.mainApp.unregister()
+                        }
+                    } catch {
+                        ToastWindowController.show("Login item change failed: \(error.localizedDescription)", style: .error)
+                    }
+                    loginItemApproved = SMAppService.mainApp.status != .requiresApproval
                 }
-                .font(.caption)
+            ))
+            if !loginItemApproved {
+                Label("Needs approval in System Settings → General → Login Items", systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
+        }
+        .onAppear {
+            loginItemApproved = SMAppService.mainApp.status != .requiresApproval
         }
     }
 

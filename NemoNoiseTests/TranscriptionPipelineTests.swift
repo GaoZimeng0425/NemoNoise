@@ -1,4 +1,5 @@
 import XCTest
+import os
 @testable import NemoNoise
 
 nonisolated final class TranscriptionPipelineTests: XCTestCase {
@@ -182,7 +183,7 @@ extension TranscriptionPipelineTests {
 
         _ = pipeline.start()
         try await Task.sleep(for: .milliseconds(20))
-        pipeline.stop()
+        await pipeline.stop()
 
         XCTAssertEqual(engine.finishCallCount, 0)
         XCTAssertGreaterThanOrEqual(source.stopCalls, 1)
@@ -215,7 +216,7 @@ extension TranscriptionPipelineTests {
         try await Task.sleep(for: .milliseconds(50))
         source.finishStream()
         _ = try? await consumer.value
-        pipeline.stop()
+        await pipeline.stop()
 
         XCTAssertTrue(collected.contains { event in
             if case .final(let r) = event { return r.text == "sentence one." && r.isFinal }
@@ -246,10 +247,137 @@ extension TranscriptionPipelineTests {
         try await Task.sleep(for: .milliseconds(60))
         source.finishStream()
         _ = try? await consumer.value
-        pipeline.stop()
+        await pipeline.stop()
 
         let finalDelivery = sink.delivered.first { $0.isFinal && $0.text == "sentence one." }
         XCTAssertNotNil(finalDelivery, "sink.deliver must be called with isFinal=true for the mid-stream final, got: \(sink.delivered)")
+    }
+
+    // MARK: - Consumer termination stops the source (#2c)
+
+    /// Cancelling the consumer task (or dropping the event stream) must stop
+    /// the audio source via `onTermination` — otherwise a re-bound controller
+    /// leaves the old session's microphone running.
+    @MainActor func testConsumerCancellationStopsSource() async throws {
+        let source = MockAudioSource()
+        let engine = MockASREngine()
+        let pipeline = TranscriptionPipeline(
+            source: source, engine: engine, sink: RecordingSink()
+        )
+
+        let events = pipeline.start()
+        let consumer = Task { for try await _ in events { /* drain */ } }
+        try await Task.sleep(for: .milliseconds(50))
+        consumer.cancel()
+        try await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertGreaterThanOrEqual(source.stopCalls, 1,
+                                    "onTermination must stop the audio source when the consumer goes away")
+        await pipeline.stop()
+    }
+
+    /// Single-session instances: cancelling session N's consumer (a late
+    /// `onTermination` from a finished session) must not affect session N+1 —
+    /// which now runs on its OWN pipeline instance with its own source.
+    @MainActor func testSeparateInstancesDoNotInterfere() async throws {
+        let source1 = MockAudioSource()
+        let pipeline1 = TranscriptionPipeline(
+            source: source1, engine: MockASREngine(), sink: RecordingSink()
+        )
+        let events1 = pipeline1.start()
+        let consumer1 = Task { for try await _ in events1 { /* drain */ } }
+        try await Task.sleep(for: .milliseconds(50))
+        consumer1.cancel()
+        try await Task.sleep(for: .milliseconds(100))
+
+        // Session 2 on a fresh instance — unaffected by session 1's teardown.
+        let source2 = MockAudioSource()
+        let sink2 = RecordingSink()
+        let pipeline2 = TranscriptionPipeline(
+            source: source2, engine: MockASREngine(), sink: sink2
+        )
+        let events2 = pipeline2.start()
+        let consumer2 = Task { for try await _ in events2 { /* drain */ } }
+        try await Task.sleep(for: .milliseconds(50))
+
+        source2.emit(samples: [0.1])
+        try await Task.sleep(for: .milliseconds(100))
+        consumer2.cancel()
+        await pipeline2.stop()
+
+        XCTAssertGreaterThanOrEqual(source1.stopCalls, 1,
+                                    "session 1's cancellation must stop its own source")
+        XCTAssertTrue(sink2.delivered.contains { $0.text == "mock partial" },
+                      "session 2 must still receive chunks after session 1's consumer was cancelled")
+    }
+
+    // MARK: - Stop drains the pump (#9)
+
+    /// Thread-safe flag used by the drain test.
+    final class LockedFlag: @unchecked Sendable {
+        private let flag = OSAllocatedUnfairLock(initialState: false)
+        func set() { flag.withLock { $0 = true } }
+        var isSet: Bool { flag.withLock { $0 } }
+    }
+
+    /// `feedChunk` that blocks until the test opens a gate; ignores task
+    /// cancellation so the pump genuinely stays mid-feed while stopped.
+    final class GatedEngine: ASREngine, @unchecked Sendable {
+        let isStreaming = true
+        private let gateOpen = OSAllocatedUnfairLock(initialState: false)
+        private let feedEnteredFlag = OSAllocatedUnfairLock(initialState: false)
+        private let feedExitedFlag = OSAllocatedUnfairLock(initialState: false)
+        var feedEntered: Bool { feedEnteredFlag.withLock { $0 } }
+        var feedExited: Bool { feedExitedFlag.withLock { $0 } }
+        func openGate() { gateOpen.withLock { $0 = true } }
+
+        func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
+            feedEnteredFlag.withLock { $0 = true }
+            while !gateOpen.withLock({ $0 }) {
+                try? await Task.sleep(nanoseconds: 5_000_000)
+            }
+            feedExitedFlag.withLock { $0 = true }
+            return TranscriptionResult(text: "gated partial", isFinal: false, emotion: nil)
+        }
+
+        func finish() async throws -> TranscriptionResult {
+            TranscriptionResult(text: "", isFinal: true, emotion: nil)
+        }
+        func reset() {}
+    }
+
+    /// `stop()` must not return while the pump is still mid-`feedChunk` —
+    /// otherwise a rapid stop→start cycle feeds stale chunks into the freshly
+    /// reset engine.
+    @MainActor func testStopWaitsForInFlightFeedToDrain() async throws {
+        let source = MockAudioSource()
+        let engine = GatedEngine()
+        let pipeline = TranscriptionPipeline(
+            source: source, engine: engine, sink: RecordingSink()
+        )
+
+        let events = pipeline.start()
+        let consumer = Task { for try await _ in events { /* drain */ } }
+        try await Task.sleep(for: .milliseconds(50))
+        source.emit(samples: [0.1])
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(engine.feedEntered, "pump should be blocked inside feedChunk")
+
+        let stopReturned = LockedFlag()
+        let stopTask = Task {
+            await pipeline.stop()
+            stopReturned.set()
+        }
+        try await Task.sleep(for: .milliseconds(150))
+        XCTAssertFalse(stopReturned.isSet,
+                       "stop() must wait for the in-flight feedChunk to drain, not return early")
+        XCTAssertFalse(engine.feedExited)
+
+        engine.openGate()
+        _ = await stopTask.value
+        XCTAssertTrue(stopReturned.isSet)
+        XCTAssertTrue(engine.feedExited, "the in-flight feed should have completed before stop() returned")
+        consumer.cancel()
     }
 
     // MARK: - Source failure

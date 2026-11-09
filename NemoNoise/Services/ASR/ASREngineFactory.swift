@@ -11,6 +11,11 @@ nonisolated struct EngineBuild: Sendable {
 nonisolated protocol ASREngineFactoring: Sendable {
     func makePrimary() throws -> EngineBuild
     func makeTranslation() throws -> EngineBuild
+    /// Meeting "Them" (system-audio) engine. Unlike translation mode's
+    /// source, the language is not assumed English — a user's meetings are
+    /// usually in their own language, so this follows the dictation language
+    /// preference.
+    func makeMeetingThem() throws -> EngineBuild
     func makeFallback() -> (any ASREngine)?
 }
 
@@ -67,6 +72,21 @@ nonisolated final class ASREngineFactory: ASREngineFactoring {
         }
         LogService.info("Translation engine: Apple Speech en-US", category: "ASREngineFactory")
         let apple = try AppleSpeechASREngine(locale: "en-US")
+        return EngineBuild(engine: apple, fallbackReason: nil)
+    }
+
+    func makeMeetingThem() throws -> EngineBuild {
+        if let dir = modelManager.installedModelDir(for: .paraformer),
+           let paraformer = try? ParaformerStreamingEngine(modelDir: dir) {
+            LogService.info("Meeting Them engine: Paraformer", category: "ASREngineFactory")
+            return EngineBuild(engine: paraformer, fallbackReason: nil)
+        }
+        // Not hardcoded en-US (that's translation mode's source assumption):
+        // a Chinese user's meetings are usually Chinese, and an English
+        // engine fed Chinese speech emits English phonetic garbage
+        // ("hold children"), which is exactly what the user saw.
+        let apple = try AppleSpeechASREngine()
+        LogService.info("Meeting Them engine: Apple Speech (\(apple.localeLabel))", category: "ASREngineFactory")
         return EngineBuild(engine: apple, fallbackReason: nil)
     }
 
