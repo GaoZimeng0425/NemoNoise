@@ -285,7 +285,7 @@ final class PipelineProvider {
         // Repair common English-term mis-transcriptions ("u爱" → "UI"). Runs
         // after punctuation so it operates on the final user-visible text.
         postProcessors.append(TextCorrectionProcessor(provider: { TextCorrections.active() }))
-        postProcessors.append(HeardTextProcessor())
+        postProcessors.append(TranscriptTidyProcessor())
 
         let detector = sharedDetector()
         // SpeechAnalyzer handles silence itself — feeding it zero-substituted
@@ -383,7 +383,7 @@ final class PipelineProvider {
         if let punctuator = Self.punctuator(for: build.engine, from: cachedPunctuator) {
             postProcessors.append(PunctuationProcessor(punctuator: punctuator))
         }
-        postProcessors.append(HeardTextProcessor())
+        postProcessors.append(TranscriptTidyProcessor())
         if let translationTranslateProcessor {
             postProcessors.append(translationTranslateProcessor)
         }
@@ -505,7 +505,7 @@ final class PipelineProvider {
             [PunctuationProcessor(punctuator: $0)]
         } ?? []
         meProcessors.append(TextCorrectionProcessor(provider: { TextCorrections.active() }))
-        meProcessors.append(HeardTextProcessor())
+        meProcessors.append(TranscriptTidyProcessor())
 
         // Me track: the user's dictation engine with dictation-style assembly,
         // but the meeting VAD preset (longer hangover, 30 s hard cut).
@@ -539,7 +539,7 @@ final class PipelineProvider {
         if let punctuator = Self.punctuator(for: builds.them.engine, from: builds.punctuator) {
             themProcessors.append(PunctuationProcessor(punctuator: punctuator))
         }
-        themProcessors.append(HeardTextProcessor())
+        themProcessors.append(TranscriptTidyProcessor())
         let systemPipeline = TranscriptionPipeline(
             source: ProcessTapAudioSource(),
             engine: builds.them.engine,

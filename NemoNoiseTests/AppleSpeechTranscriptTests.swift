@@ -90,12 +90,12 @@ nonisolated final class AppleSpeechTranscriptTests: XCTestCase {
     }
 
     /// Fast speech: the transcriber's final pass can drop whole phrases its
-    /// last draft had. The commit keeps the draft then (`HeardText.fuller`).
+    /// last draft had. The commit keeps the draft then (`TranscriptTidy.recoverDroppedWords`).
     @MainActor func testCommitKeepsLastDraftWhenFinalDroppedMostOfIt() {
         var transcript = AppleSpeechTranscript()
-        transcript.apply(text: "我们周五之前把落地页的文案定下来", isFinal: false, audioStart: 0, audioEnd: 4.0)
-        transcript.apply(text: "我们周五。", isFinal: true, audioStart: 0, audioEnd: 4.0)
-        XCTAssertEqual(transcript.takeChunkResult().text, "我们周五之前把落地页的文案定下来")
+        transcript.apply(text: "明天上午十点在三楼会议室讨论预算", isFinal: false, audioStart: 0, audioEnd: 4.0)
+        transcript.apply(text: "明天上午。", isFinal: true, audioStart: 0, audioEnd: 4.0)
+        XCTAssertEqual(transcript.takeChunkResult().text, "明天上午十点在三楼会议室讨论预算")
     }
 
     /// The draft often already covers audio past the range being finalized
@@ -103,30 +103,30 @@ nonisolated final class AppleSpeechTranscriptTests: XCTestCase {
     /// again with its own final.
     @MainActor func testCommitKeepsFinalWhenDraftRunsPastTheFinalRange() {
         var transcript = AppleSpeechTranscript()
-        transcript.apply(text: "我们周五之前把落地页的文案定下来", isFinal: false, audioStart: 0, audioEnd: 4.0)
-        transcript.apply(text: "我们周五。", isFinal: true, audioStart: 0, audioEnd: 1.2)
-        XCTAssertEqual(transcript.takeChunkResult().text, "我们周五。")
+        transcript.apply(text: "明天上午十点在三楼会议室讨论预算", isFinal: false, audioStart: 0, audioEnd: 4.0)
+        transcript.apply(text: "明天上午。", isFinal: true, audioStart: 0, audioEnd: 1.2)
+        XCTAssertEqual(transcript.takeChunkResult().text, "明天上午。")
     }
 
     @MainActor func testCommitKeepsDraftWhenItCoversOnlyTheFinalRange() {
         var transcript = AppleSpeechTranscript()
-        transcript.apply(text: "我们周五之前把落地页的文案定下来", isFinal: false, audioStart: 0, audioEnd: 4.0)
-        transcript.apply(text: "我们周五。", isFinal: true, audioStart: 0, audioEnd: 4.0)
-        XCTAssertEqual(transcript.takeChunkResult().text, "我们周五之前把落地页的文案定下来")
+        transcript.apply(text: "明天上午十点在三楼会议室讨论预算", isFinal: false, audioStart: 0, audioEnd: 4.0)
+        transcript.apply(text: "明天上午。", isFinal: true, audioStart: 0, audioEnd: 4.0)
+        XCTAssertEqual(transcript.takeChunkResult().text, "明天上午十点在三楼会议室讨论预算")
     }
 
     @MainActor func testCommitKeepsFinalWhenRangesAreUnknown() {
         var transcript = AppleSpeechTranscript()
-        transcript.apply(text: "我们周五之前把落地页的文案定下来", isFinal: false)
-        transcript.apply(text: "我们周五。", isFinal: true)
-        XCTAssertEqual(transcript.takeChunkResult().text, "我们周五。")
+        transcript.apply(text: "明天上午十点在三楼会议室讨论预算", isFinal: false)
+        transcript.apply(text: "明天上午。", isFinal: true)
+        XCTAssertEqual(transcript.takeChunkResult().text, "明天上午。")
     }
 
     @MainActor func testCommitKeepsFinalWhenItIsAboutAsLongAsDraft() {
         var transcript = AppleSpeechTranscript()
-        transcript.apply(text: "我们周五之前把文案定下来", isFinal: false)
-        transcript.apply(text: "我们周五之前把文案定下来。", isFinal: true)
-        XCTAssertEqual(transcript.takeChunkResult().text, "我们周五之前把文案定下来。")
+        transcript.apply(text: "明天上午十点开会", isFinal: false)
+        transcript.apply(text: "明天上午十点开会。", isFinal: true)
+        XCTAssertEqual(transcript.takeChunkResult().text, "明天上午十点开会。")
     }
 
     @MainActor func testCommitCarriesTranscriberAudioStart() {
