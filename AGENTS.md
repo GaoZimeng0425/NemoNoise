@@ -108,3 +108,11 @@ actions to proceed (e.g. permission denied → "Open System Settings" /
 **Never use alerts for**: recognition errors, engine failures, network
 problems, "no result" states, transient warnings. Those all go through
 `ToastWindowController`.
+
+## Build & install after every change
+
+After every code change, once the full test suite passes, run `./build.sh`
+without asking. It archives, quits the running NemoNoise, replaces
+`/Applications/NemoNoise.app` and relaunches it, so the user always tests the
+latest code on device. Device testing on a stale build has already wasted a
+round (2026-11-09: a meeting ran on an 11:47 build that predated three fixes).
