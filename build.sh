@@ -22,6 +22,26 @@ BUILD_NUMBER="${BUILD_NUMBER:-1}"
 
 echo "==> Version: $VERSION (build $BUILD_NUMBER)"
 
+# ── Local-deploy signing: stable self-signed identity ─────────────────────
+# ad-hoc 每次构建换 cdhash,重装进 /Applications 在 TCC/Keychain 眼里都是
+# 陌生 app(麦克风/语音识别授权反复重弹);自签证书让重装保持同一身份。
+# fail-closed:身份解析不到就地失败,绝不静默回退 ad-hoc。
+# 生成/重建证书: sh scripts/make-signing-cert.sh
+# 显式逃生口(临时 ad-hoc): NEMONOISE_SIGNING_IDENTITY='-'
+SIGNING_IDENTITY="${NEMONOISE_SIGNING_IDENTITY:-NemoNoise Local Code Signing}"
+if [ "$SIGNING_IDENTITY" != "-" ]; then
+  probe=$(mktemp) && printf 'probe' > "$probe"
+  if ! codesign -f -s "$SIGNING_IDENTITY" "$probe" >/dev/null 2>&1; then
+    echo "✋ 签名身份 '$SIGNING_IDENTITY' 解析不到 — 拒绝静默回退 ad-hoc。"
+    echo "   重建: sh scripts/make-signing-cert.sh"
+    echo "   临时显式回退: NEMONOISE_SIGNING_IDENTITY=- ./build.sh"
+    rm -f "$probe"
+    exit 1
+  fi
+  rm -f "$probe"
+fi
+echo "==> Signing identity: $SIGNING_IDENTITY"
+
 # Clean previous build
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -44,8 +64,8 @@ xcodebuild -exportArchive \
   -exportPath "$BUILD_DIR/export" \
   -exportOptionsPlist ExportOptions.plist
 
-echo "==> Ad-hoc signing..."
-codesign --force --deep --sign - "$BUILD_DIR/export/$APP_NAME.app"
+echo "==> Signing ($SIGNING_IDENTITY)..."
+codesign --force --deep --sign "$SIGNING_IDENTITY" "$BUILD_DIR/export/$APP_NAME.app"
 
 echo "==> Creating DMG..."
 DMG_STAGING="$BUILD_DIR/dmg_staging"
@@ -94,3 +114,24 @@ echo "    DMG:       $DMG_PATH ($(du -h "$DMG_PATH" | cut -f1))"
 echo "    Appcast:   $BUILD_DIR/appcast.xml"
 echo "    Version:   v$VERSION ($BUILD_NUMBER)"
 echo "    SHA-256:   $DMG_SHA256"
+
+# ----------------------------------------------------------------------------
+# Deploy: kill the running app, replace the /Applications copy, relaunch.
+# ----------------------------------------------------------------------------
+APP_BUNDLE="$BUILD_DIR/export/$APP_NAME.app"
+INSTALL_PATH="/Applications/$APP_NAME.app"
+
+echo "==> Closing running $APP_NAME..."
+# Graceful quit first, then force-kill any survivors. Ignore errors so a
+# not-yet-running app doesn't abort the script.
+osascript -e "tell application \"$APP_NAME\" to quit" 2>/dev/null || true
+sleep 1
+pkill -x "$APP_NAME" 2>/dev/null || true
+
+echo "==> Installing to $INSTALL_PATH..."
+rm -rf "$INSTALL_PATH"
+cp -R "$APP_BUNDLE" "$INSTALL_PATH"
+
+echo "==> Launching $APP_NAME..."
+open "$INSTALL_PATH"
+echo "==> All done. $APP_NAME is running from /Applications."
