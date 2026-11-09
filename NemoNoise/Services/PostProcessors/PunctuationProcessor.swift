@@ -4,7 +4,10 @@ import Foundation
 /// using sherpa-onnx's CT-Transformer model. Partial results pass through —
 /// running the model on every partial chunk is wasteful and the CT-Transformer
 /// is trained for complete sentences.
-final class PunctuationProcessor: PostProcessor {
+/// `nonisolated` + detached inference (#6): the CT-Transformer run used to
+/// execute on the main actor (default isolation hop from the pump task),
+/// stalling the UI during punctuation inference.
+nonisolated final class PunctuationProcessor: PostProcessor {
     private let punctuator: SherpaOfflinePunctuator
 
     init(punctuator: SherpaOfflinePunctuator) {
@@ -13,7 +16,10 @@ final class PunctuationProcessor: PostProcessor {
 
     func process(_ result: TranscriptionResult, isFinal: Bool) async throws -> TranscriptionResult? {
         guard isFinal, !result.text.isEmpty else { return nil }
-        let punctuated = punctuator.addPunctuation(to: result.text)
+        let source = result.text
+        let punctuated = await Task.detached { [punctuator] in
+            punctuator.addPunctuation(to: source)
+        }.value
         return TranscriptionResult(text: punctuated, isFinal: true, emotion: result.emotion, sequence: result.sequence)
     }
 }

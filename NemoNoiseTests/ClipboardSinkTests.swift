@@ -2,31 +2,38 @@ import XCTest
 import AppKit
 @testable import NemoNoise
 
-final class ClipboardSinkTests: XCTestCase {
-    func testDeliversFinalToClipboard() async {
-        NSPasteboard.general.clearContents()
-        let sink = ClipboardSink()
+/// Each test uses its own uniquely named pasteboard, never the user's clipboard.
+nonisolated final class ClipboardSinkTests: XCTestCase {
+    @MainActor func testDeliversFinalToClipboard() async {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+
+        let sink = ClipboardSink(pasteboard: pasteboard)
         await sink.deliver(TranscriptionResult(text: "hello clipboard", isFinal: true, emotion: nil), isFinal: true)
-        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "hello clipboard")
+        XCTAssertEqual(pasteboard.string(forType: .string), "hello clipboard")
     }
 
-    func testIgnoresPartial() async {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("existing", forType: .string)
+    @MainActor func testIgnoresPartial() async {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        pasteboard.clearContents()
+        pasteboard.setString("existing", forType: .string)
 
-        let sink = ClipboardSink()
+        let sink = ClipboardSink(pasteboard: pasteboard)
         await sink.deliver(TranscriptionResult(text: "partial", isFinal: false, emotion: nil), isFinal: false)
 
-        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "existing")
+        XCTAssertEqual(pasteboard.string(forType: .string), "existing")
     }
 
-    func testIgnoresEmptyText() async {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("existing", forType: .string)
+    @MainActor func testIgnoresEmptyText() async {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        pasteboard.clearContents()
+        pasteboard.setString("existing", forType: .string)
 
-        let sink = ClipboardSink()
+        let sink = ClipboardSink(pasteboard: pasteboard)
         await sink.deliver(TranscriptionResult(text: "", isFinal: true, emotion: nil), isFinal: true)
 
-        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "existing")
+        XCTAssertEqual(pasteboard.string(forType: .string), "existing")
     }
 }

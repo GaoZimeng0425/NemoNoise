@@ -1,14 +1,14 @@
 import XCTest
 @testable import NemoNoise
 
-final class AppleSpeechFinalQueueTests: XCTestCase {
+nonisolated final class AppleSpeechFinalQueueTests: XCTestCase {
 
-    func testPopReturnsNilWhenEmpty() {
+    @MainActor func testPopReturnsNilWhenEmpty() {
         var queue = AppleSpeechFinalQueue()
         XCTAssertNil(queue.popNext())
     }
 
-    func testEnqueueThenPopReturnsFIFO() {
+    @MainActor func testEnqueueThenPopReturnsFIFO() {
         var queue = AppleSpeechFinalQueue()
         queue.enqueue(TranscriptionResult(text: "first.", isFinal: true, emotion: nil))
         queue.enqueue(TranscriptionResult(text: "second.", isFinal: true, emotion: nil))
@@ -17,7 +17,7 @@ final class AppleSpeechFinalQueueTests: XCTestCase {
         XCTAssertNil(queue.popNext())
     }
 
-    func testDrainConcatenatesAllPending() {
+    @MainActor func testDrainConcatenatesAllPending() {
         var queue = AppleSpeechFinalQueue()
         queue.enqueue(TranscriptionResult(text: "first.", isFinal: true, emotion: nil))
         queue.enqueue(TranscriptionResult(text: "second.", isFinal: true, emotion: nil))
@@ -28,12 +28,12 @@ final class AppleSpeechFinalQueueTests: XCTestCase {
         XCTAssertNil(queue.popNext(), "queue must be empty after drain")
     }
 
-    func testDrainReturnsNilWhenEmpty() {
+    @MainActor func testDrainReturnsNilWhenEmpty() {
         var queue = AppleSpeechFinalQueue()
         XCTAssertNil(queue.drainConcatenated())
     }
 
-    func testDrainOfSingleEntryReturnsItVerbatim() {
+    @MainActor func testDrainOfSingleEntryReturnsItVerbatim() {
         var queue = AppleSpeechFinalQueue()
         queue.enqueue(TranscriptionResult(text: "only.", isFinal: true, emotion: "joy"))
         let drained = queue.drainConcatenated()

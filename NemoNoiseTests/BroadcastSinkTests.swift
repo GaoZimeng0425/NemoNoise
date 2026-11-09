@@ -8,8 +8,8 @@ final class RecordingSink: Sink, @unchecked Sendable {
     }
 }
 
-final class BroadcastSinkTests: XCTestCase {
-    func testDeliversToAllSinks() async {
+nonisolated final class BroadcastSinkTests: XCTestCase {
+    @MainActor func testDeliversToAllSinks() async {
         let a = RecordingSink()
         let b = RecordingSink()
         let broadcast = BroadcastSink([a, b])
@@ -23,7 +23,7 @@ final class BroadcastSinkTests: XCTestCase {
         XCTAssertTrue(a.delivered.last?.isFinal == true)
     }
 
-    func testEmptyBroadcastIsNoop() async {
+    @MainActor func testEmptyBroadcastIsNoop() async {
         let broadcast = BroadcastSink([])
         await broadcast.deliver(TranscriptionResult(text: "x", isFinal: false, emotion: nil), isFinal: false)
         // No assertion needed; must not crash.

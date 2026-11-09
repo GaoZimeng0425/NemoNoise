@@ -12,7 +12,10 @@ import Foundation
 /// Rule: insert a single space at a boundary only when *both* sides are non-CJK;
 /// otherwise concatenate directly. Empty / whitespace-only pieces are dropped and
 /// each piece is edge-trimmed (callers already trim, this keeps the helper total).
-enum TranscriptJoin {
+///
+/// `nonisolated`: a pure function, also called from the Apple engine's
+/// lock-guarded state off the main actor.
+nonisolated enum TranscriptJoin {
     static func sentences(_ pieces: [String]) -> String {
         var out = ""
         for raw in pieces {

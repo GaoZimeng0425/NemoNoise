@@ -11,9 +11,8 @@ final class StubOverlayTarget: OverlayWriter {
     }
 }
 
-@MainActor
-final class OverlayProgressSinkTests: XCTestCase {
-    func testPartialUpdatesPartialText() async {
+nonisolated final class OverlayProgressSinkTests: XCTestCase {
+    @MainActor func testPartialUpdatesPartialText() async {
         let target = StubOverlayTarget()
         let sink = OverlayProgressSink(target: target)
         await sink.deliver(TranscriptionResult(text: "hi", isFinal: false, emotion: nil), isFinal: false)
@@ -21,15 +20,18 @@ final class OverlayProgressSinkTests: XCTestCase {
         XCTAssertEqual(target.promotedSegments, [])
     }
 
-    func testFinalDoesNotClearPartial() async {
+    @MainActor func testFinalPromotesSegmentAndClearsPartial() async {
         let target = StubOverlayTarget()
-        target.partialText = "kept"
+        target.partialText = "in-flight"
         let sink = OverlayProgressSink(target: target)
         await sink.deliver(TranscriptionResult(text: "final", isFinal: true, emotion: nil), isFinal: true)
-        XCTAssertEqual(target.partialText, "kept")
+        XCTAssertEqual(target.promotedSegments, ["final"],
+                       "isFinal is the segment boundary: its text becomes a confirmed segment")
+        XCTAssertEqual(target.partialText, "",
+                       "the finalized partial must not linger next to its confirmed segment")
     }
 
-    func testEmptyTextIgnored() async {
+    @MainActor func testEmptyTextIgnored() async {
         let target = StubOverlayTarget()
         target.partialText = "kept"
         let sink = OverlayProgressSink(target: target)
@@ -37,7 +39,7 @@ final class OverlayProgressSinkTests: XCTestCase {
         XCTAssertEqual(target.partialText, "kept")
     }
 
-    func testCumulativePartialDoesNotPromote() async {
+    @MainActor func testCumulativePartialDoesNotPromote() async {
         let target = StubOverlayTarget()
         let sink = OverlayProgressSink(target: target)
         await sink.deliver(TranscriptionResult(text: "hello", isFinal: false, emotion: nil), isFinal: false)
@@ -46,27 +48,24 @@ final class OverlayProgressSinkTests: XCTestCase {
         XCTAssertEqual(target.promotedSegments, [], "extending partial should NOT promote")
     }
 
-    func testSegmentResetPromotesPreviousPartial() async {
+    @MainActor func testNonExtendingPartialReplacesWithoutPromoting() async {
         let target = StubOverlayTarget()
         let sink = OverlayProgressSink(target: target)
         await sink.deliver(TranscriptionResult(text: "hello world", isFinal: false, emotion: nil), isFinal: false)
         await sink.deliver(TranscriptionResult(text: "second sentence", isFinal: false, emotion: nil), isFinal: false)
         XCTAssertEqual(target.partialText, "second sentence")
-        XCTAssertEqual(target.promotedSegments, ["hello world"], "non-extending new partial should promote the old one")
+        XCTAssertEqual(target.promotedSegments, [],
+                       "segment boundaries come only from isFinal; inferring them from partials double-fired with isFinal (duplicate sentences)")
     }
 
-    func testMidStreamFinalDoesNotMutateTargetState() async {
+    @MainActor func testMidStreamFinalCommitsOnceThenNextPartialStartsFresh() async {
         let target = StubOverlayTarget()
-        target.partialText = "in-flight partial"
         let sink = OverlayProgressSink(target: target)
-        // Simulating the new pipeline behavior: a mid-stream isFinal=true delivery
-        await sink.deliver(
-            TranscriptionResult(text: "sentence one.", isFinal: true, emotion: nil),
-            isFinal: true
-        )
-        XCTAssertEqual(target.partialText, "in-flight partial",
-                       "partialText must be preserved across mid-stream finals")
-        XCTAssertEqual(target.promotedSegments, [],
-                       "mid-stream finals must NOT promote partial segments via the dictation sink")
+        await sink.deliver(TranscriptionResult(text: "sentence one", isFinal: false, emotion: nil), isFinal: false)
+        await sink.deliver(TranscriptionResult(text: "sentence one.", isFinal: true, emotion: nil), isFinal: true)
+        await sink.deliver(TranscriptionResult(text: "sentence two", isFinal: false, emotion: nil), isFinal: false)
+        XCTAssertEqual(target.promotedSegments, ["sentence one."],
+                       "each mid-stream final is committed exactly once")
+        XCTAssertEqual(target.partialText, "sentence two")
     }
 }

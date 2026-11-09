@@ -43,14 +43,14 @@ final class MockASREngine: ASREngine, @unchecked Sendable {
     }
 }
 
-final class ASREngineMockTests: XCTestCase {
+nonisolated final class ASREngineMockTests: XCTestCase {
 
-    func testMockConformsToProtocol() {
+    @MainActor func testMockConformsToProtocol() {
         let mock: any ASREngine = MockASREngine()
         XCTAssertTrue(mock.isStreaming)
     }
 
-    func testIsStreamingProperty() {
+    @MainActor func testIsStreamingProperty() {
         let streamingMock = MockASREngine()
         streamingMock.isStreaming = true
         XCTAssertTrue(streamingMock.isStreaming)
@@ -60,7 +60,7 @@ final class ASREngineMockTests: XCTestCase {
         XCTAssertFalse(nonStreamingMock.isStreaming)
     }
 
-    func testFeedChunkReturnsResult() async throws {
+    @MainActor func testFeedChunkReturnsResult() async throws {
         let mock = MockASREngine()
         let samples: [Float] = [0.1, 0.2, 0.3, 0.4]
         let result = try await mock.feedChunk(samples, sampleRate: 16000)
@@ -71,7 +71,7 @@ final class ASREngineMockTests: XCTestCase {
         XCTAssertEqual(mock.lastFeedSampleRate, 16000)
     }
 
-    func testFinishReturnsFinalResult() async throws {
+    @MainActor func testFinishReturnsFinalResult() async throws {
         let mock = MockASREngine()
         let result = try await mock.finish()
         XCTAssertEqual(result.text, "mock final")
@@ -80,13 +80,13 @@ final class ASREngineMockTests: XCTestCase {
         XCTAssertEqual(mock.finishCallCount, 1)
     }
 
-    func testReset() {
+    @MainActor func testReset() {
         let mock = MockASREngine()
         mock.reset()
         XCTAssertEqual(mock.resetCallCount, 1)
     }
 
-    func testMultipleFeedChunks() async throws {
+    @MainActor func testMultipleFeedChunks() async throws {
         let mock = MockASREngine()
         _ = try await mock.feedChunk([0.1], sampleRate: 16000)
         _ = try await mock.feedChunk([0.2], sampleRate: 16000)
@@ -95,39 +95,41 @@ final class ASREngineMockTests: XCTestCase {
     }
 }
 
-final class ShouldTranslateTests: XCTestCase {
+nonisolated final class ShouldTranslateTests: XCTestCase {
 
-    private let controller = TranslationController()
+    /// Fresh per use (`shouldTranslate` is stateless). A stored default would
+    /// run TranslationController's main-actor init in XCTest's nonisolated init.
+    @MainActor private var controller: TranslationController { TranslationController() }
 
-    func testPureEnglishText() {
+    @MainActor func testPureEnglishText() {
         XCTAssertTrue(controller.shouldTranslate("Hello world this is a test"))
     }
 
-    func testPureChineseText() {
+    @MainActor func testPureChineseText() {
         XCTAssertFalse(controller.shouldTranslate("你好世界这是一个测试"))
     }
 
-    func testMixedMostlyEnglish() {
+    @MainActor func testMixedMostlyEnglish() {
         XCTAssertTrue(controller.shouldTranslate("Hello 你好 world"))
     }
 
-    func testMixedMostlyChinese() {
+    @MainActor func testMixedMostlyChinese() {
         XCTAssertFalse(controller.shouldTranslate("你好世界这是一个测试 hello"))
     }
 
-    func testEmptyString() {
+    @MainActor func testEmptyString() {
         XCTAssertFalse(controller.shouldTranslate(""))
     }
 
-    func testNumbersOnly() {
+    @MainActor func testNumbersOnly() {
         XCTAssertFalse(controller.shouldTranslate("12345"))
     }
 
-    func testSingleEnglishWord() {
+    @MainActor func testSingleEnglishWord() {
         XCTAssertTrue(controller.shouldTranslate("Hello"))
     }
 
-    func testSingleChineseWord() {
+    @MainActor func testSingleChineseWord() {
         XCTAssertFalse(controller.shouldTranslate("你好"))
     }
 }

@@ -1,15 +1,15 @@
 import XCTest
 @testable import NemoNoise
 
-final class NNExceptionCatcherTests: XCTestCase {
+nonisolated final class NNExceptionCatcherTests: XCTestCase {
 
-    func testNoExceptionRunsBlockAndDoesNotThrow() {
+    @MainActor func testNoExceptionRunsBlockAndDoesNotThrow() {
         var ran = false
         XCTAssertNoThrow(try catchingObjCException { ran = true })
         XCTAssertTrue(ran)
     }
 
-    func testNSExceptionIsConvertedToSwiftError() {
+    @MainActor func testNSExceptionIsConvertedToSwiftError() {
         XCTAssertThrowsError(try catchingObjCException {
             NSException(name: .genericException, reason: "boom", userInfo: nil).raise()
         }) { error in

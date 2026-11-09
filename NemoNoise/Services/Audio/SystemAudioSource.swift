@@ -1,15 +1,16 @@
 import AVFoundation
 import CoreMedia
+import os
 import ScreenCaptureKit
 
 final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked Sendable {
     private let continuationBox = ContinuationBox()
     private var stream: SCStream?
-    private let sourceSampleRate: Double = 48000
-    private let targetSampleRate: Double = 16000
-    private lazy var resampler: AudioResampler? = AudioResampler(sourceRate: sourceSampleRate, targetRate: targetSampleRate)
-    private var chunkCount: Int = 0
-    private var lastLogTime: Date = .distantPast
+    private static let sourceSampleRate: Double = 48000
+    private static let targetSampleRate: Double = 16000
+    // Used only from the SCStream sample-handler queue (the output callback).
+    private let resampler = AudioResampler(sourceRate: SystemAudioSource.sourceSampleRate, targetRate: SystemAudioSource.targetSampleRate)
+    private let logState = OSAllocatedUnfairLock(initialState: (chunkCount: 0, lastLogTime: Date.distantPast))
     private let analyzer = SpectrumAnalyzer(binCount: 16, sampleRate: 16000)
 
     func start() async throws -> AsyncStream<AudioChunk> {
@@ -26,7 +27,7 @@ final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked
 
         let config = SCStreamConfiguration()
         config.capturesAudio = true
-        config.sampleRate = Int(sourceSampleRate)
+        config.sampleRate = Int(Self.sourceSampleRate)
         config.channelCount = 1
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
@@ -35,9 +36,14 @@ final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked
         let audioStream = AsyncStream<AudioChunk> { [weak self] continuation in
             self?.continuationBox.value = continuation
             continuation.onTermination = { @Sendable [weak self] _ in
-                Task { [weak self] in
-                    try? await self?.stream?.stopCapture()
-                    self?.stream = nil
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    // Take the stream out synchronously BEFORE awaiting: reading
+                    // self.stream after stopCapture() returns could instead clear
+                    // a newer session's reference (stop/restart race).
+                    let stream = self.stream
+                    self.stream = nil
+                    try? await stream?.stopCapture()
                 }
             }
         }
@@ -50,16 +56,24 @@ final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked
 
     func stop() {
         continuationBox.value?.finish()
-        Task { [weak self] in
-            try? await self?.stream?.stopCapture()
-            self?.stream = nil
+        // Extract the current stream on the main actor and hand the Task an
+        // owned reference — never read self.stream inside the Task after
+        // stopCapture() returns, or a quick restart stores a NEW stream here
+        // and this stale teardown nulls it.
+        let stream = self.stream
+        self.stream = nil
+        Task {
+            try? await stream?.stopCapture()
         }
         LogService.info("System audio capture stopped", category: "SystemAudioCapture")
     }
 
     // MARK: - SCStreamOutput
 
-    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+    // `nonisolated`: ScreenCaptureKit calls this on the sample-handler queue.
+    // SCStreamOutput isn't Sendable, so a main-actor witness would be asserted
+    // (and trap) at runtime under Swift 6.
+    nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio else { return }
         guard let samples = extractFloatSamples(from: sampleBuffer) else {
             LogService.warn("Failed to extract audio samples from CMSampleBuffer", category: "SystemAudioCapture")
@@ -74,17 +88,21 @@ final class SystemAudioSource: NSObject, AudioSource, SCStreamOutput, @unchecked
         let spectrum = analyzer.analyze(resampled)
         continuationBox.value?.yield(AudioChunk(samples: resampled, rmsLevel: rms, spectrum: spectrum))
 
-        chunkCount += 1
-        let now = Date()
-        if now.timeIntervalSince(lastLogTime) >= 2.0 {
-            LogService.info("Audio capture active: \(chunkCount) chunks, rms=\(String(format: "%.4f", rms))", category: "SystemAudioCapture")
-            lastLogTime = now
+        let logCount: Int? = logState.withLock { state in
+            state.chunkCount += 1
+            let now = Date()
+            guard now.timeIntervalSince(state.lastLogTime) >= 2.0 else { return nil }
+            state.lastLogTime = now
+            return state.chunkCount
+        }
+        if let logCount {
+            LogService.info("Audio capture active: \(logCount) chunks, rms=\(String(format: "%.4f", rms))", category: "SystemAudioCapture")
         }
     }
 
     // MARK: - Audio Processing
 
-    private func extractFloatSamples(from sampleBuffer: CMSampleBuffer) -> [Float]? {
+    nonisolated private func extractFloatSamples(from sampleBuffer: CMSampleBuffer) -> [Float]? {
         guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return nil }
         let length = CMBlockBufferGetDataLength(blockBuffer)
         let sampleCount = length / MemoryLayout<Float>.size

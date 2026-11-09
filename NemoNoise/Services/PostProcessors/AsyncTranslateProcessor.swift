@@ -1,8 +1,10 @@
 import Foundation
 
 /// Fire-and-forget translation. Returns the source English synchronously
-/// so the sink can render it immediately; spawns a detached Task that
-/// translates and back-fills Chinese via `writer.applyTranslation`.
+/// so the sink can render it immediately; spawns a Task that translates and
+/// back-fills Chinese via `writer.applyTranslation`. The Task stays on the main
+/// actor: `service` is main-actor-isolated anyway, and awaiting it never
+/// blocks the main thread.
 /// See `docs/superpowers/specs/2026-05-17-streaming-translation-realtime-design.md`.
 @MainActor
 final class AsyncTranslateProcessor: PostProcessor {
@@ -28,7 +30,7 @@ final class AsyncTranslateProcessor: PostProcessor {
         }
         let source = result.text
         beginTranslating()
-        Task.detached { [service, weak writer, weak self] in
+        Task { [service, weak writer, weak self] in
             var translated: String? = nil
             do {
                 translated = try await service.translate(source)

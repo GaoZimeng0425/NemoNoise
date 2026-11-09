@@ -1,5 +1,6 @@
 import Foundation
-import Translation
+// `TranslationSession` isn't annotated Sendable yet; keep using it as before.
+@preconcurrency import Translation
 
 protocol TranslationService {
     func translate(_ text: String) async throws -> String

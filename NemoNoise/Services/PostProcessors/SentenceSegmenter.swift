@@ -7,8 +7,8 @@ import Foundation
 ///
 /// Single-consumer: the pipeline owns the instance and calls `process` serially.
 final class SentenceSegmenter: PostProcessor, @unchecked Sendable {
-    private let silenceThreshold: TimeInterval = 0.8
-    private let maxSegmentDuration: TimeInterval = 6.0
+    private let silenceThreshold: TimeInterval
+    private let maxSegmentDuration: TimeInterval
     private let sentenceEnders: Set<Character> = [".", "?", "!", "。", "？", "！"]
 
     private let engine: any ASREngine
@@ -20,8 +20,15 @@ final class SentenceSegmenter: PostProcessor, @unchecked Sendable {
     private var lastPartialChangeTime: Date
     private var lastPartialText: String = ""
 
-    init(engine: any ASREngine, now: @escaping @Sendable () -> Date = { Date() }) {
+    /// `silenceThreshold` / `maxSegmentDuration` default to the translation
+    /// tuning; meeting mode passes longer values (0.8 s / 12 s).
+    init(engine: any ASREngine,
+         silenceThreshold: TimeInterval = 0.8,
+         maxSegmentDuration: TimeInterval = 6.0,
+         now: @escaping @Sendable () -> Date = { Date() }) {
         self.engine = engine
+        self.silenceThreshold = silenceThreshold
+        self.maxSegmentDuration = maxSegmentDuration
         self.now = now
         let n = now()
         self.segmentStartTime = n
@@ -42,6 +49,18 @@ final class SentenceSegmenter: PostProcessor, @unchecked Sendable {
             )
             resetSegmentState()
             return out
+        }
+
+        // The engine owns sentence boundaries: show its hypothesis whole and
+        // wait for its final (see `ASREngine.emitsSentenceFinals`).
+        if engine.emitsSentenceFinals {
+            return TranscriptionResult(
+                text: result.text,
+                isFinal: false,
+                emotion: result.emotion,
+                originalText: result.originalText,
+                sequence: currentSeq + 1
+            )
         }
 
         let fullCount = result.text.count

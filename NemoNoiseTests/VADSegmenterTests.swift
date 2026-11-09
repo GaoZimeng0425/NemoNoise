@@ -1,11 +1,11 @@
 import XCTest
 @testable import NemoNoise
 
-final class VADSegmenterTests: XCTestCase {
+nonisolated final class VADSegmenterTests: XCTestCase {
     private let W = 512
 
     /// Small thresholds so tests are short. 32 ms/window.
-    private func cfg() -> VADConfig {
+    @MainActor private func cfg() -> VADConfig {
         var c = VADConfig()
         c.windowSize = 512
         c.preSpeechWindows = 2
@@ -15,16 +15,16 @@ final class VADSegmenterTests: XCTestCase {
         return c
     }
 
-    private func win(_ v: Float) -> [Float] { [Float](repeating: v, count: 512) }
+    @MainActor private func win(_ v: Float) -> [Float] { [Float](repeating: v, count: 512) }
 
-    func testNonSpeechNeverEmitsSegment() {
+    @MainActor func testNonSpeechNeverEmitsSegment() {
         let seg = VADSegmenter(config: cfg())
         for _ in 0..<5 {
             XCTAssertEqual(seg.step(window: win(0.0), isSpeech: false), .buffering)
         }
     }
 
-    func testSpeechThenSilenceEmitsSegment() {
+    @MainActor func testSpeechThenSilenceEmitsSegment() {
         let seg = VADSegmenter(config: cfg())
         XCTAssertEqual(seg.step(window: win(0.5), isSpeech: true), .buffering)   // onset
         XCTAssertEqual(seg.step(window: win(0.5), isSpeech: true), .buffering)   // 2nd speech
@@ -37,7 +37,7 @@ final class VADSegmenterTests: XCTestCase {
         XCTAssertEqual(samples.count, 4 * W)
     }
 
-    func testOnsetPrependsPreSpeechBuffer() {
+    @MainActor func testOnsetPrependsPreSpeechBuffer() {
         let seg = VADSegmenter(config: cfg())   // preSpeechWindows = 2
         _ = seg.step(window: win(0.1), isSpeech: false)
         _ = seg.step(window: win(0.2), isSpeech: false)
@@ -53,7 +53,7 @@ final class VADSegmenterTests: XCTestCase {
         XCTAssertEqual(Array(s[2*W..<3*W]), win(0.9))             // onset window
     }
 
-    func testShortBlipIsDiscarded() {
+    @MainActor func testShortBlipIsDiscarded() {
         // minSpeech requires 3 windows so a single-window blip is rejected.
         var c = cfg(); c.minSpeechMs = 96   // 3 windows
         let s = VADSegmenter(config: c)
@@ -63,7 +63,7 @@ final class VADSegmenterTests: XCTestCase {
         XCTAssertEqual(s.step(window: win(0.0), isSpeech: false), .buffering)
     }
 
-    func testInternalPauseDoesNotSplit() {
+    @MainActor func testInternalPauseDoesNotSplit() {
         let seg = VADSegmenter(config: cfg())   // minSilence = 2 windows
         _ = seg.step(window: win(0.5), isSpeech: true)    // onset
         _ = seg.step(window: win(0.0), isSpeech: false)   // 1 silence (< 2, no split)
@@ -75,7 +75,7 @@ final class VADSegmenterTests: XCTestCase {
         XCTAssertEqual(s.count, 5 * W)   // onset + silence + speech + 2 silence
     }
 
-    func testMaxSegmentForceCut() {
+    @MainActor func testMaxSegmentForceCut() {
         let seg = VADSegmenter(config: cfg())   // maxSegment = 10 windows
         var event: SegmenterEvent = .buffering
         for _ in 0..<10 {
@@ -87,7 +87,7 @@ final class VADSegmenterTests: XCTestCase {
         XCTAssertEqual(s.count, 10 * W)
     }
 
-    func testFlushReturnsOpenSegmentThenNil() {
+    @MainActor func testFlushReturnsOpenSegmentThenNil() {
         let seg = VADSegmenter(config: cfg())
         _ = seg.step(window: win(0.5), isSpeech: true)   // onset
         _ = seg.step(window: win(0.5), isSpeech: true)   // 2nd speech, no endpoint
@@ -96,21 +96,21 @@ final class VADSegmenterTests: XCTestCase {
         XCTAssertNil(seg.flush())                        // already drained
     }
 
-    func testFlushDiscardsTooShortSegment() {
+    @MainActor func testFlushDiscardsTooShortSegment() {
         var c = cfg(); c.minSpeechMs = 96   // 3 windows
         let seg = VADSegmenter(config: c)
         _ = seg.step(window: win(0.5), isSpeech: true)   // 1 speech window
         XCTAssertNil(seg.flush())                        // < minSpeech -> nil
     }
 
-    func testResetClearsState() {
+    @MainActor func testResetClearsState() {
         let seg = VADSegmenter(config: cfg())
         _ = seg.step(window: win(0.5), isSpeech: true)
         seg.reset()
         XCTAssertNil(seg.flush())
     }
 
-    func testReOnsetAfterDiscardedBlip() {
+    @MainActor func testReOnsetAfterDiscardedBlip() {
         // minSpeech = 3 windows, minSilence = 2 windows
         var c = cfg(); c.minSpeechMs = 96; c.minSilenceMs = 64
         let seg = VADSegmenter(config: c)
@@ -132,7 +132,7 @@ final class VADSegmenterTests: XCTestCase {
         XCTAssertEqual(samples.count, 5 * W)
     }
 
-    func testPreSpeechBufferIsCapped() {
+    @MainActor func testPreSpeechBufferIsCapped() {
         // preSpeechWindows = 2; feed 4 non-speech windows, only last 2 should be kept
         let seg = VADSegmenter(config: cfg())
         _ = seg.step(window: win(0.1), isSpeech: false)  // pre 1 (will be evicted)

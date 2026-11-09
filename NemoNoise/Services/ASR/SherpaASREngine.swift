@@ -3,14 +3,13 @@ import Foundation
 final class SherpaASREngine: ASREngine, @unchecked Sendable {
     private let recognizer: SherpaOfflineRecognizer
     private var accumulated: [Float] = []
-    private var lastDecodeCount: Int = 0
 
     let isStreaming = false
     // SenseVoice runs with use_itn=1 and emits its own punctuation, so the
     // CT-Transformer must not re-punctuate (it would double/corrupt marks).
     let emitsPunctuation = true
 
-    init(modelDir: URL, language: String = LanguagePreference.current.sherpaCode) throws {
+    nonisolated init(modelDir: URL, language: String = LanguagePreference.current.sherpaCode) throws {
         let modelPath  = modelDir.appendingPathComponent("model.int8.onnx").path
         let tokensPath = modelDir.appendingPathComponent("tokens.txt").path
         let start = ContinuousClock.now
@@ -23,25 +22,12 @@ final class SherpaASREngine: ASREngine, @unchecked Sendable {
         LogService.info("Model loaded, language: \(language), init duration: \(elapsed.description)", category: "SherpaASREngine")
     }
 
+    /// Accumulate-only (#7): this engine is always driven through
+    /// `VADSegmentingEngine`, which decodes each completed segment via
+    /// `finish()`. Decoding here too meant every segment was inferred twice.
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
         accumulated.append(contentsOf: samples)
-        let newSamples = accumulated.count - lastDecodeCount
-        guard newSamples >= 16000 else {
-            return TranscriptionResult(text: "", isFinal: false, emotion: nil)
-        }
-
-        lastDecodeCount = accumulated.count
-        let snapshot = accumulated
-        let decodeStart = ContinuousClock.now
-
-        let result = await Task.detached { [recognizer] in
-            recognizer.decode(samples: snapshot, sampleRate: 16000)
-        }.value
-
-        let decodeElapsed = ContinuousClock.now - decodeStart
-        LogService.debug("Decode: \(result.text.count) chars, duration: \(decodeElapsed.description), samples: \(snapshot.count)", category: "SherpaASREngine")
-
-        return TranscriptionResult(text: result.text, isFinal: false, emotion: emotionEmoji(result.emotion))
+        return TranscriptionResult(text: "", isFinal: false, emotion: nil)
     }
 
     func finish() async throws -> TranscriptionResult {
@@ -60,7 +46,6 @@ final class SherpaASREngine: ASREngine, @unchecked Sendable {
 
     func reset() {
         accumulated.removeAll(keepingCapacity: true)
-        lastDecodeCount = 0
     }
 
     private func emotionEmoji(_ emotion: String) -> String? {

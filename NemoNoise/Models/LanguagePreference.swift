@@ -1,6 +1,6 @@
 import Foundation
 
-enum LanguagePreference: String, CaseIterable, Codable, Identifiable {
+nonisolated enum LanguagePreference: String, CaseIterable, Codable, Identifiable {
     case auto = "Auto-detect"
     case zh = "Chinese (中文)"
     case en = "English"

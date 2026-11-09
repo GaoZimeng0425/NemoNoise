@@ -24,6 +24,10 @@ final class VADSegmentingEngine: ASREngine, @unchecked Sendable {
     private let segmenter: VADSegmenter
     private let windowSize: Int
     private var leftover: [Float] = []
+    /// Samples run through the segmenter this session. A segment is
+    /// contiguous audio ending at the window that closed it, so its start is
+    /// `consumed - segment.count`.
+    private var consumed = 0
 
     let isStreaming = true
 
@@ -41,35 +45,46 @@ final class VADSegmentingEngine: ASREngine, @unchecked Sendable {
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
         leftover.append(contentsOf: samples)
         var pieces: [String] = []
+        var firstStart: TimeInterval?
         while leftover.count >= windowSize {
             let window = Array(leftover.prefix(windowSize))
             leftover.removeFirst(windowSize)
+            consumed += windowSize
             let isSpeech = detector.isSpeech(window)
             if case .segment(let seg) = segmenter.step(window: window, isSpeech: isSpeech) {
                 let text = await decodeSegment(seg)
-                if !text.isEmpty { pieces.append(text) }
+                if !text.isEmpty {
+                    pieces.append(text)
+                    if firstStart == nil { firstStart = start(of: seg) }
+                }
             }
         }
         guard !pieces.isEmpty else {
             return TranscriptionResult(text: "", isFinal: false, emotion: nil)
         }
-        return TranscriptionResult(text: TranscriptJoin.sentences(pieces), isFinal: true, emotion: nil)
+        return TranscriptionResult(text: TranscriptJoin.sentences(pieces), isFinal: true, emotion: nil,
+                                   audioStart: firstStart)
     }
 
     func finish() async throws -> TranscriptionResult {
         defer { reset() }
         if let seg = segmenter.flush() {
             let text = await decodeSegment(seg)
-            return TranscriptionResult(text: text, isFinal: true, emotion: nil)
+            return TranscriptionResult(text: text, isFinal: true, emotion: nil, audioStart: start(of: seg))
         }
         return TranscriptionResult(text: "", isFinal: true, emotion: nil)
     }
 
     func reset() {
         leftover.removeAll(keepingCapacity: true)
+        consumed = 0
         segmenter.reset()
         detector.reset()
         inner.reset()
+    }
+
+    private func start(of segment: [Float]) -> TimeInterval {
+        Double(max(0, consumed - segment.count)) / 16000
     }
 
     /// Decode one segment through the inner offline engine via the standard

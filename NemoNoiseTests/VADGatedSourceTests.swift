@@ -17,23 +17,23 @@ private final class ScriptedSpeechDetector: VADSpeechDetector {
     func reset() { i = 0 }
 }
 
-final class VADGatedSourceTests: XCTestCase {
-    private func samples(_ v: Float, _ count: Int) -> [Float] { [Float](repeating: v, count: count) }
+nonisolated final class VADGatedSourceTests: XCTestCase {
+    @MainActor private func samples(_ v: Float, _ count: Int) -> [Float] { [Float](repeating: v, count: count) }
 
-    func testConformsToAudioSource() {
+    @MainActor func testConformsToAudioSource() {
         let _: any AudioSource = VADGatedSource(
             inner: MockAudioSource(),
             detector: EnergySpeechDetector()
         )
     }
 
-    func testReturnsNilWhenLessThanOneWindow() {
+    @MainActor func testReturnsNilWhenLessThanOneWindow() {
         let src = VADGatedSource(inner: MockAudioSource(),
                                  detector: ScriptedSpeechDetector(decisions: [true]))
         XCTAssertNil(src.process(samples(0.5, 300)))   // < 512
     }
 
-    func testSilenceIsGatedToZeros() {
+    @MainActor func testSilenceIsGatedToZeros() {
         let src = VADGatedSource(inner: MockAudioSource(),
                                  detector: ScriptedSpeechDetector(decisions: [false, false]))
         let out = src.process(samples(0.5, 1024))      // 2 windows, both non-speech
@@ -42,7 +42,7 @@ final class VADGatedSourceTests: XCTestCase {
         XCTAssertTrue(out!.samples.allSatisfy { $0 == 0 })
     }
 
-    func testOnsetPrependsPreSpeechRealAudio() {
+    @MainActor func testOnsetPrependsPreSpeechRealAudio() {
         // window0 = non-speech (buffered + emits zeros), window1 = speech onset
         // (flush buffered real window0 + real window1). Emitted = 512 zeros +
         // 512 real (w0) + 512 real (w1) = 1536 samples.
@@ -55,7 +55,7 @@ final class VADGatedSourceTests: XCTestCase {
         XCTAssertEqual(nonZero, 1024)   // the two real windows survived
     }
 
-    func testLeftoverCarriesAcrossCalls() {
+    @MainActor func testLeftoverCarriesAcrossCalls() {
         let src = VADGatedSource(inner: MockAudioSource(),
                                  detector: ScriptedSpeechDetector(decisions: [false, false]))
         XCTAssertNil(src.process(samples(0.0, 300)))    // 300 buffered, no window

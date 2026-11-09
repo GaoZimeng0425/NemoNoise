@@ -1,8 +1,8 @@
 import XCTest
 @testable import NemoNoise
 
-final class TextCorrectionProcessorTests: XCTestCase {
-    private func corrected(_ text: String, _ rules: [CorrectionRule]) async -> String? {
+nonisolated final class TextCorrectionProcessorTests: XCTestCase {
+    @MainActor private func corrected(_ text: String, _ rules: [CorrectionRule]) async -> String? {
         let p = TextCorrectionProcessor(rules: rules)
         let r = try? await p.process(
             TranscriptionResult(text: text, isFinal: true, emotion: nil), isFinal: true
@@ -12,12 +12,12 @@ final class TextCorrectionProcessorTests: XCTestCase {
 
     // MARK: - CJK-mangled term replacement
 
-    func testReplacesCJKMangledTerm() async {
+    @MainActor func testReplacesCJKMangledTerm() async {
         let out = await corrected("这个u爱做得不错。", [CorrectionRule(from: "u爱", to: "UI")])
         XCTAssertEqual(out, "这个UI做得不错。")
     }
 
-    func testLongerRuleAppliesBeforeShorterPrefix() async {
+    @MainActor func testLongerRuleAppliesBeforeShorterPrefix() async {
         let out = await corrected("调用诶批艾接口", [
             CorrectionRule(from: "诶", to: "A"),
             CorrectionRule(from: "诶批艾", to: "API"),
@@ -27,7 +27,7 @@ final class TextCorrectionProcessorTests: XCTestCase {
 
     // MARK: - Pass-through
 
-    func testNoMatchReturnsNil() async throws {
+    @MainActor func testNoMatchReturnsNil() async throws {
         let p = TextCorrectionProcessor(rules: [CorrectionRule(from: "u爱", to: "UI")])
         let res = try await p.process(
             TranscriptionResult(text: "今天天气不错。", isFinal: true, emotion: nil), isFinal: true
@@ -35,7 +35,7 @@ final class TextCorrectionProcessorTests: XCTestCase {
         XCTAssertNil(res)
     }
 
-    func testPartialResultsAreIgnored() async throws {
+    @MainActor func testPartialResultsAreIgnored() async throws {
         let p = TextCorrectionProcessor(rules: [CorrectionRule(from: "u爱", to: "UI")])
         let res = try await p.process(
             TranscriptionResult(text: "u爱", isFinal: false, emotion: nil), isFinal: false
@@ -45,12 +45,12 @@ final class TextCorrectionProcessorTests: XCTestCase {
 
     // MARK: - ASCII keys match as a standalone token only
 
-    func testLatinKeyNormalisesCaseAdjacentToCJK() async {
+    @MainActor func testLatinKeyNormalisesCaseAdjacentToCJK() async {
         let out = await corrected("ui设计很重要。", [CorrectionRule(from: "ui", to: "UI")])
         XCTAssertEqual(out, "UI设计很重要。")
     }
 
-    func testLatinKeyDoesNotMatchInsideLargerWord() async throws {
+    @MainActor func testLatinKeyDoesNotMatchInsideLargerWord() async throws {
         let p = TextCorrectionProcessor(rules: [CorrectionRule(from: "ui", to: "UI")])
         let res = try await p.process(
             TranscriptionResult(text: "building blocks", isFinal: true, emotion: nil), isFinal: true
@@ -60,7 +60,7 @@ final class TextCorrectionProcessorTests: XCTestCase {
 
     // MARK: - Metadata preserved
 
-    func testEmotionAndSequencePreserved() async throws {
+    @MainActor func testEmotionAndSequencePreserved() async throws {
         let p = TextCorrectionProcessor(rules: [CorrectionRule(from: "u爱", to: "UI")])
         let res = try await p.process(
             TranscriptionResult(text: "u爱", isFinal: true, emotion: "happy", sequence: 7), isFinal: true
@@ -72,7 +72,7 @@ final class TextCorrectionProcessorTests: XCTestCase {
 
     // MARK: - Merge & presets
 
-    func testMergeUserOverridesPresetAndAppendsNew() {
+    @MainActor func testMergeUserOverridesPresetAndAppendsNew() {
         let presets = [CorrectionRule(from: "u爱", to: "UI"), CorrectionRule(from: "诶批艾", to: "API")]
         let user = [CorrectionRule(from: "u爱", to: "ui"), CorrectionRule(from: "瑞艾克特", to: "React")]
         let merged = TextCorrections.merge(presets: presets, user: user)
@@ -82,7 +82,7 @@ final class TextCorrectionProcessorTests: XCTestCase {
         XCTAssertTrue(merged.contains(CorrectionRule(from: "瑞艾克特", to: "React"))) // new appended
     }
 
-    func testPresetsIncludeReportedCase() {
+    @MainActor func testPresetsIncludeReportedCase() {
         XCTAssertFalse(TextCorrections.presets.isEmpty)
         XCTAssertTrue(TextCorrections.presets.contains { $0.from == "u爱" && $0.to == "UI" })
     }

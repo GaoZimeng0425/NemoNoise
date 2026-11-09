@@ -13,7 +13,7 @@ final class Qwen3ASREngine: ASREngine, @unchecked Sendable {
     // the CT-Transformer on top would double/corrupt it (`。。`, `？？`).
     let emitsPunctuation = true
 
-    init(modelDir: URL) throws {
+    nonisolated init(modelDir: URL) throws {
         let convFrontend = modelDir.appendingPathComponent("conv_frontend.onnx").path
         let encoder      = modelDir.appendingPathComponent("encoder.int8.onnx").path
         let decoder      = modelDir.appendingPathComponent("decoder.int8.onnx").path

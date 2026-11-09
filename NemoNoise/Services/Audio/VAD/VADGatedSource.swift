@@ -19,6 +19,11 @@ final class VADGatedSource: AudioSource, @unchecked Sendable {
     private let windowSize: Int
     private let analyzer = SpectrumAnalyzer(binCount: 16, sampleRate: 16000)
     private var leftover: [Float] = []
+    /// Per-session VAD counters — logged at stream end to discriminate
+    /// "mic delivered silence" (speech≈0) from "audio was speech but the
+    /// engine returned nothing".
+    private var totalWindows = 0
+    private var speechWindows = 0
 
     init(inner: any AudioSource, detector: any VADSpeechDetector, config: VADConfig = .default) {
         self.inner = inner
@@ -31,6 +36,8 @@ final class VADGatedSource: AudioSource, @unchecked Sendable {
         detector.reset()
         gate.reset()
         leftover.removeAll(keepingCapacity: true)
+        totalWindows = 0
+        speechWindows = 0
         let innerStream = try await inner.start()
 
         return AsyncStream<AudioChunk> { continuation in
@@ -40,6 +47,10 @@ final class VADGatedSource: AudioSource, @unchecked Sendable {
                         continuation.yield(out)
                     }
                 }
+                LogService.info(
+                    "VAD summary — windows=\(self.totalWindows) speech=\(self.speechWindows)",
+                    category: "VAD"
+                )
                 continuation.finish()
             }
             continuation.onTermination = { _ in task.cancel() }
@@ -58,6 +69,8 @@ final class VADGatedSource: AudioSource, @unchecked Sendable {
             let window = Array(leftover.prefix(windowSize))
             leftover.removeFirst(windowSize)
             let speech = detector.isSpeech(window)
+            totalWindows += 1
+            if speech { speechWindows += 1 }
             for w in gate.step(window: window, isSpeech: speech) {
                 emitted.append(contentsOf: w)
             }

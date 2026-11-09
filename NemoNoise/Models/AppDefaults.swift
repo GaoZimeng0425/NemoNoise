@@ -2,7 +2,7 @@ import Foundation
 
 /// Centralised string keys used with `UserDefaults` / `@AppStorage`.
 /// Add new keys here so they are discoverable and don't drift via typos.
-enum AppDefaults {
+nonisolated enum AppDefaults {
     enum Keys {
         static let engineType = "engineType"
         static let recordingMode = "recordingMode"
@@ -17,6 +17,14 @@ enum AppDefaults {
         /// JSON-encoded `[LexiconEntry]` for recognition-side biasing.
         /// Read by `UserLexicon.active()`.
         static let vocabularyTerms = "vocabularyTerms"
+        /// Set once the process tap has delivered real (non-zero) system audio.
+        /// Distinguishes "quiet meeting" from "System Audio Recording permission
+        /// denied" — denied taps deliver exact digital zeros with no error.
+        /// Read by `ProcessTapAudioSource`.
+        static let systemAudioTapProven = "systemAudioTapProven"
+        /// Opt-in: refine the final dictation transcript with Apple
+        /// Intelligence before insertion (`TranscriptCleanupService`).
+        static let llmTranscriptCleanup = "llmTranscriptCleanup"
         /// Legacy hotkey key — read once by `HotkeyMigration` and then deleted.
         static let legacyHotkeyOption = "hotkeyOption"
     }

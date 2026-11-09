@@ -5,22 +5,13 @@ import SwiftUI
 struct MenuBarPopoverView: View {
     @Environment(RecordingController.self) private var controller
     @Environment(TranslationController.self) private var translationController
+    @Environment(MeetingController.self) private var meetingController
     @Environment(PipelineProvider.self) private var pipelineProvider
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
     let updater: SPUUpdater
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "waveform")
-                    .foregroundStyle(.tint)
-                Text("NemoNoise")
-                    .font(.headline)
-                Spacer()
-            }
-
-            Divider()
-
             HStack(spacing: 6) {
                 Circle()
                     .fill(statusColor)
@@ -28,6 +19,10 @@ struct MenuBarPopoverView: View {
                 Text(statusText)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                Spacer()
+                Text(controller.hotkeyDisplayText)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
 
             if let warning = engineFallbackWarning {
@@ -55,10 +50,6 @@ struct MenuBarPopoverView: View {
                     .foregroundStyle(.red)
             }
 
-            Text(controller.hotkeyDisplayText)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-
             Divider()
 
             HStack(spacing: 8) {
@@ -74,26 +65,47 @@ struct MenuBarPopoverView: View {
 
             Divider()
 
-            HStack {
-                Button("Check for Updates…") { updater.checkForUpdates() }
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(meetingController.isActive ? Color.purple : Color.gray)
+                        .frame(width: 8, height: 8)
+                    Button(meetingButtonTitle) {
+                        meetingController.toggle()
+                    }
                     .buttonStyle(.plain)
-                Spacer()
-                Button {
-                    // SettingsLink alone doesn't activate an LSUIElement app, so a
-                    // window opened behind another app stays hidden on re-click.
-                    NSApp.activate(ignoringOtherApps: true)
-                    openSettings()
-                } label: {
-                    Label("Settings", systemImage: "gear")
+                    .foregroundStyle(meetingController.isActive ? .red : .primary)
                 }
-                .buttonStyle(.plain)
+                if meetingController.isActive {
+                    Text("\(meetingController.durationText) · Me: \(meetingController.meEngineLabel) · Them: \(meetingController.themEngineLabel)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                if case .failed(let msg) = pipelineProvider.meeting {
+                    Text("Meeting: \(msg)")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                }
             }
-            .font(.subheadline)
+
+            Divider()
+
+            Button("Check for Updates…") { updater.checkForUpdates() }
+                .buttonStyle(.plain)
+                .font(.subheadline)
 
             HStack {
+                Button {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: "settings")
+                } label: {
+                    Image(systemName: "gearshape")
+                }
                 Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
-                    .foregroundStyle(.secondary)
+                Button { NSApp.terminate(nil) } label: {
+                    Image(systemName: "power")
+                }
+                .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
             .font(.subheadline)
@@ -117,6 +129,14 @@ struct MenuBarPopoverView: View {
         case .recording: "Recording…"
         case .processing: "Processing…"
         case .failed: "Error"
+        }
+    }
+
+    private var meetingButtonTitle: String {
+        switch meetingController.meetingState {
+        case .idle: return "Start Meeting"
+        case .recording: return "Stop Meeting"
+        case .finishing: return "Saving…"
         }
     }
 

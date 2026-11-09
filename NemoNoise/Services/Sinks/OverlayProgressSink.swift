@@ -3,10 +3,8 @@ import Foundation
 @MainActor
 protocol OverlayWriter: AnyObject {
     var partialText: String { get set }
-    /// Promote the given text into a finalised segment. Called when the engine
-    /// has clearly moved on to a new utterance (new partial doesn't extend the
-    /// previous one), so the previous partial would otherwise be visually
-    /// overwritten and lost.
+    /// Commit `text` as a finalised segment. Called for every `isFinal` result:
+    /// the engine's isFinal is the segment boundary (see `OverlayProgressSink`).
     func appendConfirmedSegment(_ text: String)
 }
 

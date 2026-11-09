@@ -10,7 +10,7 @@ enum ModelDownloadState: Equatable {
 
 // MARK: - Per-model descriptor
 
-struct ModelDescriptor {
+nonisolated struct ModelDescriptor {
     let id: String
     let displayName: String
     let detail: String
@@ -53,7 +53,7 @@ struct ModelDescriptor {
     }
 }
 
-extension ModelDescriptor {
+nonisolated extension ModelDescriptor {
     static let senseVoice = ModelDescriptor(
         id: "sensevoice",
         displayName: "SenseVoiceSmall (int8)",
@@ -133,19 +133,34 @@ final class ModelManager {
     /// All models tracked by this manager.
     static let allDescriptors: [ModelDescriptor] = [.senseVoice, .paraformer, .punctuation, .qwen3, .sileroVad]
 
-    init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        baseDir = appSupport.appendingPathComponent("NemoNoise/models", isDirectory: true)
+    /// - Parameter baseDir: where models live. Tests pass a temporary directory
+    ///   so state changes and `deleteModel` never touch the user's models.
+    init(baseDir: URL = ModelManager.defaultBaseDir) {
+        self.baseDir = baseDir
         refreshAll()
     }
 
-    func modelDir(for descriptor: ModelDescriptor) -> URL {
+    /// `~/Library/Application Support/NemoNoise/models` (inside the app's
+    /// container when sandboxed).
+    nonisolated static var defaultBaseDir: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("NemoNoise/models", isDirectory: true)
+    }
+
+    nonisolated func modelDir(for descriptor: ModelDescriptor) -> URL {
         baseDir.appendingPathComponent(descriptor.subdir, isDirectory: true)
     }
 
     func modelPath(for descriptor: ModelDescriptor) -> URL? {
         guard state(for: descriptor) == .downloaded else { return nil }
         return modelDir(for: descriptor)
+    }
+
+    /// Disk-only counterpart of `modelPath(for:)` for callers off the main
+    /// actor (engines are built on a detached task): applies `refreshAll()`'s
+    /// test directly instead of reading the observable `states`.
+    nonisolated func installedModelDir(for descriptor: ModelDescriptor) -> URL? {
+        allRequiredItemsPresent(descriptor) ? modelDir(for: descriptor) : nil
     }
 
     func state(for descriptor: ModelDescriptor) -> ModelDownloadState {
@@ -181,11 +196,14 @@ final class ModelManager {
     /// manually placed files (e.g. via `Show in Finder` for manual-install models).
     func refreshAll() {
         for d in Self.allDescriptors {
-            let dir = modelDir(for: d)
-            let allPresent = !d.requiredItems.isEmpty && d.requiredItems.allSatisfy {
-                FileManager.default.fileExists(atPath: dir.appendingPathComponent($0).path)
-            }
-            setState(allPresent ? .downloaded : .notDownloaded, for: d)
+            setState(allRequiredItemsPresent(d) ? .downloaded : .notDownloaded, for: d)
+        }
+    }
+
+    nonisolated private func allRequiredItemsPresent(_ descriptor: ModelDescriptor) -> Bool {
+        let dir = modelDir(for: descriptor)
+        return !descriptor.requiredItems.isEmpty && descriptor.requiredItems.allSatisfy {
+            FileManager.default.fileExists(atPath: dir.appendingPathComponent($0).path)
         }
     }
 
@@ -202,29 +220,58 @@ final class ModelManager {
     }
 
     private func download(_ descriptor: ModelDescriptor) async {
-        let dir = modelDir(for: descriptor)
+        let finalDir = modelDir(for: descriptor)
+        // Stage into a temp directory and swap into place only on success. The
+        // previous flow deleted the model dir up front and deleted it AGAIN on
+        // failure/cancel — a failed re-download destroyed a working install
+        // (that is how the ASR models were lost around 2026-06-25).
+        // Staged beside the destination (same volume) so the final swap is a
+        // rename, never a cross-volume copy that can fail halfway.
+        let stagingDir = finalDir.deletingLastPathComponent()
+            .appendingPathComponent(".staging-\(descriptor.id)-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: stagingDir) }
         do {
-            // Clean any partial files from a previous failed download
-            if FileManager.default.fileExists(atPath: dir.path) {
-                try FileManager.default.removeItem(at: dir)
-            }
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: stagingDir, withIntermediateDirectories: true)
 
             if let archiveURL = descriptor.archiveURL {
-                try await downloadAndExtract(descriptor: descriptor, archiveURL: archiveURL, dir: dir)
+                try await downloadAndExtract(descriptor: descriptor, archiveURL: archiveURL, dir: stagingDir)
             } else {
-                try await downloadIndividualFiles(descriptor: descriptor, dir: dir)
+                try await downloadIndividualFiles(descriptor: descriptor, dir: stagingDir)
             }
 
+            try Self.installStaged(stagingDir, at: finalDir, requiredItems: descriptor.requiredItems)
+
             setState(.downloaded, for: descriptor)
-            LogService.info("\(descriptor.displayName) downloaded to \(dir.path)", category: "ModelManager")
+            LogService.info("\(descriptor.displayName) downloaded to \(finalDir.path)", category: "ModelManager")
         } catch is CancellationError {
-            setState(.notDownloaded, for: descriptor)
-            try? FileManager.default.removeItem(at: dir)
+            // Whatever existed before the download attempt is intact.
+            setState(allRequiredItemsPresent(descriptor) ? .downloaded : .notDownloaded, for: descriptor)
         } catch {
-            setState(.error(error.localizedDescription), for: descriptor)
-            try? FileManager.default.removeItem(at: dir)
+            // Old install (if any) survived — recompute state from disk so a
+            // still-usable model doesn't show as gone.
+            setState(allRequiredItemsPresent(descriptor) ? .downloaded : .error(error.localizedDescription),
+                     for: descriptor)
             LogService.error("Download failed: \(error)", category: "ModelManager")
+        }
+    }
+
+    /// Swap a fully staged download into place. Refuses a staging directory
+    /// missing any required item, and never deletes the old install first:
+    /// `replaceItemAt` swaps, so a failure leaves the working model as it was
+    /// (deleting then moving lost a working install whenever the move failed).
+    nonisolated static func installStaged(_ staged: URL, at finalDir: URL, requiredItems: [String]) throws {
+        let fm = FileManager.default
+        let missing = requiredItems.filter { !fm.fileExists(atPath: staged.appendingPathComponent($0).path) }
+        guard missing.isEmpty else {
+            throw NSError(domain: "ModelManager", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Download incomplete — missing \(missing.joined(separator: ", "))"
+            ])
+        }
+        if fm.fileExists(atPath: finalDir.path) {
+            _ = try fm.replaceItemAt(finalDir, withItemAt: staged)
+        } else {
+            try fm.createDirectory(at: finalDir.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.moveItem(at: staged, to: finalDir)
         }
     }
 
@@ -296,7 +343,7 @@ final class ModelManager {
     private func downloadFile(
         from url: URL,
         to destination: URL,
-        onProgress: @escaping (Double) -> Void
+        onProgress: @escaping @MainActor (Double) -> Void
     ) async throws {
         let observer = ProgressObserver()
         let config = URLSessionConfiguration.default
@@ -318,9 +365,12 @@ final class ModelManager {
     }
 }
 
-private final class ProgressObserver: NSObject, URLSessionDownloadDelegate {
+/// `nonisolated`: URLSession calls these on its delegate queue, never the main
+/// actor. `@unchecked Sendable`: both callbacks are assigned before the task is
+/// resumed and only read after that.
+nonisolated private final class ProgressObserver: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     var completion: CheckedContinuation<URL, Error>?
-    var onProgress: ((Double) -> Void)?
+    var onProgress: (@Sendable (Double) -> Void)?
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

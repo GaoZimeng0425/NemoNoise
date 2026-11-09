@@ -1,9 +1,12 @@
 import Foundation
 
-final class ParaformerStreamingEngine: ASREngine, @unchecked Sendable {
+/// `nonisolated` (#6): the pipeline pump runs off the main actor; without
+/// this the class's default MainActor isolation would hop every streaming
+/// decode onto the main thread and stutter the overlay.
+nonisolated final class ParaformerStreamingEngine: ASREngine, @unchecked Sendable {
     private let recognizer: SherpaOnlineRecognizer
 
-    init(modelDir: URL) throws {
+    nonisolated init(modelDir: URL) throws {
         let encoderPath = modelDir.appendingPathComponent("encoder.int8.onnx").path
         let decoderPath = modelDir.appendingPathComponent("decoder.int8.onnx").path
         let tokensPath  = modelDir.appendingPathComponent("tokens.txt").path

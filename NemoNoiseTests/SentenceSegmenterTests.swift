@@ -4,6 +4,7 @@ import XCTest
 @MainActor
 final class StubASREngine: ASREngine, @unchecked Sendable {
     var isStreaming: Bool = true
+    var emitsSentenceFinals: Bool = false
     var markBoundaryCalls: Int = 0
 
     func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
@@ -16,9 +17,11 @@ final class StubASREngine: ASREngine, @unchecked Sendable {
     func markBoundary() { markBoundaryCalls += 1 }
 }
 
-final class SentenceSegmenterTests: XCTestCase {
+nonisolated final class SentenceSegmenterTests: XCTestCase {
 
-    private final class FakeClock: @unchecked Sendable {
+    /// `nonisolated`: its `read` closure is called from the segmenter's
+    /// `@Sendable` clock, off the main actor.
+    nonisolated private final class FakeClock: @unchecked Sendable {
         private let lock = NSLock()
         private var _current: Date = Date(timeIntervalSinceReferenceDate: 0)
         var current: Date {
@@ -189,5 +192,76 @@ final class SentenceSegmenterTests: XCTestCase {
         XCTAssertEqual(out?.text, "Hi", "shrinkage resets cursor; delta = full new text")
         XCTAssertEqual(out?.isFinal, false)
         XCTAssertEqual(out?.sequence, 2)
+    }
+
+    // MARK: - Engines that commit their own sentences (Apple SpeechAnalyzer)
+
+    /// Such an engine's partial is a revisable hypothesis of the current
+    /// sentence only. Cutting it by character offset commits text the engine
+    /// later rewrites — and its own final then repeats it — so the segmenter
+    /// must leave partials alone and let the engine's finals be the boundary.
+    @MainActor
+    private func makeSentenceFinalSegmenter(_ clock: FakeClock) -> (SentenceSegmenter, StubASREngine) {
+        let engine = StubASREngine()
+        engine.emitsSentenceFinals = true
+        return (SentenceSegmenter(engine: engine, now: clock.read), engine)
+    }
+
+    @MainActor
+    func testSentenceFinalEngineSentenceEnderDoesNotCut() async throws {
+        let (segmenter, engine) = makeSentenceFinalSegmenter(FakeClock())
+        let out = try await segmenter.process(
+            TranscriptionResult(text: "Hello world.", isFinal: false, emotion: nil),
+            isFinal: false
+        )
+        XCTAssertEqual(out?.text, "Hello world.")
+        XCTAssertEqual(out?.isFinal, false)
+        XCTAssertEqual(out?.sequence, 1)
+        XCTAssertEqual(engine.markBoundaryCalls, 0)
+    }
+
+    @MainActor
+    func testSentenceFinalEngineHardLimitAndSilenceDoNotCut() async throws {
+        let clock = FakeClock()
+        let (segmenter, _) = makeSentenceFinalSegmenter(clock)
+        _ = try await segmenter.process(
+            TranscriptionResult(text: "a long", isFinal: false, emotion: nil),
+            isFinal: false
+        )
+        clock.advance(15)
+        let out = try await segmenter.process(
+            TranscriptionResult(text: "a long", isFinal: false, emotion: nil),
+            isFinal: false
+        )
+        XCTAssertEqual(out?.isFinal, false)
+        XCTAssertEqual(out?.text, "a long")
+    }
+
+    @MainActor
+    func testSentenceFinalEngineRevisedPartialIsReportedWhole() async throws {
+        let (segmenter, _) = makeSentenceFinalSegmenter(FakeClock())
+        _ = try await segmenter.process(
+            TranscriptionResult(text: "I scream", isFinal: false, emotion: nil),
+            isFinal: false
+        )
+        let out = try await segmenter.process(
+            TranscriptionResult(text: "Ice cream is", isFinal: false, emotion: nil),
+            isFinal: false
+        )
+        XCTAssertEqual(out?.text, "Ice cream is", "a rewritten hypothesis is shown whole, not as a char-offset delta")
+    }
+
+    @MainActor
+    func testSentenceFinalEngineFinalsAdvanceSequence() async throws {
+        let (segmenter, _) = makeSentenceFinalSegmenter(FakeClock())
+        let first = try await segmenter.process(
+            TranscriptionResult(text: "One.", isFinal: true, emotion: nil), isFinal: true)
+        let partial = try await segmenter.process(
+            TranscriptionResult(text: "Tw", isFinal: false, emotion: nil), isFinal: false)
+        let second = try await segmenter.process(
+            TranscriptionResult(text: "Two.", isFinal: true, emotion: nil), isFinal: true)
+        XCTAssertEqual(first?.sequence, 1)
+        XCTAssertEqual(partial?.sequence, 2)
+        XCTAssertEqual(second?.sequence, 2)
     }
 }

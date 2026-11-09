@@ -5,13 +5,13 @@ import Foundation
 /// applied AFTER decoding), a lexicon term nudges the decoder to produce the
 /// term in the first place. Engines without biasing support ignore it and rely
 /// on the correction dictionary instead.
-struct LexiconEntry: Codable, Equatable {
+nonisolated struct LexiconEntry: Codable, Equatable {
     var term: String
     var weight: Float   // bias strength. Reserved for the deferred Paraformer
                         // hotwords_score phase; Qwen3/Apple biasing ignore it. Default 2.0.
 }
 
-enum UserLexicon {
+nonisolated enum UserLexicon {
     static func active(defaults: UserDefaults = .standard) -> [LexiconEntry] {
         guard let data = defaults.data(forKey: AppDefaults.Keys.vocabularyTerms),
               let entries = try? JSONDecoder().decode([LexiconEntry].self, from: data) else {

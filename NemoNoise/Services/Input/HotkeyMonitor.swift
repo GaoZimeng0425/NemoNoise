@@ -32,7 +32,8 @@ final class HotkeyMonitor {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.restartEventStream()
+            // Delivered on `.main` (see `queue` above).
+            MainActor.assumeIsolated { self?.restartEventStream() }
         }
 
         startEventStream()
@@ -70,7 +71,7 @@ final class HotkeyMonitor {
         LogService.info("Hotkey event stream restarted after shortcut change", category: "HotkeyMonitor")
     }
 
-    deinit {
+    isolated deinit {
         eventTask?.cancel()
         if let observer = shortcutObserver {
             NotificationCenter.default.removeObserver(observer)

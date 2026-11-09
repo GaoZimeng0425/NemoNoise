@@ -30,3 +30,7 @@ xcuserdata/
 LiveTranslate
 .codegraph
 examples
+
+# Local tool output (archify diagrams, zcode plans)
+.archify/
+.zcode/

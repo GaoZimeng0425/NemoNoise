@@ -39,7 +39,24 @@ final class ToastWindowController {
         hostingView.sizingOptions = .preferredContentSize
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = .clear
-        let fittingSize = hostingView.fittingSize
+        var fittingSize = hostingView.fittingSize
+
+        // On this OS `GlassEffectContainer` reports no intrinsic size to
+        // NSHostingView — every toast in the logs measured 0×0, which clips
+        // the capsule down to just the icon. Measure the capsule contents
+        // (icon + text + paddings) as a floor.
+        if fittingSize.width <= 1 || fittingSize.height <= 1 {
+            let textAttributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+            ]
+            let textSize = (message as NSString).size(withAttributes: textAttributes)
+            let maxWidth: CGFloat = 420  // matches ToastCapsule's frame(maxWidth:)
+            let iconAndSpacing: CGFloat = 30  // icon ~20 + HStack spacing 10
+            let horizontalPaddings: CGFloat = 76  // 18×2 capsule + 20×2 outer
+            let width = ceil(min(textSize.width + iconAndSpacing + horizontalPaddings, maxWidth + horizontalPaddings))
+            let height = ceil(max(textSize.height, 20) + 64)  // 12×2 capsule + 20×2 outer, 2-line headroom
+            fittingSize = NSSize(width: width, height: height)
+        }
 
         let p = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: fittingSize.width, height: fittingSize.height),
@@ -109,7 +126,8 @@ final class ToastWindowController {
             p.animator().setFrame(slideOut, display: true)
             p.animator().alphaValue = 0
         }, completionHandler: {
-            removePanel()
+            // AppKit runs animation completion handlers on the main thread.
+            MainActor.assumeIsolated { removePanel() }
         })
     }
 

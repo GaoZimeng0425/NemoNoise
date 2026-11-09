@@ -1,17 +1,16 @@
 import XCTest
 @testable import NemoNoise
 
-@MainActor
-final class TranslationControllerApplyTranslationTests: XCTestCase {
+nonisolated final class TranslationControllerApplyTranslationTests: XCTestCase {
 
-    func testApplyTranslationWithMatchingSeqWritesChinese() {
+    @MainActor func testApplyTranslationWithMatchingSeqWritesChinese() {
         let c = TranslationController()
         c.displayedSeq = 5
         c.applyTranslation(seq: 5, chinese: "你好")
         XCTAssertEqual(c.chineseText, "你好")
     }
 
-    func testApplyTranslationWithStaleSeqIsDropped() {
+    @MainActor func testApplyTranslationWithStaleSeqIsDropped() {
         let c = TranslationController()
         c.displayedSeq = 6
         c.chineseText = ""
@@ -19,7 +18,7 @@ final class TranslationControllerApplyTranslationTests: XCTestCase {
         XCTAssertEqual(c.chineseText, "", "stale seq translations must be dropped")
     }
 
-    func testApplyTranslationWithFutureSeqIsDropped() {
+    @MainActor func testApplyTranslationWithFutureSeqIsDropped() {
         let c = TranslationController()
         c.displayedSeq = 5
         c.chineseText = ""

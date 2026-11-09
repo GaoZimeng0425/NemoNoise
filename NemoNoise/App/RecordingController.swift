@@ -3,6 +3,9 @@ import AVFoundation
 import ApplicationServices
 import KeyboardShortcuts
 
+/// UI state + orchestration for dictation. The per-recording work lives in
+/// `DictationSession` (created per hotkey press, discarded afterwards); this
+/// controller is the durable @Observable state the menubar/overlay read.
 @MainActor @Observable
 final class RecordingController: OverlayWriter {
     // MARK: - UI state (observed by SwiftUI)
@@ -16,6 +19,9 @@ final class RecordingController: OverlayWriter {
     var isListeningSilence: Bool = false
     var recordingDuration: TimeInterval = 0
     var currentEngineLabel: String = "Apple"
+    /// Two-stage ESC (yap pattern): the first press only arms cancellation
+    /// (the overlay shows a hint); a second press within the window stops.
+    var isEscCancelArmed = false
 
     var recordingMode: RecordingMode {
         didSet { UserDefaults.standard.set(recordingMode.rawValue, forKey: AppDefaults.Keys.recordingMode) }
@@ -41,7 +47,10 @@ final class RecordingController: OverlayWriter {
     let hotkeyMonitor = HotkeyMonitor()
     private let textInjector = TextInjector()
 
-    private var pipeline: TranscriptionPipeline?
+    /// Builds a fresh per-session pipeline around the provider's resident
+    /// engines. Nil while engines are loading/failed.
+    private var pipelineFactory: (() -> TranscriptionPipeline?)?
+    private var engineLabelProvider: (() -> String)?
     private var mutex: RecordingMutex?
     private var overlayController: OverlayWindowController?
 
@@ -51,15 +60,21 @@ final class RecordingController: OverlayWriter {
 
     // MARK: - Internal state
 
-    private var silenceTimer: Timer?
+    private var currentSession: DictationSession?
     private var hideTask: Task<Void, Never>?
-    private let maxRecordingDuration: TimeInterval = 120
-    private var timerTask: Task<Void, Never>?
-    private var pipelineTask: Task<Void, Never>?
-    private var escMonitor: Any?
+    private var durationTicker: Task<Void, Never>?
+    private var escArmTask: Task<Void, Never>?
     private var recordingStartedAt: Date?
 
-    // MARK: - Init
+    // MARK: - Wiring
+
+    func bind(pipelineFactory: @escaping () -> TranscriptionPipeline?,
+              engineLabel: @escaping () -> String,
+              mutex: RecordingMutex) {
+        self.pipelineFactory = pipelineFactory
+        self.engineLabelProvider = engineLabel
+        self.mutex = mutex
+    }
 
     init() {
         let raw = UserDefaults.standard.string(forKey: AppDefaults.Keys.recordingMode) ?? AppDefaults.Defaults.recordingMode
@@ -75,38 +90,13 @@ final class RecordingController: OverlayWriter {
         hotkeyMonitor.start()
     }
 
-    func bind(pipeline: TranscriptionPipeline, mutex: RecordingMutex) {
-        self.pipeline = pipeline
-        self.mutex = mutex
-        self.isStreaming = pipeline.isStreaming
-    }
-
-    /// OverlayWriter conformance — called by OverlayProgressSink when the
-    /// engine starts a new utterance (segment reset), so the previous partial
-    /// becomes a confirmed segment instead of being overwritten.
-    func appendConfirmedSegment(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        confirmedSegments.append(TranscriptionSegment(text: trimmed, emotion: nil))
-        LogService.info("Segment promoted (count=\(confirmedSegments.count)): \"\(trimmed.prefix(40))\"", category: "Recording")
-    }
-
-    /// Closure that rebuilds the dictation pipeline using whatever the user has
+    /// Closure that rebuilds the dictation engines using whatever the user has
     /// currently picked in Settings. Set by `NemoNoiseApp` once wiring is done.
+    /// A rebuild never disturbs a running session — the session keeps its
+    /// engine until it ends; the next session picks up the new one.
     var pipelineRebuildHandler: (@MainActor () -> Void)?
 
-    /// Triggered from Settings when the user changes engine selection. Rebuilds
-    /// the dictation pipeline so the new choice (and any fallback toast) takes
-    /// effect immediately — except while a recording is in progress, where we
-    /// defer to avoid orphaning the active session.
     func requestPipelineRebuild() {
-        guard recordingState == .ready else {
-            ToastWindowController.show(
-                "Engine change will apply after the current recording",
-                style: .info
-            )
-            return
-        }
         pipelineRebuildHandler?()
     }
 
@@ -140,7 +130,7 @@ final class RecordingController: OverlayWriter {
             performHaptic()
             let elapsed = recordingStartedAt.map { Date().timeIntervalSince($0) } ?? 0
             if elapsed < 0.3 {
-                abortRecording()
+                abortRecording(reason: "too short")
             } else {
                 stopRecording()
             }
@@ -149,6 +139,12 @@ final class RecordingController: OverlayWriter {
 
     private func performHaptic() {
         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+    }
+
+    private func disarmEscCancel() {
+        escArmTask?.cancel()
+        escArmTask = nil
+        isEscCancelArmed = false
     }
 
     // MARK: - Recording lifecycle
@@ -169,7 +165,20 @@ final class RecordingController: OverlayWriter {
             Task { @MainActor in
                 let granted = await AVCaptureDevice.requestAccess(for: .audio)
                 if granted {
-                    self.startRecording()
+                    if self.recordingMode == .toggle {
+                        // Toggle's single keypress gesture is complete —
+                        // starting now is what the user asked for.
+                        self.startRecording()
+                    } else {
+                        // Push-to-talk (#4): the key-up was swallowed by the
+                        // permission dialog, so auto-starting now would record
+                        // until the 120 s cap. Ask for a fresh press instead.
+                        ToastWindowController.show(
+                            "Microphone authorized — hold the hotkey to record",
+                            style: .success,
+                            duration: 3
+                        )
+                    }
                 } else {
                     MicPermissionAlert.present()
                 }
@@ -182,87 +191,132 @@ final class RecordingController: OverlayWriter {
             return
         }
 
-        guard let pipeline, let mutex else {
-            if pipeline == nil {
-                ToastWindowController.show("Engines warming up…", style: .info, duration: 1.5)
-            }
+        guard let mutex else { return }
+
+        // A cheap per-session shell around the provider's resident engines.
+        guard let pipeline = pipelineFactory?() else {
+            ToastWindowController.show("Engines warming up…", style: .info, duration: 1.5)
             return
         }
-        guard mutex.tryAcquire(.dictation) else { return }
+        guard mutex.tryAcquire(.dictation) else {
+            ToastWindowController.show("Audio is in use by another mode", style: .info, duration: 2)
+            return
+        }
 
         // Lock the AX target at hotkey DOWN to avoid cursor-move races.
         textInjector.captureTarget()
         _ = LogService.startSession()
         LogService.info("Recording started, mode: \(recordingMode.rawValue), engine streaming: \(pipeline.isStreaming)", category: "Recording")
 
+        let session = DictationSession(pipeline: pipeline, mode: recordingMode)
+        currentSession = session
         recordingStartedAt = Date()
         recordingState = .recording
         confirmedSegments = []
         partialText = ""
         isStreaming = pipeline.isStreaming
+        currentEngineLabel = engineLabelProvider?() ?? currentEngineLabel
         showOverlay()
-        startTimer()
-        startEscMonitor()
+        wireCallbacks(session)
+        session.start()
 
-        pipelineTask = Task { [weak self, pipeline] in
-            guard let self else { return }
-            do {
-                self.resetSilenceTimer()
-                for try await event in pipeline.start() {
-                    switch event {
-                    case .partial(_, let rms, let spectrum):
-                        self.micLevel = rms
-                        self.applyEnvelope(spectrum)
-                        self.isListeningSilence = false
-                        self.resetSilenceTimer()
-                    case .level(let rms, let spectrum):
-                        self.micLevel = rms
-                        self.applyEnvelope(spectrum)
-                    case .engineFallback(let from):
-                        self.isStreaming = pipeline.isStreaming
-                        self.currentEngineLabel = "Apple (fallback)"
-                        LogService.info("Engine fallback from \(from)", category: "Recording")
-                        ToastWindowController.show("Switched to local engine", style: .info)
-                    case .final:
-                        break
-                    }
-                }
-            } catch {
-                self.handlePipelineError(error)
+        durationTicker = Task { [weak self, weak session] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, let session else { return }
+                self.recordingDuration = session.duration
             }
         }
     }
 
+    private func wireCallbacks(_ session: DictationSession) {
+        session.onEvent = { [weak self] event in
+            guard let self else { return }
+            switch event {
+            case .partial(_, let rms, let spectrum):
+                self.micLevel = rms
+                self.applyEnvelope(spectrum)
+                self.isListeningSilence = false
+            case .level(let rms, let spectrum):
+                self.micLevel = rms
+                self.applyEnvelope(spectrum)
+            case .engineFallback(let from):
+                self.isStreaming = session.pipeline.isStreaming
+                self.currentEngineLabel = "Apple (fallback)"
+                LogService.info("Engine fallback from \(from)", category: "Recording")
+                ToastWindowController.show("Switched to local engine", style: .info)
+            }
+        }
+        session.onSpeechSilence = { [weak self] in
+            self?.isListeningSilence = true
+        }
+        session.onMaxDurationReached = { [weak self] in
+            guard let self, self.recordingState == .recording else { return }
+            LogService.info("Max recording duration reached, auto-stopping", category: "Recording")
+            ToastWindowController.show("Recording stopped at 120s limit", style: .warning)
+            self.stopRecording()
+        }
+        session.onEscPressed = { [weak self] in
+            guard let self, self.recordingState == .recording else { return }
+            if self.isEscCancelArmed {
+                // Cancel means discard: the overlay promised "Esc again to
+                // cancel" — finalizing here used to type the text anyway.
+                self.performHaptic()
+                self.disarmEscCancel()
+                self.abortRecording(reason: "cancelled with Esc")
+                ToastWindowController.show("Recording cancelled", style: .info, duration: 2)
+            } else {
+                // First press: arm only — a stray ESC shouldn't kill a long
+                // dictation. The overlay swaps to the cancel hint.
+                self.isEscCancelArmed = true
+                self.escArmTask?.cancel()
+                self.escArmTask = Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(2.5))
+                    guard !Task.isCancelled else { return }
+                    self?.disarmEscCancel()
+                }
+            }
+        }
+        session.onPipelineError = { [weak self] error in
+            guard let self else { return }
+            // While stopping, the stop task owns the session: it surfaces a
+            // finalize failure itself. Handling it here too used to flip
+            // state to .ready mid-stop, letting a new session start that the
+            // stop task then tore down (mutex released, mic left running).
+            guard self.recordingState == .recording else {
+                LogService.warn("Pipeline error while stopping (stop task handles it): \(error.localizedDescription)",
+                                category: "Recording")
+                return
+            }
+            self.handlePipelineError(error)
+        }
+    }
+
     private func stopRecording() {
-        LogService.info("stopRecording invoked — state=\(recordingState), pipeline=\(pipeline != nil), mutex=\(mutex != nil)", category: "Recording")
-        guard recordingState == .recording, let pipeline, let mutex else {
+        LogService.info("stopRecording invoked — state=\(recordingState), session=\(currentSession != nil), mutex=\(mutex != nil)", category: "Recording")
+        guard recordingState == .recording, let session = currentSession, let mutex else {
             LogService.warn("stopRecording guard failed — bailing out", category: "Recording")
             return
         }
 
-        LogService.info("Recording stopped, duration: \(String(format: "%.1f", recordingDuration))s", category: "Recording")
-
+        LogService.info("Recording stopped, duration: \(String(format: "%.1f", session.duration))s", category: "Recording")
         recordingState = .processing
-        pipelineTask?.cancel()
-        pipelineTask = nil
-        stopTimer()
-        invalidateSilenceTimer()
-        stopEscMonitor()
+        durationTicker?.cancel()
+        durationTicker = nil
+        disarmEscCancel()
 
-        Task { [weak self, pipeline, mutex] in
-            defer { mutex.release(.dictation) }
-            guard let self else { return }
-            LogService.info("stopRecording Task started — calling pipeline.finalize()", category: "Recording")
+        Task { [weak self, session, mutex] in
+            // Released explicitly: on success after dispatch, on failure by
+            // `handlePipelineError` once the session has drained.
+            guard let self else { mutex.release(.dictation); return }
+            LogService.info("stopRecording Task started — calling session.finish()", category: "Recording")
             do {
-                let final = try await pipeline.finalize()
-                LogService.info("pipeline.finalize() returned — final.text length=\(final.text.count), partialText length=\(self.partialText.count), confirmedSegments count=\(self.confirmedSegments.count)", category: "Recording")
+                let final = try await session.finish()
+                LogService.info("session.finish() returned — final.text length=\(final.text.count), partialText length=\(self.partialText.count), confirmedSegments count=\(self.confirmedSegments.count), maxMicLevel=\(session.maxMicLevel)", category: "Recording")
 
-                // pipeline.finalize() calls sink.deliver(isFinal=true), which
-                // OverlayProgressSink now handles by appending final.text to
-                // confirmedSegments. So the trailing piece is already there
-                // when final.text is non-empty. The fallback below covers the
-                // case where engine.finish() returned empty but a partial is
-                // still on screen (engines that flush entirely via partials).
+                // session.finish() calls sink.deliver(isFinal=true), which
+                // appends final.text to confirmedSegments. The fallback below
+                // covers engines that flush entirely via partials.
                 let lastPartial = self.partialText.trimmingCharacters(in: .whitespacesAndNewlines)
                 self.partialText = ""
                 if final.text.isEmpty, !lastPartial.isEmpty {
@@ -274,67 +328,85 @@ final class RecordingController: OverlayWriter {
                 LogService.info("Dispatch text assembled — \(pieces.count) segments, total length=\(dispatchText.count)", category: "Recording")
 
                 let engineLabel = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
+
+                // Opt-in LLM cleanup (Apple Intelligence): refine the text for
+                // insertion only — history keeps the raw ASR output so engine
+                // comparison / re-recognition stays honest.
+                var insertText = dispatchText
+                if UserDefaults.standard.bool(forKey: AppDefaults.Keys.llmTranscriptCleanup) {
+                    if let cleaned = await TranscriptCleanupService.shared.cleanup(dispatchText) {
+                        LogService.info("Transcript cleanup applied: \(dispatchText.count) → \(cleaned.count) chars", category: "Recording")
+                        insertText = cleaned
+                    }
+                }
+
                 await OutputDispatcher.dispatch(
-                    text: dispatchText,
+                    text: insertText,
                     injector: self.textInjector,
                     historyStore: self.historyStore,
-                    engineLabel: engineLabel
+                    engineLabel: engineLabel,
+                    audioURL: session.audioFileURL,
+                    sessionDuration: session.duration,
+                    historyText: dispatchText == insertText ? nil : dispatchText
                 )
 
                 self.scheduleOverlayHide(after: 2)
                 self.micLevel = 0
                 self.spectrum = Array(repeating: 0, count: 16)
                 self.recordingState = .ready
+                self.currentSession = nil
+                mutex.release(.dictation)
                 LogService.endSession()
             } catch {
-                LogService.error("stopRecording Task threw: \(error)", category: "Recording")
                 self.handlePipelineError(error)
             }
         }
     }
 
-    /// Abort an in-flight recording without finalizing. Used when a
-    /// push-to-talk press is shorter than the minimum useful duration:
-    /// audio is discarded, the mutex is released synchronously, and state
-    /// returns to `.ready` in the same MainActor tick (no `.processing`
-    /// window). Toggle mode never triggers this path.
-    private func abortRecording() {
-        guard recordingState == .recording, let pipeline, let mutex else { return }
-        LogService.info("Aborting recording (too short)", category: "Recording")
+    /// Abort an in-flight recording without finalizing: a push-to-talk press
+    /// shorter than the minimum useful duration, or the two-stage Esc cancel.
+    /// Audio and text are discarded and state returns to `.ready`
+    /// immediately. The mutex is released only after the session has
+    /// drained (#9).
+    private func abortRecording(reason: String) {
+        guard recordingState == .recording, let session = currentSession, let mutex else { return }
+        LogService.info("Aborting recording (\(reason))", category: "Recording")
 
-        pipelineTask?.cancel()
-        pipelineTask = nil
-        pipeline.stop()
-        mutex.release(.dictation)
-        stopTimer()
-        invalidateSilenceTimer()
-        stopEscMonitor()
-
+        currentSession = nil
+        durationTicker?.cancel()
+        durationTicker = nil
+        disarmEscCancel()
         confirmedSegments = []
         partialText = ""
         micLevel = 0
         spectrum = Array(repeating: 0, count: 16)
+        isListeningSilence = false
         recordingState = .ready
-        LogService.endSession()
         hideOverlay()
+
+        Task { [session, mutex] in
+            await session.abort()
+            mutex.release(.dictation)
+            await MainActor.run { LogService.endSession() }
+        }
     }
 
     private func handlePipelineError(_ error: Error) {
         LogService.error("Recording error: \(error.localizedDescription)", category: "Recording")
         SentryService.capture(error: error)
 
-        mutex?.release(.dictation)
+        // Keep the failed session's audio on disk — it's the evidence for
+        // "mic or engine?" (OpenSuperWhisper pattern).
+        if let audioURL = SessionAudioRecorder.shared.endSession() {
+            LogService.warn("Failed-session audio preserved: \(audioURL.path)", category: "Recording")
+        }
 
         if let pipelineErr = error as? PipelineError {
             switch pipelineErr {
             case .sourceUnavailable:
                 MicPermissionAlert.present()
             case .engineFailedFatally(let underlying):
-                if let apple = underlying as? AppleSpeechError, apple == .siriDisabled {
-                    ToastWindowController.show("请启用 Siri：系统设置 → Siri 与听写", style: .warning, duration: 5)
-                } else {
-                    ToastWindowController.show("Engine error: \(underlying.localizedDescription)", style: .error, duration: 4)
-                }
+                ToastWindowController.show("Engine error: \(underlying.localizedDescription)", style: .error, duration: 4)
             case .finalizeFailed(let underlying):
                 ToastWindowController.show("Recognition failed: \(underlying.localizedDescription)", style: .warning, duration: 4)
             }
@@ -343,8 +415,21 @@ final class RecordingController: OverlayWriter {
         }
 
         recordingState = .ready
-        pipeline?.stop()
-        stopEscMonitor()
+        durationTicker?.cancel()
+        durationTicker = nil
+        disarmEscCancel()
+        // Release the mutex only once the session has drained (#9), so a new
+        // session can't start while this one's pump still feeds the engine.
+        let mutex = self.mutex
+        if let session = currentSession {
+            currentSession = nil
+            Task {
+                await session.abort()
+                mutex?.release(.dictation)
+            }
+        } else {
+            mutex?.release(.dictation)
+        }
         hideOverlay()
         LogService.endSession()
     }
@@ -367,7 +452,7 @@ final class RecordingController: OverlayWriter {
         stopRecording()
     }
 
-    // MARK: - Overlay + timer + ESC
+    // MARK: - Overlay
 
     private func showOverlay() {
         if overlayController == nil {
@@ -387,62 +472,16 @@ final class RecordingController: OverlayWriter {
         }
     }
 
-    private func resetSilenceTimer() {
-        silenceTimer?.invalidate()
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, recordingState == .recording else { return }
-                isListeningSilence = true
-            }
-        }
-    }
+    // MARK: - OverlayWriter
 
-    private func invalidateSilenceTimer() {
-        silenceTimer?.invalidate()
-        silenceTimer = nil
-        isListeningSilence = false
-    }
-
-    private func startTimer() {
-        recordingDuration = 0
-        let startTime = Date()
-        timerTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                guard let self else { return }
-                self.recordingDuration = Date().timeIntervalSince(startTime)
-                if self.recordingDuration >= self.maxRecordingDuration {
-                    LogService.info("Max recording duration reached, auto-stopping", category: "Recording")
-                    ToastWindowController.show("Recording stopped at \(Int(self.maxRecordingDuration))s limit", style: .warning)
-                    self.stopRecording()
-                    return
-                }
-            }
-        }
-    }
-
-    private func stopTimer() {
-        timerTask?.cancel()
-        timerTask = nil
-    }
-
-    private func startEscMonitor() {
-        guard recordingMode == .toggle else { return }
-        escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, event.keyCode == 53 else { return event }
-            if recordingState == .recording {
-                performHaptic()
-                stopRecording()
-            }
-            return nil
-        }
-    }
-
-    private func stopEscMonitor() {
-        if let monitor = escMonitor {
-            NSEvent.removeMonitor(monitor)
-            escMonitor = nil
-        }
+    /// OverlayWriter conformance — called by OverlayProgressSink when the
+    /// engine starts a new utterance (segment reset), so the previous partial
+    /// becomes a confirmed segment instead of being overwritten.
+    func appendConfirmedSegment(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        confirmedSegments.append(TranscriptionSegment(text: trimmed, emotion: nil))
+        LogService.info("Segment promoted (count=\(confirmedSegments.count)): \"\(trimmed.prefix(40))\"", category: "Recording")
     }
 
     private func applyEnvelope(_ target: [Float]) {
@@ -458,5 +497,4 @@ final class RecordingController: OverlayWriter {
             spectrum[i] += (target[i] - spectrum[i]) * alpha
         }
     }
-
 }

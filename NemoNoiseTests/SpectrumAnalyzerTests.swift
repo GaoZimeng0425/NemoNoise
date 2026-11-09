@@ -1,11 +1,11 @@
 import XCTest
 @testable import NemoNoise
 
-final class SpectrumAnalyzerTests: XCTestCase {
+nonisolated final class SpectrumAnalyzerTests: XCTestCase {
     private let sampleRate: Float = 16000
     private let binCount = 16
 
-    func makeSine(freq: Float, duration: Float = 0.1, amplitude: Float = 0.5) -> [Float] {
+    @MainActor func makeSine(freq: Float, duration: Float = 0.1, amplitude: Float = 0.5) -> [Float] {
         let count = Int(sampleRate * duration)
         let twoPi = 2 * Float.pi
         return (0..<count).map { i in
@@ -13,13 +13,13 @@ final class SpectrumAnalyzerTests: XCTestCase {
         }
     }
 
-    func testReturnsBinCountElements() {
+    @MainActor func testReturnsBinCountElements() {
         let analyzer = SpectrumAnalyzer(binCount: binCount, sampleRate: sampleRate)
         let result = analyzer.analyze(makeSine(freq: 1000))
         XCTAssertEqual(result.count, binCount)
     }
 
-    func testSilenceIsNearZero() {
+    @MainActor func testSilenceIsNearZero() {
         let analyzer = SpectrumAnalyzer(binCount: binCount, sampleRate: sampleRate)
         let silence = Array<Float>(repeating: 0, count: 1024)
         let result = analyzer.analyze(silence)
@@ -28,7 +28,7 @@ final class SpectrumAnalyzerTests: XCTestCase {
         }
     }
 
-    func testLowFrequencyDominatesLowBin() {
+    @MainActor func testLowFrequencyDominatesLowBin() {
         let analyzer = SpectrumAnalyzer(binCount: binCount, sampleRate: sampleRate)
         let result = analyzer.analyze(makeSine(freq: 100))
         guard let maxIdx = result.indices.max(by: { result[$0] < result[$1] }) else {
@@ -37,7 +37,7 @@ final class SpectrumAnalyzerTests: XCTestCase {
         XCTAssertLessThanOrEqual(maxIdx, 2, "100Hz sine should peak in bin 0-2, got \(maxIdx)")
     }
 
-    func testMidFrequencyDominatesMidBin() {
+    @MainActor func testMidFrequencyDominatesMidBin() {
         let analyzer = SpectrumAnalyzer(binCount: binCount, sampleRate: sampleRate)
         let result = analyzer.analyze(makeSine(freq: 1000))
         guard let maxIdx = result.indices.max(by: { result[$0] < result[$1] }) else {
@@ -47,7 +47,7 @@ final class SpectrumAnalyzerTests: XCTestCase {
         XCTAssertLessThanOrEqual(maxIdx, 12, "1kHz sine should peak in middle bins, got \(maxIdx)")
     }
 
-    func testHighFrequencyDominatesHighBin() {
+    @MainActor func testHighFrequencyDominatesHighBin() {
         let analyzer = SpectrumAnalyzer(binCount: binCount, sampleRate: sampleRate)
         let result = analyzer.analyze(makeSine(freq: 3000))
         guard let maxIdx = result.indices.max(by: { result[$0] < result[$1] }) else {
@@ -56,13 +56,13 @@ final class SpectrumAnalyzerTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(maxIdx, 12, "3kHz sine should peak in upper bins, got \(maxIdx)")
     }
 
-    func testShortInputIsPadded() {
+    @MainActor func testShortInputIsPadded() {
         let analyzer = SpectrumAnalyzer(binCount: binCount, sampleRate: sampleRate)
         let result = analyzer.analyze(makeSine(freq: 1000, duration: 0.006))
         XCTAssertEqual(result.count, binCount)
     }
 
-    func testValuesStayInZeroOneRange() {
+    @MainActor func testValuesStayInZeroOneRange() {
         let analyzer = SpectrumAnalyzer(binCount: binCount, sampleRate: sampleRate)
         let loud = makeSine(freq: 500, amplitude: 0.95)
         let result = analyzer.analyze(loud)

@@ -14,7 +14,7 @@ enum AudioInterruptionReason: Sendable {
 /// Pure stall-detection logic: no timers, no audio, clock injected by the
 /// caller. `MicAudioSource` serializes access behind a lock, so this type is
 /// intentionally not thread-safe on its own.
-struct AudioStallWatchdog {
+nonisolated struct AudioStallWatchdog {
     let threshold: CFTimeInterval
     private(set) var lastActivity: CFTimeInterval
 

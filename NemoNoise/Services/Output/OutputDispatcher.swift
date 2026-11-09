@@ -9,7 +9,10 @@ enum OutputDispatcher {
         text: String,
         injector: any TextInjecting,
         historyStore: TranscriptHistoryStore,
-        engineLabel: String?
+        engineLabel: String?,
+        audioURL: URL? = nil,
+        sessionDuration: TimeInterval? = nil,
+        historyText: String? = nil
     ) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -17,8 +20,12 @@ enum OutputDispatcher {
             return
         }
 
-        // History first — always recorded, regardless of target type.
-        historyStore.add(text: trimmed, engineLabel: engineLabel)
+        // History first — always recorded, regardless of target type. When the
+        // inserted text was LLM-cleaned, `historyText` keeps the raw ASR
+        // output here — history is the "mic or engine?" ground truth, not a
+        // copy of the presentation layer.
+        let historyEntry = (historyText ?? trimmed).trimmingCharacters(in: .whitespacesAndNewlines)
+        historyStore.add(text: historyEntry, engineLabel: engineLabel, audioURL: audioURL, duration: sessionDuration)
         LogService.info("OutputDispatcher — history saved, total=\(historyStore.records.count)", category: "Output")
 
         // Inject.
@@ -51,11 +58,7 @@ enum OutputDispatcher {
                 duration: 4
             )
         case .failed:
-            ToastWindowController.show(
-                "Copied to clipboard — press ⌘V to paste",
-                style: .info,
-                duration: 4
-            )
+            PasteRecoveryCard.show(text: trimmed, injector: injector)
         }
     }
 }

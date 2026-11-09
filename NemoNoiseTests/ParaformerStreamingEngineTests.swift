@@ -1,21 +1,22 @@
 import XCTest
 @testable import NemoNoise
 
-final class ParaformerStreamingEngineTests: XCTestCase {
+nonisolated final class ParaformerStreamingEngineTests: XCTestCase {
 
-    func testBuildResultAtEndpointAddsPeriodAndMarksFinal() {
+    @MainActor func testBuildResultAtEndpointMarksFinalWithoutAddingPunctuation() {
         let result = ParaformerStreamingEngine.buildResult(rawText: "hello world", isEndpoint: true)
         XCTAssertTrue(result.isFinal)
-        XCTAssertEqual(result.text, "hello world。")
+        // Punctuation is PunctuationProcessor's job downstream; the engine must not add "。".
+        XCTAssertEqual(result.text, "hello world")
     }
 
-    func testBuildResultAtEndpointWithEmptyTextStaysEmpty() {
+    @MainActor func testBuildResultAtEndpointWithEmptyTextStaysEmpty() {
         let result = ParaformerStreamingEngine.buildResult(rawText: "", isEndpoint: true)
         XCTAssertTrue(result.isFinal)
         XCTAssertEqual(result.text, "")
     }
 
-    func testBuildResultMidStreamMarksPartial() {
+    @MainActor func testBuildResultMidStreamMarksPartial() {
         let result = ParaformerStreamingEngine.buildResult(rawText: "partial", isEndpoint: false)
         XCTAssertFalse(result.isFinal)
         XCTAssertEqual(result.text, "partial")

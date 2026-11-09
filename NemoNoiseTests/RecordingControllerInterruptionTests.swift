@@ -1,12 +1,11 @@
 import XCTest
 @testable import NemoNoise
 
-@MainActor
-final class RecordingControllerInterruptionTests: XCTestCase {
+nonisolated final class RecordingControllerInterruptionTests: XCTestCase {
     /// When not recording, an interruption signal must be a safe no-op:
     /// state stays `.ready` and nothing is finalized. (The active-recording
     /// path drives the AVAudioEngine + overlay and is covered by manual QA.)
-    func testInterruptionIgnoredWhenNotRecording() {
+    @MainActor func testInterruptionIgnoredWhenNotRecording() {
         let controller = RecordingController()
         XCTAssertEqual(controller.recordingState, .ready)
 
