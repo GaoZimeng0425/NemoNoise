@@ -116,3 +116,11 @@ without asking. It archives, quits the running NemoNoise, replaces
 `/Applications/NemoNoise.app` and relaunches it, so the user always tests the
 latest code on device. Device testing on a stale build has already wasted a
 round (2026-11-09: a meeting ran on an 11:47 build that predated three fixes).
+
+## Reference projects: logic only, never code
+
+Other apps (cicada, VoiceInk, FluidVoice, yap, muesli, …) are for learning
+how they approach a problem and what they measured. Never copy their code,
+regexes or test cases: design and write our own implementation, with our own
+names, structure and test examples. No third-party license files or
+attribution headers for ported code — there should be no ported code.

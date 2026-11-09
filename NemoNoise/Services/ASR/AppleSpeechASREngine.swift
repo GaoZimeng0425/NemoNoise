@@ -62,7 +62,7 @@ nonisolated struct AppleSpeechTranscript {
                 guard let draftEnd = volatileEnd, let finalEnd = audioEnd else { return false }
                 return draftEnd <= finalEnd + 0.05
             }()
-            let kept = draftWithinFinal ? HeardText.fuller(final: text, draft: volatile) : text
+            let kept = draftWithinFinal ? TranscriptTidy.recoverDroppedWords(final: text, draft: volatile) : text
             if kept != text {
                 LogService.info("Final dropped words the draft had — kept the draft (\(text.count) → \(kept.count) chars)",
                                 category: "AppleSpeechASREngine")
