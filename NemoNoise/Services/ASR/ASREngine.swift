@@ -41,3 +41,15 @@ extension ASREngine {
     var emitsSentenceFinals: Bool { false }
     func markBoundary() {}
 }
+
+/// An offline engine whose decoder accepts per-decode bias text (Qwen3's
+/// per-stream hotwords). `VADSegmentingEngine` uses it to hand each segment
+/// the session's confirmed transcript so far — names then stay spelled the
+/// same across segments — and to re-decode with a reduced bias when a
+/// hallucination guard fires. Engines without a biasing channel (SenseVoice's
+/// CTC decoder) simply don't conform.
+protocol BiasableDecodeEngine: ASREngine {
+    /// Bias text for the next decode cycle (reset → feed → finish). Consumed
+    /// by that decode; nil restores the engine's built-in bias (lexicon terms).
+    func setNextDecodeBias(_ bias: String?)
+}

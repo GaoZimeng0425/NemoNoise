@@ -11,6 +11,19 @@ final class StubOverlayTarget: OverlayWriter {
     }
 }
 
+/// Records the seam pause handed to the pause-aware commit.
+@MainActor
+private final class PauseAwareTarget: OverlayWriter {
+    var partialText: String = ""
+    var promoted: [(text: String, pauseBefore: TimeInterval?)] = []
+
+    func appendConfirmedSegment(_ text: String) {}
+
+    func appendConfirmedSegment(_ text: String, pauseBefore: TimeInterval?) {
+        promoted.append((text, pauseBefore))
+    }
+}
+
 nonisolated final class OverlayProgressSinkTests: XCTestCase {
     @MainActor func testPartialUpdatesPartialText() async {
         let target = StubOverlayTarget()
@@ -67,5 +80,27 @@ nonisolated final class OverlayProgressSinkTests: XCTestCase {
         XCTAssertEqual(target.promotedSegments, ["sentence one."],
                        "each mid-stream final is committed exactly once")
         XCTAssertEqual(target.partialText, "sentence two")
+    }
+
+    // MARK: - Seam pause passthrough
+
+    @MainActor func testPauseUnawareWriterGetsDefaultForwarding() async {
+        // StubOverlayTarget implements only the plain commit; the protocol's
+        // default pause-aware implementation must forward to it.
+        let target = StubOverlayTarget()
+        let sink = OverlayProgressSink(target: target)
+        await sink.deliver(TranscriptionResult(text: "第二段", isFinal: true, emotion: nil, pauseBefore: 0.7),
+                           isFinal: true)
+        XCTAssertEqual(target.promotedSegments, ["第二段"])
+    }
+
+    @MainActor func testPauseAwareWriterReceivesTheSeamPause() async {
+        let target = PauseAwareTarget()
+        let sink = OverlayProgressSink(target: target)
+        await sink.deliver(TranscriptionResult(text: "第二段", isFinal: true, emotion: nil, pauseBefore: 0.7),
+                           isFinal: true)
+        XCTAssertEqual(target.promoted.count, 1)
+        XCTAssertEqual(target.promoted.first?.text, "第二段")
+        XCTAssertEqual(target.promoted.first?.pauseBefore ?? -1, 0.7, accuracy: 1e-9)
     }
 }

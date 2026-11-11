@@ -87,6 +87,34 @@ nonisolated final class VADSegmenterTests: XCTestCase {
         XCTAssertEqual(s.count, 10 * W)
     }
 
+    @MainActor func testForceCutCountTracksHardCutsOnly() {
+        let seg = VADSegmenter(config: cfg())
+        // A silence-closed segment must not count.
+        _ = seg.step(window: win(0.5), isSpeech: true)
+        _ = seg.step(window: win(0.5), isSpeech: true)
+        _ = seg.step(window: win(0.0), isSpeech: false)
+        guard case .segment = seg.step(window: win(0.0), isSpeech: false) else {
+            return XCTFail("expected silence-cut segment")
+        }
+        XCTAssertEqual(seg.forceCutCount, 0)
+        // 10 windows of speech → one force-cut.
+        var event: SegmenterEvent = .buffering
+        for _ in 0..<10 {
+            event = seg.step(window: win(0.5), isSpeech: true)
+        }
+        guard case .segment = event else { return XCTFail("expected force-cut") }
+        XCTAssertEqual(seg.forceCutCount, 1)
+        seg.reset()
+        XCTAssertEqual(seg.forceCutCount, 0)
+    }
+
+    @MainActor func testDefaultPreSpeechPaddingIsFiveWindows() {
+        // ~160 ms of leading silence in every segment: LLM-style offline
+        // decoders need the natural utterance edge (see VADConfig docs).
+        XCTAssertEqual(VADConfig.default.preSpeechWindows, 5)
+        XCTAssertEqual(VADConfig.meeting.preSpeechWindows, 5)
+    }
+
     @MainActor func testFlushReturnsOpenSegmentThenNil() {
         let seg = VADSegmenter(config: cfg())
         _ = seg.step(window: win(0.5), isSpeech: true)   // onset

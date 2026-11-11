@@ -4,9 +4,13 @@ import Foundation
 /// this engine accumulates audio for the whole session and decodes once on
 /// `finish()`. Decoding is LLM-style and not real-time — the user releases
 /// the hotkey and waits for the result.
-final class Qwen3ASREngine: ASREngine, @unchecked Sendable {
+final class Qwen3ASREngine: ASREngine, BiasableDecodeEngine, @unchecked Sendable {
     private let recognizer: SherpaQwen3Recognizer
     private var accumulated: [Float] = []
+    /// Per-decode bias set by `VADSegmentingEngine` (lexicon terms + prior
+    /// transcript). Consumed by the next `finish()`; `reset()` leaves it
+    /// alone — callers set the bias after resetting, before feeding.
+    private var nextBias: String?
 
     let isStreaming = false
     // Qwen3-ASR is an LLM-decoder model that emits punctuation itself; running
@@ -47,8 +51,10 @@ final class Qwen3ASREngine: ASREngine, @unchecked Sendable {
         }
 
         let snapshot = accumulated
+        let bias = nextBias
+        nextBias = nil
         let text = await Task.detached { [recognizer] in
-            recognizer.decode(samples: snapshot, sampleRate: 16000)
+            recognizer.decode(samples: snapshot, sampleRate: 16000, hotwords: bias)
         }.value
 
         return TranscriptionResult(text: text, isFinal: true, emotion: nil)
@@ -56,5 +62,10 @@ final class Qwen3ASREngine: ASREngine, @unchecked Sendable {
 
     func reset() {
         accumulated.removeAll(keepingCapacity: true)
+    }
+
+    /// BiasableDecodeEngine — passthrough to the per-stream hotwords channel.
+    func setNextDecodeBias(_ bias: String?) {
+        nextBias = bias
     }
 }

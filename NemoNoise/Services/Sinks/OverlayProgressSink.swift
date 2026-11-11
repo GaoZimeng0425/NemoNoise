@@ -6,6 +6,17 @@ protocol OverlayWriter: AnyObject {
     /// Commit `text` as a finalised segment. Called for every `isFinal` result:
     /// the engine's isFinal is the segment boundary (see `OverlayProgressSink`).
     func appendConfirmedSegment(_ text: String)
+    /// Segment commit with the seam pause into the previous segment (nil when
+    /// the engine doesn't measure it). A requirement so writers that keep the
+    /// pause for join-time punctuation are dynamically dispatched; the default
+    /// below just drops it.
+    func appendConfirmedSegment(_ text: String, pauseBefore: TimeInterval?)
+}
+
+extension OverlayWriter {
+    func appendConfirmedSegment(_ text: String, pauseBefore: TimeInterval?) {
+        appendConfirmedSegment(text)
+    }
 }
 
 final class OverlayProgressSink: Sink {
@@ -24,7 +35,7 @@ final class OverlayProgressSink: Sink {
                 // held in lookahead; for Apple Speech (after the engine-side
                 // delta normalization in AppleSpeechASREngine) it's the new
                 // portion since the last commit.
-                target.appendConfirmedSegment(result.text)
+                target.appendConfirmedSegment(result.text, pauseBefore: result.pauseBefore)
                 target.partialText = ""
                 return
             }

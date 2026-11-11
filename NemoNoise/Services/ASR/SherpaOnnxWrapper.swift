@@ -309,8 +309,15 @@ nonisolated final class SherpaQwen3Recognizer: @unchecked Sendable {
         recognizer = p
     }
 
-    func decode(samples: [Float], sampleRate: Int32 = 16000) -> String {
-        guard let stream = SherpaOnnxCreateOfflineStream(recognizer) else { return "" }
+    /// Decode one utterance. When `hotwords` is non-nil it replaces the
+    /// config-level bias for this decode only (per-stream hotwords — used by
+    /// `VADSegmentingEngine` to carry prior context into each segment decode);
+    /// nil decodes with the recognizer's built-in bias.
+    func decode(samples: [Float], sampleRate: Int32 = 16000, hotwords: String? = nil) -> String {
+        let stream: UnsafePointer<SherpaOnnxOfflineStream>? = hotwords.map { bias in
+            bias.withCString { SherpaOnnxCreateOfflineStreamWithHotwords(recognizer, $0) }
+        } ?? SherpaOnnxCreateOfflineStream(recognizer)
+        guard let stream else { return "" }
         defer { SherpaOnnxDestroyOfflineStream(stream) }
 
         samples.withUnsafeBufferPointer { buf in

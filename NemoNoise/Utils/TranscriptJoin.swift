@@ -16,22 +16,66 @@ import Foundation
 /// `nonisolated`: a pure function, also called from the Apple engine's
 /// lock-guarded state off the main actor.
 nonisolated enum TranscriptJoin {
+    /// A seam pause shorter than this is a breath, not a sentence end, so the
+    /// previous piece's terminal mark is dropped there. 1.2 s — the breath vs
+    /// sentence-end split measured in reference-project dogfooding of
+    /// per-segment offline decoding.
+    static let sentencePause: TimeInterval = 1.2
+
     static func sentences(_ pieces: [String]) -> String {
+        sentences(pieces.map { (text: $0, pauseBefore: nil) })
+    }
+
+    /// Seam-aware join: like `sentences(_:)`, but a piece whose `pauseBefore`
+    /// is known and shorter than `sentencePause` first strips the previous
+    /// piece's trailing sentence-final mark — each VAD-cut segment is decoded
+    /// as a complete utterance and always ends in one, which would otherwise
+    /// punctuate every breath. A nil pause (unknown — streaming engines)
+    /// keeps the mark. The last piece always keeps its mark.
+    static func sentences(_ pieces: [(text: String, pauseBefore: TimeInterval?)]) -> String {
         var out = ""
-        for raw in pieces {
-            let piece = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !piece.isEmpty else { continue }
-            guard let lhs = out.last, let rhs = piece.first else {
-                out = piece
+        for piece in pieces {
+            let text = piece.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            if let pause = piece.pauseBefore, pause < sentencePause {
+                out = strippingSentenceEnd(out)
+            }
+            guard let lhs = out.last, let rhs = text.first else {
+                out = text
                 continue
             }
             if isCJK(lhs) || isCJK(rhs) {
-                out += piece
+                out += text
             } else {
-                out += " " + piece
+                out += " " + text
             }
         }
         return out
+    }
+
+    /// Drop trailing sentence-final marks (ASCII and full-width runs,
+    /// e.g. "。。" or "!?"). Commas and other pauses are left alone.
+    private static func strippingSentenceEnd(_ s: String) -> String {
+        var out = s
+        while let last = out.last, isSentenceEnd(last) {
+            out.removeLast()
+        }
+        return out
+    }
+
+    /// Sentence-final marks: ASCII and full-width stops, exclamations, and
+    /// questions. Written as scalar values so the set is unambiguous.
+    private static let sentenceEndScalars: Set<UInt32> = [
+        0x2E,    // . full stop
+        0x3002,  // 。 ideographic full stop
+        0x21,    // ! exclamation
+        0xFF01,  // ！ full-width exclamation
+        0x3F,    // ? question
+        0xFF1F,  // ？ full-width question
+    ]
+
+    private static func isSentenceEnd(_ c: Character) -> Bool {
+        c.unicodeScalars.count == 1 && sentenceEndScalars.contains(c.unicodeScalars.first!.value)
     }
 
     /// True for CJK ideographs, kana, Hangul, and CJK / full-width punctuation —

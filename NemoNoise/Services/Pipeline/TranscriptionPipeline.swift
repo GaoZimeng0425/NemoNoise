@@ -86,13 +86,17 @@ final class TranscriptionPipeline {
                         do {
                             var result = try await engine.feedChunk(chunk.samples, sampleRate: 16000)
                             let engineStart = result.audioStart
+                            let enginePause = result.pauseBefore
                             for proc in postProcessors {
                                 if let next = try await proc.process(result, isFinal: result.isFinal) {
                                     result = next
                                 }
                             }
                             let processed = result
-                            result = clock.withLock { $0.stamp(processed, engineStart: engineStart, chunkStart: chunkStart) }
+                            result = clock.withLock {
+                                $0.stamp(processed, engineStart: engineStart, chunkStart: chunkStart,
+                                         pauseBefore: enginePause)
+                            }
                             await sink.deliver(result, isFinal: result.isFinal)
                             if result.text.isEmpty {
                                 continuation.yield(.level(rms: chunk.rmsLevel, spectrum: chunk.spectrum))
@@ -141,6 +145,7 @@ final class TranscriptionPipeline {
         do {
             var result = try await engine.finish()
             let engineStart = result.audioStart
+            let enginePause = result.pauseBefore
             for proc in postProcessors {
                 if let next = try await proc.process(result, isFinal: true) {
                     result = next
@@ -148,7 +153,8 @@ final class TranscriptionPipeline {
             }
             let processed = result
             result = clock.withLock {
-                $0.stamp(processed, engineStart: engineStart, chunkStart: $0.fedSeconds)
+                $0.stamp(processed, engineStart: engineStart, chunkStart: $0.fedSeconds,
+                         pauseBefore: enginePause)
             }
             await sink.deliver(result, isFinal: true)
             runningInfo?.0.yield(.final(result))
@@ -209,7 +215,7 @@ nonisolated struct UtteranceClock {
     }
 
     mutating func stamp(_ result: TranscriptionResult, engineStart: TimeInterval?,
-                        chunkStart: TimeInterval) -> TranscriptionResult {
+                        chunkStart: TimeInterval, pauseBefore: TimeInterval? = nil) -> TranscriptionResult {
         guard !result.text.isEmpty else { return result }
         guard result.isFinal else {
             if openedAt == nil { openedAt = chunkStart }
@@ -218,7 +224,8 @@ nonisolated struct UtteranceClock {
         let start = engineStart ?? openedAt ?? lastLineEnd
         openedAt = nil
         lastLineEnd = fedSeconds
-        return result.stamped(audioStart: start, spokenAt: firstAudioAt?.addingTimeInterval(start))
+        return result.stamped(audioStart: start, spokenAt: firstAudioAt?.addingTimeInterval(start),
+                              pauseBefore: pauseBefore)
     }
 }
 

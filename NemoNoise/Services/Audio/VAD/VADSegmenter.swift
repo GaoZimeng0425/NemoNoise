@@ -17,7 +17,7 @@ enum SegmenterEvent: Equatable {
 ///
 /// Durations are counted in *windows*, never wall-clock, so the machine is
 /// fully deterministic and unit-testable. Mirrors `VADGate`'s pre-speech
-/// onset recovery (96 ms ring buffer) so the leading consonant isn't clipped.
+/// onset recovery (160 ms ring buffer) so the leading consonant isn't clipped.
 final class VADSegmenter {
     private let windowSize: Int
     private let preSpeechCount: Int
@@ -31,6 +31,11 @@ final class VADSegmenter {
     private var silenceRun = 0
     private var speechWindows = 0
     private var segmentWindows = 0
+    /// Segments closed by the `maxSegmentMs` hard cap (no pause found) since
+    /// the last `reset()`. Force-cuts can land mid-word; the count measures
+    /// how often that happens in real sessions before any mitigation (e.g.
+    /// seam overlap + dedup) is worth building.
+    private(set) var forceCutCount = 0
 
     init(config: VADConfig = .default) {
         self.windowSize = config.windowSize
@@ -71,7 +76,10 @@ final class VADSegmenter {
             silenceRun += 1
         }
 
-        if segmentWindows >= maxSegmentWindows { return closeSegment() }
+        if segmentWindows >= maxSegmentWindows {
+            forceCutCount += 1
+            return closeSegment()
+        }
         if silenceRun >= minSilenceWindows { return closeSegment() }
         return .buffering
     }
@@ -87,6 +95,7 @@ final class VADSegmenter {
     func reset() {
         resetSegmentState()
         preBuffer.removeAll(keepingCapacity: true)
+        forceCutCount = 0
     }
 
     private func closeSegment() -> SegmenterEvent {

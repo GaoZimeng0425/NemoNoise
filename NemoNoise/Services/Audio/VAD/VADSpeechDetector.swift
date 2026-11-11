@@ -19,8 +19,12 @@ struct VADConfig {
     /// Window fed to the detector; Silero's native window at 16 kHz.
     var windowSize: Int = 512
     /// Windows of pre-speech audio retained to recover clipped onsets.
-    /// 3 × 512 / 16000 ≈ 96 ms.
-    var preSpeechWindows: Int = 3
+    /// 5 × 512 / 16000 = 160 ms of leading silence inside every segment.
+    /// LLM-style offline decoders need that natural utterance edge: trimming
+    /// just 0.18 s of it measurably corrupts the first syllable (语音输入 →
+    /// 语音水软), and ~150 ms of head padding is what the reference lore
+    /// (blurt dogfood) settled on for whole-utterance decoding.
+    var preSpeechWindows: Int = 5
     /// Energy-fallback RMS threshold (used only by EnergySpeechDetector).
     var energyThreshold: Float = 0.02
 
