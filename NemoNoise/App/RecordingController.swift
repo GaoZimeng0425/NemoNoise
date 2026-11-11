@@ -1,5 +1,4 @@
 import SwiftUI
-import AVFoundation
 import ApplicationServices
 import KeyboardShortcuts
 
@@ -60,6 +59,7 @@ final class RecordingController: OverlayWriter {
 
     // MARK: - Internal state
 
+    private var envelope = SpectrumEnvelope()
     private var currentSession: DictationSession?
     private var hideTask: Task<Void, Never>?
     private var durationTicker: Task<Void, Never>?
@@ -158,13 +158,12 @@ final class RecordingController: OverlayWriter {
             return
         }
 
-        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        switch micStatus {
-        case .authorized: break
-        case .notDetermined:
+        switch MicrophonePermission.preflight() {
+        case .ready:
+            break
+        case .needsPrompt:
             Task { @MainActor in
-                let granted = await AVCaptureDevice.requestAccess(for: .audio)
-                if granted {
+                if await MicrophonePermission.prompt() {
                     if self.recordingMode == .toggle {
                         // Toggle's single keypress gesture is complete —
                         // starting now is what the user asked for.
@@ -184,10 +183,8 @@ final class RecordingController: OverlayWriter {
                 }
             }
             return
-        case .denied, .restricted:
+        case .denied:
             MicPermissionAlert.present()
-            return
-        @unknown default:
             return
         }
 
@@ -320,10 +317,11 @@ final class RecordingController: OverlayWriter {
                 let lastPartial = self.partialText.trimmingCharacters(in: .whitespacesAndNewlines)
                 self.partialText = ""
                 if final.text.isEmpty, !lastPartial.isEmpty {
-                    self.confirmedSegments.append(TranscriptionSegment(text: lastPartial, emotion: final.emotion))
+                    self.confirmedSegments.append(TranscriptionSegment(text: lastPartial, emotion: final.emotion, pauseBefore: nil))
                 }
 
-                let pieces = self.confirmedSegments.map(\.text).filter { !$0.isEmpty }
+                let pieces = self.confirmedSegments.map { (text: $0.text, pauseBefore: $0.pauseBefore) }
+                    .filter { !$0.text.isEmpty }
                 let dispatchText = TranscriptJoin.sentences(pieces)
                 LogService.info("Dispatch text assembled — \(pieces.count) segments, total length=\(dispatchText.count)", category: "Recording")
 
@@ -352,6 +350,7 @@ final class RecordingController: OverlayWriter {
 
                 self.scheduleOverlayHide(after: 2)
                 self.micLevel = 0
+                self.envelope.reset()
                 self.spectrum = Array(repeating: 0, count: 16)
                 self.recordingState = .ready
                 self.currentSession = nil
@@ -379,6 +378,7 @@ final class RecordingController: OverlayWriter {
         confirmedSegments = []
         partialText = ""
         micLevel = 0
+        envelope.reset()
         spectrum = Array(repeating: 0, count: 16)
         isListeningSilence = false
         recordingState = .ready
@@ -480,21 +480,21 @@ final class RecordingController: OverlayWriter {
     func appendConfirmedSegment(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        confirmedSegments.append(TranscriptionSegment(text: trimmed, emotion: nil))
+        confirmedSegments.append(TranscriptionSegment(text: trimmed, emotion: nil, pauseBefore: nil))
         LogService.info("Segment promoted (count=\(confirmedSegments.count)): \"\(trimmed.prefix(40))\"", category: "Recording")
     }
 
+    /// Pause-aware variant: keeps the seam pause for join-time punctuation
+    /// (see `TranscriptJoin.sentences(_:pauseBefore:)`).
+    func appendConfirmedSegment(_ text: String, pauseBefore: TimeInterval?) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        confirmedSegments.append(TranscriptionSegment(text: trimmed, emotion: nil, pauseBefore: pauseBefore))
+        LogService.info("Segment promoted (count=\(confirmedSegments.count), pauseBefore=\(pauseBefore.map { String(format: "%.2fs", $0) } ?? "nil")): \"\(trimmed.prefix(40))\"", category: "Recording")
+    }
+
     private func applyEnvelope(_ target: [Float]) {
-        let dt: Float = 0.085
-        let attackTau: Float = 0.06
-        let releaseTau: Float = 0.20
-        if spectrum.count != target.count {
-            spectrum = Array(repeating: 0, count: target.count)
-        }
-        for i in 0..<spectrum.count {
-            let tau = target[i] > spectrum[i] ? attackTau : releaseTau
-            let alpha = 1 - exp(-dt / tau)
-            spectrum[i] += (target[i] - spectrum[i]) * alpha
-        }
+        envelope.apply(target)
+        spectrum = envelope.bins
     }
 }

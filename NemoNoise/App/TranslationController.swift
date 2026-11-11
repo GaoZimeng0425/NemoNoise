@@ -13,6 +13,7 @@ final class TranslationController: SubtitleWriter {
     var spectrum: [Float] = Array(repeating: 0, count: 16)
 
     let translationService: AppleTranslationService = AppleTranslationService()
+    private var envelope = SpectrumEnvelope()
     private var subtitleController: SubtitleOverlayController?
     private var pipelineTask: Task<Void, Never>?
     /// Builds a fresh per-activation pipeline around the provider's resident
@@ -106,6 +107,7 @@ final class TranslationController: SubtitleWriter {
         pipelineTask = nil
         hideSubtitle()
         audioLevel = 0
+        envelope.reset()
         spectrum = Array(repeating: 0, count: 16)
         translationState = .idle
         chineseText = ""
@@ -160,17 +162,8 @@ final class TranslationController: SubtitleWriter {
     }
 
     private func applyEnvelope(_ target: [Float]) {
-        let dt: Float = 0.085
-        let attackTau: Float = 0.06
-        let releaseTau: Float = 0.20
-        if spectrum.count != target.count {
-            spectrum = Array(repeating: 0, count: target.count)
-        }
-        for i in 0..<spectrum.count {
-            let tau = target[i] > spectrum[i] ? attackTau : releaseTau
-            let alpha = 1 - exp(-dt / tau)
-            spectrum[i] += (target[i] - spectrum[i]) * alpha
-        }
+        envelope.apply(target)
+        spectrum = envelope.bins
     }
 
     func applyTranslation(seq: Int, chinese: String) {

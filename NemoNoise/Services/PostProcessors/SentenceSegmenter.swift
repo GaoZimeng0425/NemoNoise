@@ -69,7 +69,7 @@ final class SentenceSegmenter: PostProcessor, @unchecked Sendable {
             resetSegmentState()
         }
         let delta = String(result.text.dropFirst(consumedTextLength))
-        if delta.isEmpty { return nil }    // <-- NEW
+        if delta.isEmpty { return nil }
 
         if delta != lastPartialText {
             lastPartialText = delta

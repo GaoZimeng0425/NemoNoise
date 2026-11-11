@@ -30,6 +30,16 @@ nonisolated final class PipelineProviderTests: XCTestCase {
         func reset() {}
     }
 
+    /// Offline-engine variant (Qwen3 / SenseVoice shape) for the routing rule.
+    nonisolated final class OfflineStubEngine: ASREngine, @unchecked Sendable {
+        let isStreaming = false
+        func feedChunk(_ samples: [Float], sampleRate: Int) async throws -> TranscriptionResult {
+            TranscriptionResult(text: "", isFinal: false, emotion: nil)
+        }
+        func finish() async throws -> TranscriptionResult { TranscriptionResult(text: "", isFinal: true, emotion: nil) }
+        func reset() {}
+    }
+
     // MARK: - Helpers
 
     @MainActor private func makeProvider(factory: StubFactory = StubFactory())
@@ -185,5 +195,27 @@ nonisolated final class PipelineProviderTests: XCTestCase {
         XCTAssertEqual(provider.meeting, .ready)
         XCTAssertTrue(meeting.pipelinesReady, "both meeting pipelines must be bound by bootstrap")
         XCTAssertEqual(meeting.themEngineLabel, "Apple", "StubEngine is not Paraformer → Apple label")
+    }
+
+    // MARK: - Mic routing (dictation / meeting-Me engine-selection rule)
+
+    /// The Apple-engine branch can't be exercised here (SpeechAnalyzer asset
+    /// unavailable in tests) — it returns the mic source and engine unchanged.
+    @MainActor func testMicRoutingStreamingEngineGetsGatedSource() {
+        let routed = PipelineProvider.micRouting(engine: StubEngine(),
+                                                 micSource: MicAudioSource(),
+                                                 detector: EnergySpeechDetector())
+        XCTAssertTrue(routed.source is VADGatedSource)
+        XCTAssertTrue(routed.engine is StubEngine, "streaming engines are used as-is")
+    }
+
+    @MainActor func testMicRoutingOfflineEngineGetsSegmentingDecorator() {
+        let routed = PipelineProvider.micRouting(engine: OfflineStubEngine(),
+                                                 micSource: MicAudioSource(),
+                                                 detector: EnergySpeechDetector(),
+                                                 vadConfig: .meeting)
+        XCTAssertFalse(routed.source is VADGatedSource,
+                       "offline engines get the raw mic — segmentation happens at the engine")
+        XCTAssertTrue(routed.engine is VADSegmentingEngine)
     }
 }

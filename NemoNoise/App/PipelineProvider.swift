@@ -242,14 +242,7 @@ final class PipelineProvider {
         case .success(let build):
             dictationBuild = build
             dictationFallback = fallback
-            let label: String
-            if build.fallbackReason != nil {
-                label = "Apple"
-            } else {
-                let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
-                             ?? AppDefaults.Defaults.engineType
-                label = Self.engineDisplayName(for: choice)
-            }
+            let label = Self.primaryEngineLabel(for: build)
             dictationEngineLabel = label
 
             if let recordingController {
@@ -276,41 +269,16 @@ final class PipelineProvider {
             return nil
         }
 
-        // Skip the CT-Transformer when the engine already emits its own
-        // punctuation (Qwen3) — re-punctuating self-punctuated text
-        // doubles/corrupts it (`。。`, `？？`, `。，`).
-        var postProcessors: [any PostProcessor] = Self.punctuator(for: build.engine, from: cachedPunctuator).map {
-            [PunctuationProcessor(punctuator: $0)]
-        } ?? []
-        // Repair common English-term mis-transcriptions ("u爱" → "UI"). Runs
-        // after punctuation so it operates on the final user-visible text.
-        postProcessors.append(TextCorrectionProcessor(provider: { TextCorrections.active() }))
-        postProcessors.append(TranscriptTidyProcessor())
-
         let detector = sharedDetector()
-        // SpeechAnalyzer handles silence itself — feeding it zero-substituted
-        // windows disturbs its endpointing and timeline, so it gets the raw
-        // mic (yap/muesli feed it unprocessed audio). Offline engines
-        // (Qwen3 / SenseVoice) decode in one shot at finish(), so they get
-        // the segmenting decorator. Paraformer (streaming, ours) keeps the
-        // gated source — its silence-injection preserves its own endpointing.
-        let source: any AudioSource
-        let engine: any ASREngine
-        if build.engine is AppleSpeechASREngine {
-            source = makeMicSource()
-            engine = build.engine
-        } else if build.engine.isStreaming {
-            source = VADGatedSource(inner: makeMicSource(), detector: detector)
-            engine = build.engine
-        } else {
-            source = makeMicSource()
-            engine = VADSegmentingEngine(inner: build.engine, detector: detector)
-        }
+        let routed = Self.micRouting(engine: build.engine,
+                                     micSource: makeMicSource(),
+                                     detector: detector,
+                                     vadConfig: .default)
 
         return TranscriptionPipeline(
-            source: source,
-            engine: engine,
-            postProcessors: postProcessors,
+            source: routed.source,
+            engine: routed.engine,
+            postProcessors: Self.dictationProcessors(engine: build.engine, punctuator: cachedPunctuator),
             sink: OverlayProgressSink(target: recordingController),
             fallback: dictationFallback
         )
@@ -472,14 +440,7 @@ final class PipelineProvider {
 
         meetingBuilds = (me: meBuild, meFallback: meFallback, them: themBuild, punctuator: punctuator)
 
-        let meLabel: String
-        if meBuild.fallbackReason != nil {
-            meLabel = "Apple"
-        } else {
-            let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
-                         ?? AppDefaults.Defaults.engineType
-            meLabel = Self.engineDisplayName(for: choice)
-        }
+        let meLabel = Self.primaryEngineLabel(for: meBuild)
         let themLabel = themBuild.engine is ParaformerStreamingEngine ? "Paraformer" : "Apple"
 
         meetingController.bind(
@@ -501,32 +462,16 @@ final class PipelineProvider {
             Task { @MainActor in meetingController?.handleMicInterruption(reason) }
         })
 
-        var meProcessors: [any PostProcessor] = Self.punctuator(for: builds.me.engine, from: builds.punctuator).map {
-            [PunctuationProcessor(punctuator: $0)]
-        } ?? []
-        meProcessors.append(TextCorrectionProcessor(provider: { TextCorrections.active() }))
-        meProcessors.append(TranscriptTidyProcessor())
-
         // Me track: the user's dictation engine with dictation-style assembly,
         // but the meeting VAD preset (longer hangover, 30 s hard cut).
-        // SpeechAnalyzer bypasses gating for the same reason as dictation.
-        let meSource: any AudioSource
-        let meEngine: any ASREngine
-        if builds.me.engine is AppleSpeechASREngine {
-            meSource = micSource
-            meEngine = builds.me.engine
-        } else if builds.me.engine.isStreaming {
-            meSource = VADGatedSource(inner: micSource, detector: detector)
-            meEngine = builds.me.engine
-        } else {
-            meSource = micSource
-            meEngine = VADSegmentingEngine(inner: builds.me.engine, detector: detector, config: .meeting)
-        }
-
+        let meRouted = Self.micRouting(engine: builds.me.engine,
+                                       micSource: micSource,
+                                       detector: detector,
+                                       vadConfig: .meeting)
         let micPipeline = TranscriptionPipeline(
-            source: meSource,
-            engine: meEngine,
-            postProcessors: meProcessors,
+            source: meRouted.source,
+            engine: meRouted.engine,
+            postProcessors: Self.dictationProcessors(engine: builds.me.engine, punctuator: builds.punctuator),
             sink: MeetingSink(track: .me, target: meetingController, storeBox: meetingController.storeBox),
             fallback: builds.meFallback
         )
@@ -556,6 +501,50 @@ final class PipelineProvider {
     /// goes through here; generic so the rule is testable without a model.
     static func punctuator<P>(for engine: any ASREngine, from loaded: P?) -> P? {
         engine.emitsPunctuation ? nil : loaded
+    }
+
+    /// Dictation-style mic routing, shared by the dictation pipeline and the
+    /// meeting Me track. SpeechAnalyzer handles silence itself — feeding it
+    /// zero-substituted windows disturbs its endpointing and timeline, so it
+    /// gets the raw mic (yap/muesli feed it unprocessed audio). Streaming
+    /// engines (Paraformer, ours) keep the VAD-gated source — its
+    /// silence-injection preserves their own endpointing. Offline engines
+    /// (Qwen3 / SenseVoice) decode one segment per VAD cut, so they get the
+    /// segmenting decorator with the caller's preset (`.default` dictation,
+    /// `.meeting`: longer hangover + 30 s hard cut).
+    static func micRouting(engine: any ASREngine,
+                           micSource: any AudioSource,
+                           detector: any VADSpeechDetector,
+                           vadConfig: VADConfig = .default) -> (source: any AudioSource, engine: any ASREngine) {
+        if engine is AppleSpeechASREngine {
+            return (micSource, engine)
+        }
+        if engine.isStreaming {
+            return (VADGatedSource(inner: micSource, detector: detector), engine)
+        }
+        return (micSource, VADSegmentingEngine(inner: engine, detector: detector, config: vadConfig))
+    }
+
+    /// The dictation-style post-processor chain: CT-Transformer punctuation
+    /// (skipped when the engine already emits its own — re-punctuating
+    /// self-punctuated text doubles/corrupts it, `。。` `？？` `。，`), then
+    /// English-term corrections ("u爱" → "UI") on the final user-visible
+    /// text, then TranscriptTidy.
+    static func dictationProcessors(engine: any ASREngine,
+                                    punctuator loaded: SherpaOfflinePunctuator?) -> [any PostProcessor] {
+        var processors: [any PostProcessor] = Self.punctuator(for: engine, from: loaded).map { [PunctuationProcessor(punctuator: $0)] } ?? []
+        processors.append(TextCorrectionProcessor(provider: { TextCorrections.active() }))
+        processors.append(TranscriptTidyProcessor())
+        return processors
+    }
+
+    /// Label for a primary build: the chosen engine's display name, or
+    /// "Apple" when the build already fell back.
+    private static func primaryEngineLabel(for build: EngineBuild) -> String {
+        guard build.fallbackReason == nil else { return "Apple" }
+        let choice = UserDefaults.standard.string(forKey: AppDefaults.Keys.engineType)
+                     ?? AppDefaults.Defaults.engineType
+        return engineDisplayName(for: choice)
     }
 
     // MARK: - Dictation source pieces

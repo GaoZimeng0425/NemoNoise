@@ -873,17 +873,15 @@ final class MicAudioSource: AudioSource, Sendable {
     }
 
     private func requestMicrophoneAccess() async throws {
-        let status = AVCaptureDevice.authorizationStatus(for: .audio)
-        switch status {
-        case .authorized:
+        switch MicrophonePermission.preflight() {
+        case .ready:
             return
-        case .notDetermined:
-            let granted = await AVCaptureDevice.requestAccess(for: .audio)
-            if !granted { throw ASRError.audioCaptureFailed("Microphone access denied") }
-        case .denied, .restricted:
+        case .needsPrompt:
+            guard await MicrophonePermission.prompt() else {
+                throw ASRError.audioCaptureFailed("Microphone access denied")
+            }
+        case .denied:
             throw ASRError.audioCaptureFailed("Microphone access denied — enable in System Settings → Privacy → Microphone")
-        @unknown default:
-            throw ASRError.audioCaptureFailed("Unknown microphone authorization status")
         }
     }
 }

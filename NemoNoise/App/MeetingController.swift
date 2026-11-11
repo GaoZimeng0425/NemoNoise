@@ -1,5 +1,4 @@
 import AppKit
-import AVFoundation
 import SwiftUI
 
 /// Third mode of the app: meeting recording. Owns TWO pipelines — mic ("Me")
@@ -143,24 +142,20 @@ final class MeetingController: MeetingWriter {
         micPipeline = pipelines.mic
         systemPipeline = pipelines.system
 
-        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        switch micStatus {
-        case .authorized:
+        switch MicrophonePermission.preflight() {
+        case .ready:
             break
-        case .notDetermined:
+        case .needsPrompt:
             Task { @MainActor in
-                let granted = await AVCaptureDevice.requestAccess(for: .audio)
-                if granted {
+                if await MicrophonePermission.prompt() {
                     self.startMeeting()
                 } else {
                     MicPermissionAlert.present()
                 }
             }
             return
-        case .denied, .restricted:
+        case .denied:
             MicPermissionAlert.present()
-            return
-        @unknown default:
             return
         }
 

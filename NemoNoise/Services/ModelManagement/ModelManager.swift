@@ -207,12 +207,6 @@ final class ModelManager {
         }
     }
 
-    /// Ensure the model's subdir exists so the user can drop files into it via Finder.
-    func ensureModelDirExists(for descriptor: ModelDescriptor) {
-        let dir = modelDir(for: descriptor)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    }
-
     // MARK: Private
 
     private func setState(_ state: ModelDownloadState, for descriptor: ModelDescriptor) {
