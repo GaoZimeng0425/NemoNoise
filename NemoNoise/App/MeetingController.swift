@@ -72,9 +72,10 @@ final class MeetingController: MeetingWriter {
     private var meTrackAlive = false
     private var themTrackAlive = false
     /// Single-flight auto-start after a first click found engines unbuilt:
-    /// polls readiness briefly and starts the meeting the moment they bind,
-    /// instead of making the user click again.
-    private var autoStartTask: Task<Void, Never>?
+    /// `pipelinesResolved(ready:)` — fired by the provider from every
+    /// outcome of the build — starts the meeting the moment they bind (or
+    /// reports the failure), instead of making the user click again.
+    private var awaitingEngines = false
 
     /// Installed by PipelineProvider: builds the meeting engines on first
     /// use (lazy, so engine memory is only paid when a meeting actually runs).
@@ -97,8 +98,26 @@ final class MeetingController: MeetingWriter {
     /// The provider dropped the meeting engines (memory pressure): the next
     /// start goes back through `preparePipelines` instead of getting nil from
     /// a stale factory and silently doing nothing.
+    /// The provider calls this from EVERY outcome of the meeting engine
+    /// build (success bind, Me-track failure, Them-track failure) — the
+    /// readiness callback that replaces polling. A waiting first start
+    /// either begins the meeting or hears why it can't.
+    func pipelinesResolved(ready: Bool) {
+        guard awaitingEngines, meetingState == .idle else { return }
+        awaitingEngines = false
+        if ready {
+            startMeeting()
+        } else {
+            ToastWindowController.show("Meeting engines unavailable", style: .error, duration: 4)
+        }
+    }
+
     func unbind() {
         pipelineFactory = nil
+        // The factory this waiter is waiting on is gone (memory-pressure
+        // unload / settings rebuild); clear it so the next click starts a
+        // fresh wait instead of returning silently.
+        awaitingEngines = false
     }
 
     func toggle() {
@@ -116,26 +135,12 @@ final class MeetingController: MeetingWriter {
 
         guard pipelinesReady else {
             // First meeting (heavy local models): engines build in the
-            // background; start automatically the moment they bind — the
-            // user should not have to click twice.
+            // background; the provider's `pipelinesResolved` starts the
+            // meeting the moment they bind — or surfaces the build failure.
+            guard !awaitingEngines else { return }
+            awaitingEngines = true
             preparePipelines?()
-            guard autoStartTask == nil else { return }
             ToastWindowController.show("Preparing meeting engines…", style: .info, duration: 2)
-            autoStartTask = Task { [weak self] in
-                // ~10 s max; readiness flips in ~1 s for Apple, longer for
-                // local models loading off disk.
-                for _ in 0..<100 {
-                    try? await Task.sleep(for: .milliseconds(100))
-                    guard let self else { return }
-                    if self.meetingState != .idle { break }
-                    if self.pipelinesReady {
-                        self.autoStartTask = nil
-                        self.startMeeting()
-                        return
-                    }
-                }
-                self?.autoStartTask = nil
-            }
             return
         }
         guard let mutex, let pipelines = pipelineFactory?() else { return }

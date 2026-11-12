@@ -197,6 +197,65 @@ nonisolated final class PipelineProviderTests: XCTestCase {
         XCTAssertEqual(meeting.themEngineLabel, "Apple", "StubEngine is not Paraformer → Apple label")
     }
 
+    /// A Settings engine change must invalidate the meeting pool: the
+    /// engines a meeting uses can't outlive the choice they were built
+    /// from. Lightweight (Apple-stub) meeting engines rebuild eagerly right
+    /// after, so the next "Start Meeting" click just works again.
+    @MainActor func testSettingsRebuildInvalidatesAndRebindsMeetingPool() async throws {
+        let savedDefaults = UserDefaultsSnapshot([AppDefaults.Keys.engineType])
+        defer { savedDefaults.restore() }
+        UserDefaults.standard.set("apple", forKey: AppDefaults.Keys.engineType)
+
+        let (provider, _, _, meeting) = makeProvider()
+        provider.bootstrap()
+        try await waitUntilReady(provider)
+        let built = Date().addingTimeInterval(5)
+        while provider.meeting == .loading {
+            if Date() >= built { XCTFail("eager meeting build did not finish within 5s"); return }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertTrue(meeting.pipelinesReady)
+
+        UserDefaults.standard.set("sensevoice", forKey: AppDefaults.Keys.engineType)
+        provider.rebuildDictation()
+
+        // Invalidation is synchronous on the MainActor: the stale pool is
+        // unbound before the background rebuild even starts.
+        XCTAssertFalse(meeting.pipelinesReady, "a settings rebuild must invalidate the meeting pool")
+
+        try await waitUntilReady(provider)
+        let rebound = Date().addingTimeInterval(5)
+        while !(meeting.pipelinesReady && provider.meeting == .ready) {
+            if Date() >= rebound { XCTFail("meeting pool did not rebind after settings rebuild"); return }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
+    /// A FAILED meeting-engine build resolves a waiting first-start instead
+    /// of leaving it polling into silence: the controller drops the waiter
+    /// and the meeting never begins.
+    @MainActor func testMeetingEngineFailureResolvesWaitingStart() async throws {
+        let factory = StubFactory()
+        struct Boom: Error {}
+        factory.meetingThemResult = .failure(Boom())
+
+        // No bootstrap: meeting engines unbuilt, so startMeeting waits.
+        let (provider, _, _, meeting) = makeProvider(factory: factory)
+        meeting.startMeeting()
+        XCTAssertFalse(meeting.isActive)
+
+        let deadline = Date().addingTimeInterval(5)
+        while provider.meeting == .loading {
+            if Date() >= deadline { XCTFail("meeting build never resolved"); return }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        if case .failed = provider.meeting { /* expected */ } else {
+            XCTFail("expected meeting .failed but is \(provider.meeting)")
+        }
+        XCTAssertEqual(meeting.meetingState, .idle, "a failed build must not begin a meeting")
+        XCTAssertFalse(meeting.isActive)
+    }
+
     // MARK: - Mic routing (dictation / meeting-Me engine-selection rule)
 
     /// The Apple-engine branch can't be exercised here (SpeechAnalyzer asset

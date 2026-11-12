@@ -157,73 +157,107 @@ final class PipelineProvider {
         guard enginesUnloadedByPressure else { return }
         enginesUnloadedByPressure = false
         LogService.info("Rebuilding engines after memory-pressure unload", category: "PipelineProvider")
-        let factory = self.factory
-        let punctuator = self.cachedPunctuator
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let primaryResult = Result<EngineBuild, Error> { try factory.makePrimary() }
-            await Self.warmUp(primaryResult)
-            let translationResult = Result<EngineBuild, Error> { try factory.makeTranslation() }
-            let fallback = factory.makeFallback()
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.applyDictation(result: primaryResult, fallback: fallback, punctuator: punctuator)
-                self.applyTranslation(result: translationResult, punctuator: punctuator)
-            }
-        }
+        run(.init(translation: true))
     }
 
     /// Called once from `NemoNoiseApp`. Loads engines on a background thread,
     /// then hops to MainActor to bind pipelines.
     func bootstrap() {
-        let factory = self.factory
-        let modelManager = self.modelManager
-        Task.detached(priority: .userInitiated) { [weak self] in
-            // Warm the SpeechAnalyzer assets (dictation fallback + translation
-            // fallback) before anything needs them — the first session then
-            // skips the slow asset IPC/download entirely. Injectable so tests
-            // can stub it out (asset IPC is slow/unavailable there).
-            await self?.appleAssetPrewarm()
-
-            let punctuator = Self.makePunctuator(modelManager: modelManager)
-
-            let primaryResult = Result<EngineBuild, Error> { try factory.makePrimary() }
-            await Self.warmUp(primaryResult)
-            let fallback = factory.makeFallback()
-            let translationResult = Result<EngineBuild, Error> { try factory.makeTranslation() }
-
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.cachedPunctuator = punctuator
-                self.applyDictation(result: primaryResult, fallback: fallback, punctuator: punctuator)
-                self.applyTranslation(result: translationResult, punctuator: punctuator)
-                self.translationController?.startHotkeyMonitoring()
-                // With no local models every meeting engine is an Apple engine
-                // and the build is nearly free — do it eagerly so the FIRST
-                // "Start Meeting" click just works (no preparing toast, no
-                // second click). Heavy local models keep the lazy path.
-                if self.meetingEnginesAreLightweight() {
-                    LogService.info("Meeting engines are lightweight — building eagerly", category: "PipelineProvider")
-                    self.buildMeetingIfNeeded()
-                }
-            }
-        }
+        run(.init(translation: true,
+                  loadPunctuator: true,
+                  prewarmAssets: true,
+                  eagerMeetingIfLight: true,
+                  startTranslationHotkey: true))
     }
 
     /// Rebuild dictation engines when the user changes engine choice in
     /// Settings. Builds in the background and swaps the resident build when
     /// ready — a recording that is live simply keeps the old engine until it
     /// ends; the next session picks up the new one. No parking, no guards.
+    ///
+    /// The meeting pool must not outlive the engine choice it was built
+    /// from: invalidate it too (unless a meeting is live — that session
+    /// keeps its engines, like a live dictation does). The rebuild then
+    /// converges to the same state as a fresh launch: eagerly bound when
+    /// every engine is lightweight, lazy (first meeting start) when not.
     func rebuildDictation() {
+        if meetingBuilt, meetingController?.isActive != true {
+            meetingBuilt = false
+            meetingBuilds = nil
+            meeting = .loading
+            meetingController?.unbind()
+        }
+        run(.init(eagerMeetingIfLight: true))
+    }
+
+    /// What one rebuild pass builds, and which bootstrap-only extras it
+    /// runs. Callers declare intent; the build sequence itself lives only
+    /// in `run(_:)` below.
+    private struct RebuildPlan {
+        /// Also rebuild the translation engine alongside the primary.
+        var translation = false
+        /// Load the punctuation model from disk (first launch only; later
+        /// rebuilds reuse the cached instance).
+        var loadPunctuator = false
+        /// Prewarm SpeechAnalyzer assets before building (first launch).
+        var prewarmAssets = false
+        /// Build the meeting engines eagerly when every one is lightweight
+        /// (no local models), so the first "Start Meeting" click just works.
+        var eagerMeetingIfLight = false
+        /// Start listening for the translation hotkey once engines bind.
+        var startTranslationHotkey = false
+    }
+
+    /// The single background build sequence behind bootstrap, settings
+    /// rebuilds and pressure recovery. Order is load-bearing: asset prewarm
+    /// first (slow IPC), punctuator before engines, primary built and
+    /// warmed before the fallback, everything applied on the MainActor.
+    private func run(_ plan: RebuildPlan) {
         dictation = .loading
+        if plan.translation { translation = .loading }
         let factory = self.factory
-        let punctuator = self.cachedPunctuator
+        let modelManager = self.modelManager
+        let cachedPunctuator = self.cachedPunctuator
         Task.detached(priority: .userInitiated) { [weak self] in
+            if plan.prewarmAssets {
+                // Warm the SpeechAnalyzer assets (dictation fallback +
+                // translation fallback) before anything needs them — the
+                // first session then skips the slow asset IPC/download
+                // entirely. Injectable so tests can stub it out (asset IPC
+                // is slow/unavailable there).
+                await self?.appleAssetPrewarm()
+            }
+            let punctuator = plan.loadPunctuator
+                ? Self.makePunctuator(modelManager: modelManager)
+                : cachedPunctuator
+
             let primaryResult = Result<EngineBuild, Error> { try factory.makePrimary() }
             await Self.warmUp(primaryResult)
             let fallback = factory.makeFallback()
+            let translationResult: Result<EngineBuild, Error>? = plan.translation
+                ? Result<EngineBuild, Error> { try factory.makeTranslation() }
+                : nil
+
             await MainActor.run { [weak self] in
                 guard let self else { return }
+                if plan.loadPunctuator {
+                    self.cachedPunctuator = punctuator
+                }
                 self.applyDictation(result: primaryResult, fallback: fallback, punctuator: punctuator)
+                if let translationResult {
+                    self.applyTranslation(result: translationResult, punctuator: punctuator)
+                }
+                if plan.startTranslationHotkey {
+                    self.translationController?.startHotkeyMonitoring()
+                }
+                // With no local models every meeting engine is an Apple
+                // engine and the build is nearly free — build eagerly so the
+                // FIRST "Start Meeting" click just works (no preparing
+                // toast, no second click). Heavy local models stay lazy.
+                if plan.eagerMeetingIfLight && self.meetingEnginesAreLightweight() {
+                    LogService.info("Meeting engines are lightweight — building eagerly", category: "PipelineProvider")
+                    self.buildMeetingIfNeeded()
+                }
             }
         }
     }
@@ -384,9 +418,10 @@ final class PipelineProvider {
         return primaryLight && themLight
     }
 
-    /// Builds the meeting pipelines on first use. Known MVP limitation: a
-    /// Settings engine change does NOT rebuild these — the meeting keeps the
-    /// engines it was built with until the app restarts.
+    /// Builds the meeting pipelines on first use. A Settings engine change
+    /// invalidates the pool (`rebuildDictation`); the next meeting start
+    /// rebuilds through this path. A meeting that is live keeps its engines
+    /// until it ends — same semantics as a live dictation session.
     func buildMeetingIfNeeded() {
         guard !meetingBuilt else { return }
         meetingBuilt = true
@@ -424,6 +459,7 @@ final class PipelineProvider {
                 ToastWindowController.show("Meeting mic engine unavailable: \(error.localizedDescription)",
                                            style: .error, duration: 5)
             }
+            meetingController.pipelinesResolved(ready: false)
             return
         }
         // Them track: streaming engine over system audio (process tap, SCK
@@ -435,6 +471,7 @@ final class PipelineProvider {
                 ToastWindowController.show("Meeting system-audio engine unavailable: \(error.localizedDescription)",
                                            style: .error, duration: 5)
             }
+            meetingController.pipelinesResolved(ready: false)
             return
         }
 
@@ -450,6 +487,7 @@ final class PipelineProvider {
             themEngineLabel: themLabel
         )
         meeting = .ready
+        meetingController.pipelinesResolved(ready: true)
     }
 
     /// Fresh per-meeting pipelines (cheap shells: new mic source, process
