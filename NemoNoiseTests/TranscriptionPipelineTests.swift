@@ -2,6 +2,14 @@ import XCTest
 import os
 @testable import NemoNoise
 
+/// Shared sink test double: records every delivery for assertion.
+final class RecordingSink: Sink, @unchecked Sendable {
+    private(set) var delivered: [(text: String, isFinal: Bool)] = []
+    func deliver(_ result: TranscriptionResult, isFinal: Bool) async {
+        delivered.append((result.text, isFinal))
+    }
+}
+
 nonisolated final class TranscriptionPipelineTests: XCTestCase {
 
     @MainActor func testPipelineYieldsPartialOnChunkAndFinalOnFinalize() async throws {

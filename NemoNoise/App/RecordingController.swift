@@ -53,10 +53,6 @@ final class RecordingController: OverlayWriter {
     private var mutex: RecordingMutex?
     private var overlayController: OverlayWindowController?
 
-    /// Exposes the text injector so `NemoNoiseApp` can wire it into the
-    /// dictation pipeline's `TextInjectorSink`.
-    var injector: any TextInjecting { textInjector }
-
     // MARK: - Internal state
 
     private var envelope = SpectrumEnvelope()

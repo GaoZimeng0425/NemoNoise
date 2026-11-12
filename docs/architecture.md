@@ -36,7 +36,7 @@ Meeting mode is *two* `TranscriptionPipeline` instances owned by `MeetingControl
 | Audio sources | `Services/Audio/AudioSource.swift` + `MicAudioSource.swift` + `SystemAudioSource.swift` + `ProcessTapAudioSource.swift` |
 | ASR engines | `Services/ASR/ASREngine.swift` + 4 implementations |
 | Engine factory | `Services/ASR/ASREngineFactory.swift` |
-| Sinks | `Services/Pipeline/Sink.swift`, `BroadcastSink.swift`, `Services/Sinks/*` |
+| Sinks | `Services/Pipeline/Sink.swift`, `Services/Sinks/*` |
 | Meeting persistence | `Services/Meeting/MeetingTranscriptStore.swift` (JSONL + Markdown + `MeetingStoreBox`) |
 | Post-processors | `Services/Pipeline/PostProcessor.swift`, `Services/PostProcessors/*` |
 | App wiring | `App/NemoNoiseApp.swift` (assembly), `App/RecordingController.swift`, `App/TranslationController.swift`, `App/MeetingController.swift` (UI adapters), `App/RecordingMutex.swift` |
